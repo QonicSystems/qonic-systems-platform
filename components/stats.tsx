@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Reveal } from "@/components/reveal";
 
 const stats = [[850, "+", "Successful Placements"], [120, "+", "Enterprise Clients"], [5, "", "Industry Verticals"], [96, "%", "Client Retention Rate"]] as const;
 
@@ -23,5 +24,5 @@ function Counter({ target }: { target: number }) {
 }
 
 export function Stats() {
-  return <section className="border-b border-slate-100 bg-white" aria-label="Company statistics"><div className="site-container grid grid-cols-2 gap-8 py-14 md:grid-cols-4">{stats.map(([target, suffix, label]) => <div key={label} className="stat"><strong><Counter target={target} />{suffix}</strong><p>{label}</p></div>)}</div></section>;
+  return <section className="border-y border-canvas-line bg-white" aria-label="Company statistics"><div className="site-container grid grid-cols-2 gap-8 py-16 md:grid-cols-4">{stats.map(([target, suffix, label], index) => <Reveal key={label} delay={index * 90} className="stat"><strong><Counter target={target} />{suffix}</strong><p>{label}</p></Reveal>)}</div></section>;
 }

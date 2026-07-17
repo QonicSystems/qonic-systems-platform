@@ -16,5 +16,8 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="en" className={`${body.variable} ${display.variable}`}><body><a className="skip-link" href="#main-content">Skip to main content</a><SiteHeader />{children}<Footer /></body></html>;
+  return <html lang="en" className={`${body.variable} ${display.variable}`}>
+    <head><noscript><style>{`.reveal{opacity:1!important;transform:none!important}`}</style></noscript></head>
+    <body><a className="skip-link" href="#main-content">Skip to main content</a><SiteHeader />{children}<Footer /></body>
+  </html>;
 }

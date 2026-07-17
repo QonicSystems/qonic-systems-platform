@@ -21,17 +21,15 @@ export function SiteHeader() {
     return () => document.removeEventListener("keydown", closeOnEscape);
   }, []);
 
-  const linkClass = scrolled ? "text-slate-body hover:bg-slate-100 hover:text-navy" : "text-white hover:bg-white/10 hover:text-teal-light";
-
   return (
     <header className={`site-header ${scrolled ? "site-header--scrolled" : ""}`}>
-      <nav className="site-container flex h-20 items-center justify-between" aria-label="Primary navigation">
+      <nav className="site-container flex items-center justify-between" aria-label="Primary navigation">
         <a href="/" className="brand" aria-label={`${site.name} — Home`}>
           <span className="brand-mark"><LogoMark /></span>
           <span>Avenstrix<span>Consulting</span></span>
         </a>
         <div className="hidden items-center gap-1 lg:flex">
-          {navigation.map(([label, href]) => <a key={href} href={href} className={`nav-link ${linkClass}`}>{label}</a>)}
+          {navigation.map(([label, href]) => <a key={href} href={href} className="nav-link">{label}</a>)}
         </div>
         <div className="flex items-center gap-3">
           <a href="/contact" className="button button-primary hidden sm:inline-flex">Let&apos;s Talk</a>
