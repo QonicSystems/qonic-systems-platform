@@ -1,0 +1,4 @@
+import type { Metadata } from "next";
+
+export const metadata: Metadata = { title: "Privacy Policy" };
+export default function PrivacyPage() { return <main id="main-content"><section className="page-hero"><div className="site-container"><h1 className="section-title section-title-light">Privacy Policy</h1></div></section><section className="section"><article className="site-container prose-copy"><p>Last updated: July 17, 2026</p><h2>Information we collect</h2><p>We collect the information you submit through our contact form so we can respond to your recruitment enquiry.</p><h2>How we use information</h2><p>We use your information to communicate with you, evaluate your request, and improve our services. We do not sell personal information.</p><h2>Contact</h2><p>For privacy questions, contact <a href="mailto:hello@avenstrixconsulting.com">hello@avenstrixconsulting.com</a>.</p></article></section></main>; }
