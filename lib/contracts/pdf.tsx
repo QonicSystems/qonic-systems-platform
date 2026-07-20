@@ -1,9 +1,7 @@
-import { Document, Image, Page, Path, StyleSheet, Svg, Text, View, renderToBuffer } from "@react-pdf/renderer";
-import { LOGO_PATHS, LOGO_VIEWBOX } from "@/lib/brand-art";
+import { Document, Image, Page, StyleSheet, Text, View, renderToBuffer } from "@react-pdf/renderer";
 import { formatDate, formatSalary, type ContractPayload } from "@/lib/contracts/payload";
+import { PdfLockup } from "@/lib/pdf-brand";
 import { FIELD_LABELS, findTemplate, type LetterTemplate } from "@/lib/contracts/templates";
-
-const BRAND_YELLOW = "#FFD700";
 
 export type LetterContext = {
   reference: string;
@@ -21,9 +19,6 @@ export type LetterContext = {
 const styles = StyleSheet.create({
   page: { paddingTop: 48, paddingBottom: 56, paddingHorizontal: 52, fontSize: 10, lineHeight: 1.5, color: "#2b2b2b" },
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", borderBottomWidth: 2, borderBottomColor: "#FFD700", paddingBottom: 10, marginBottom: 20 },
-  brandRow: { flexDirection: "row", alignItems: "center", gap: 7 },
-  brand: { fontSize: 16, fontWeight: 700, color: "#111111" },
-  brandAccent: { color: "#8a8a8a", fontWeight: 400 },
   meta: { fontSize: 8.5, color: "#8a8a8a", textAlign: "right" },
   title: { fontSize: 15, fontWeight: 700, color: "#111111", marginBottom: 4 },
   subtitle: { fontSize: 9.5, color: "#8a8a8a", marginBottom: 16 },
@@ -57,13 +52,7 @@ function LetterDocument({ template, context }: { template: LetterTemplate; conte
   return <Document title={`${template.label} ${context.reference}`} author="QONIC consulting">
     <Page size="A4" style={styles.page}>
       <View style={styles.header}>
-        <View style={styles.brandRow}>
-          <Text style={styles.brand}>QONIC</Text>
-          <Svg viewBox={LOGO_VIEWBOX} style={{ width: 15, height: 16 }}>
-            {LOGO_PATHS.map((d) => <Path key={d} d={d} fill={BRAND_YELLOW} />)}
-          </Svg>
-          <Text style={styles.brandAccent}>consulting</Text>
-        </View>
+        <PdfLockup />
         <View>
           <Text style={styles.meta}>Reference: {context.reference}</Text>
           <Text style={styles.meta}>Issued: {formatDate(context.releasedAt.toISOString().slice(0, 10))}</Text>

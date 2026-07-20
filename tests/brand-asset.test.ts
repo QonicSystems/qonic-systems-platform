@@ -36,10 +36,18 @@ describe("brand artwork", () => {
   it("draws the same mark on the web and on both document letterheads", () => {
     // Each of these must go through lib/brand-art rather than its own copy,
     // which is what keeps a letter's logo identical to the site's.
-    for (const file of ["components/brand.tsx", "lib/contracts/pdf.tsx", "lib/finance/invoice-pdf.tsx"]) {
+    for (const file of ["components/brand.tsx", "lib/pdf-brand.tsx"]) {
       const source = readFileSync(join(root, file), "utf8");
       expect(source, `${file} should import the shared mark`).toContain("@/lib/brand-art");
       expect(pathData(source), `${file} should not inline its own path data`).toEqual([]);
+    }
+    // Both documents must go through the one shared letterhead rather than
+    // rolling their own — that divergence is what left the letter's wordmark
+    // half grey while the site's was black.
+    for (const doc of ["lib/contracts/pdf.tsx", "lib/finance/invoice-pdf.tsx"]) {
+      const source = readFileSync(join(root, doc), "utf8");
+      expect(source, `${doc} should render the shared letterhead`).toContain("<PdfLockup />");
+      expect(pathData(source), `${doc} should not inline its own path data`).toEqual([]);
     }
   });
 
