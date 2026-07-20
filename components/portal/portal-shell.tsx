@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { LogoMark } from "@/components/icons";
@@ -22,7 +22,11 @@ export function PortalShell({ user, links, unreadCount, children }: {
   const pathname = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+
+  // Close the compact menu on navigation, otherwise it stays open over the new page.
+  const closeMenu = () => setMenuOpen(false);
 
   const signOut = async () => {
     setSigningOut(true);
@@ -43,6 +47,14 @@ export function PortalShell({ user, links, unreadCount, children }: {
         </nav>
 
         <div className="portal-account">
+          <button
+            type="button"
+            className={`portal-burger ${menuOpen ? "is-open" : ""}`}
+            aria-expanded={menuOpen}
+            aria-controls="portal-menu"
+            aria-label="Toggle navigation menu"
+            onClick={() => setMenuOpen((value) => !value)}
+          ><span /><span /><span /></button>
           <GlobalSearch />
           <Link href="/notifications" className="portal-bell" aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : "Notifications"}>
             <span aria-hidden="true">🔔</span>
@@ -65,6 +77,23 @@ export function PortalShell({ user, links, unreadCount, children }: {
           </div>}
         </div>
       </div>
+
+      {/* Below the desktop breakpoint the horizontal nav is hidden, so this is
+          the ONLY way to reach the rest of the portal on a narrow screen. */}
+      <div id="portal-menu" className={`portal-drawer ${menuOpen ? "is-open" : ""}`}>
+        <div className="portal-drawer-inner">
+          {links.map((entry) => isGroup(entry)
+            ? <div key={entry.label} className="portal-drawer-group">
+                <p className="portal-drawer-heading">{entry.label}</p>
+                {entry.items.map((item) => <Link key={item.href} href={item.href}
+                  className={`portal-drawer-link ${isActive(item.href, pathname) ? "is-active" : ""}`}
+                  onClick={closeMenu}>{item.label}</Link>)}
+              </div>
+            : <Link key={entry.href} href={entry.href}
+                className={`portal-drawer-link ${isActive(entry.href, pathname) ? "is-active" : ""}`}
+                onClick={closeMenu}>{entry.label}</Link>)}
+        </div>
+      </div>
     </header>
 
     <main id="main-content" className="portal-main">{children}</main>
@@ -81,14 +110,35 @@ function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
 }
 
 /**
- * Opens on hover for pointer users and on click for everyone else, so the group
- * is reachable by keyboard and on touch — hover alone would strand both.
+ * Click to open, click again or click away to close.
+ *
+ * An earlier version also opened on hover, which made it impossible to click one
+ * open with a mouse: mouseenter set it open, then the click toggled it straight
+ * back shut. Click-only is unambiguous and works identically for pointer, touch,
+ * and keyboard, so there is no state for the two interactions to fight over.
  */
 function NavDropdown({ group, pathname }: { group: NavGroup; pathname: string }) {
   const [open, setOpen] = useState(false);
+  const container = useRef<HTMLDivElement>(null);
   const active = group.items.some((item) => isActive(item.href, pathname));
 
-  return <div className="portal-group" onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: MouseEvent) => {
+      if (!container.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
+  return <div className="portal-group" ref={container}>
     <button
       type="button"
       className={`portal-link portal-group-trigger ${active ? "is-active" : ""}`}
