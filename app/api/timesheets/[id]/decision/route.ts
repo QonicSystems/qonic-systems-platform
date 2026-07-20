@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { clientIp, recordAudit } from "@/lib/audit";
 import { guardRoute } from "@/lib/auth/guard";
 import { canDecideTimesheet } from "@/lib/delivery/timesheet";
+import { notify } from "@/lib/notify";
 import { db } from "@/lib/db";
 
 export const runtime = "nodejs";
@@ -38,6 +39,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       where: { id: sheet.id },
       data: { status: decision, decidedById: context.user.id, decidedAt: new Date(), decisionNote: note || null },
     });
+    await notify({
+      userId: sheet.userId, kind: "TIMESHEET",
+      title: decision === "APPROVED" ? "Your timesheet was approved" : "Your timesheet needs changes",
+      body: note || undefined,
+      link: `/timesheets?week=${sheet.weekStart.toISOString().slice(0, 10)}`,
+    }, tx);
     await recordAudit({
       actorId: context.user.id,
       action: `timesheet.${decision.toLowerCase()}`,

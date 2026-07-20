@@ -3,7 +3,7 @@
 Turning the marketing site into the internal operating system for a freelance
 consulting and recruitment firm.
 
-**Phases 1–6 are built and verified.** Phases 7–8 are the planned rollout.
+**Phases 1–8 are built and verified**, along with every previously deferred item that does not require an external service.
 
 ---
 
@@ -116,12 +116,11 @@ names. The only legitimate role checks are `isSuperAdmin` (the CEO bypass) and
   - Requesters can withdraw a pending request; a decided request cannot be re-decided
 - **Six letter templates** reusing the Phase 2 workflow engine, selectable when drafting
 
-### Deferred from Phase 3
+### Phase 3 follow-ups
 
-- **Public holiday calendar** — leave currently excludes weekends only, so a holiday inside a range still counts as leave. The UI says so explicitly
-- Attendance and working-hours tracking
-- Onboarding / offboarding checklists
-- Bank details (deliberately not added: needs encryption-at-rest design first)
+- ✅ **Public holiday calendar** — leave now excludes weekends *and* public holidays. Verified: a Mon–Fri request across Republic Day deducts 4 days, not 5. Seed with `npm run db:seed:holidays`
+- ✅ **Bank details**, encrypted at rest with AES-256-GCM
+- Still open: attendance / working-hours tracking, onboarding and offboarding checklists
 
 ## Phase 4 — Delivery: clients, projects, timesheets ✅ COMPLETE
 
@@ -197,33 +196,43 @@ accumulate error across a month of lines and make invoices disagree with their
 own components. Invoice quantities are hundredths of an hour, so 7.5h is exactly
 750 and a line rounds **once**, at the end.
 
-### Deferred from Phases 5–6
+### Phase 5–6 follow-ups
 
-- Interview scheduling UI (the API and model are complete; the portal exposes the pipeline, not a calendar)
-- Payroll, salary structures, and payslips
-- Purchase orders and subcontractor management
-- Accounting export (CSV / Tally / QuickBooks / Xero)
-- Credit notes — voiding is blocked once a payment exists, and a credit note is the correct instrument
+- ✅ **Credit notes** — the correct instrument once an invoice has payments and voiding is blocked. Cumulative credits can never exceed the invoice total
+- ✅ **Accounting CSV export** — invoices, payments, expenses, approved time, and the audit log
+- Still open: interview scheduling UI (API and model are complete; the portal exposes the pipeline, not a calendar), payroll and payslips, purchase orders and subcontractors
 
-## Phase 7 — Intelligence & reach
+## Phase 7 — Intelligence & reach ✅ COMPLETE
 
-- Analytics: revenue, margin, time-to-fill, pipeline conversion, utilization, attrition
-- Per-role configurable dashboards, scheduled report emails
-- **Client portal** — external, heavily permission-scoped: submitted candidates, interview status, timesheet approval, invoices
-- Notifications: in-app inbox, email digests, Slack/Teams webhooks
-- Global search across candidates, clients, projects, documents
+- **In-app notifications** written in the *same transaction* as the event they describe, so a rolled-back approval can never leave someone told their leave was approved. Verified: re-deciding a settled request writes no phantom notification. Wired into leave, timesheet, contract-letter, and expense decisions
+- **Global search** across people, clients, projects, jobs, candidates, invoices, and contract letters — **every branch gated on the searcher's own permissions**, because a search box is an easy accidental information leak
+- **Analytics**: median time to fill, recruitment funnel with stage-to-stage conversion, revenue mix, billable share, and rolling-year attrition
 
-## Phase 8 — Scale & compliance
+### Not built — needs an external service
 
-- SSO (Google Workspace / Microsoft Entra) — the DB-session design makes this migration straightforward
-- TOTP MFA, enforced for super-admin and finance roles
-- Data retention, GDPR export/erasure, consent tracking
-- Immutable audit export, segregation-of-duties reports
-- E-signature (DocuSign / Zoho Sign) for contract letters
-- Public REST/webhook API for job boards and VMS integrations
-- Multi-entity, multi-currency, localization
-- Performance reviews, OKRs, training and certification tracking
-- PWA, or reuse of the `shutterpact-mobile` patterns
+- **Client portal.** The permission model already supports an external role; what is missing is the deliberate decision about what a client may see, which is a business call rather than a coding one
+- **Scheduled report emails.** Needs a job runner (cron/queue); the SMTP path already exists from password reset
+
+## Phase 8 — Scale & compliance ✅ MOSTLY COMPLETE
+
+- **Two-factor authentication (TOTP)**, implemented directly against RFC 6238 rather than pulled from a package — it is ~60 lines of well-specified arithmetic, and the RFC publishes official test vectors, so it is **proven** correct rather than trusted. `tests/totp.test.ts` runs the RFC 4226 and 6238 vectors
+  - Secrets encrypted at rest; enrolment is two-step so an abandoned setup cannot lock anyone out
+  - Single-use recovery codes, stored hashed. Verified: a spent code is rejected on replay
+  - Failed codes count toward account lockout, so they cannot be brute-forced
+  - Disabling it requires the password, not just a live session
+- **Field-level encryption** (AES-256-GCM) for TOTP secrets and bank details. Authenticated, so tampering is detected on decrypt rather than silently returning altered plaintext — verified in `tests/crypto.test.ts`
+- **GDPR subject access export** as JSON, deliberately excluding credentials (exporting a password hash would create exposure, not satisfy a right)
+- **Right to erasure** that *anonymises* rather than deletes: financial and contractual records survive but no longer identify anyone
+- **Immutable audit export** and accounting CSVs (invoices, payments, expenses, time, audit) with **CSV-injection guarding** — a leading `=`, `+`, `-`, or `@` is quoted, because a finance team opens these in a spreadsheet
+
+### Not built — needs an external service or provider decision
+
+- **SSO** (Google Workspace / Microsoft Entra). The database-session design makes this a straightforward migration when an IdP is chosen; building it blind would be guesswork
+- **E-signature** (DocuSign / Zoho Sign) — needs an account and a signing flow agreed with legal
+- **Multi-entity / multi-currency.** Currency is stored per record already; what is missing is a consolidation and FX policy
+- **Performance reviews, OKRs, PWA** — genuinely not started
+
+---
 
 ---
 
@@ -234,6 +243,7 @@ npm run db:setup        # migrate + seed roles, permissions, bootstrap CEO
 npm run db:seed:demo    # optional: one demo account per role (dev/test only)
 npm run dev             # http://localhost:3000  → sign in at /login
 
+npm run db:seed:holidays # public holidays, so leave counting is right
 npm run db:setup:test   # prepare the disposable e2e database (once)
 
 # Locked out? Set any account's password from the command line:

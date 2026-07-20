@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { clientIp, recordAudit } from "@/lib/audit";
 import { guardRoute } from "@/lib/auth/guard";
 import { canDecideLeave } from "@/lib/leave/leave";
+import { notify } from "@/lib/notify";
 import { db } from "@/lib/db";
 
 export const runtime = "nodejs";
@@ -61,6 +62,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       });
     }
 
+    await notify({
+      userId: leave.userId, kind: "LEAVE",
+      title: `Your leave was ${decision.toLowerCase()}`,
+      body: `${leave.days} day(s) of ${leave.leaveType.label}${note ? ` — “${note}”` : ""}`,
+      link: "/leave",
+    }, tx);
     await recordAudit({
       actorId: context.user.id, action: `leave.${decision.toLowerCase()}`, entityType: "LeaveRequest", entityId: leave.id,
       before: { status: leave.status }, after: { status: decision, days: leave.days, employee: leave.user.name }, ipAddress: clientIp(request),

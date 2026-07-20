@@ -18,7 +18,8 @@
     "db:studio": "prisma studio",
     "db:setup": "npm run db:deploy && npm run db:seed",
     "db:setup:test": "tsx prisma/setup-test-db.ts",
-    "db:set-password": "tsx prisma/set-password.ts"
+    "db:set-password": "tsx prisma/set-password.ts",
+    "db:seed:holidays": "tsx prisma/seed-holidays.ts"
   },
   "dependencies": {
     "@node-rs/argon2": "^2.0.2",

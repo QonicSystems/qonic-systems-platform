@@ -14,7 +14,11 @@ export async function POST(request: Request) {
   let body: unknown;
   try { body = await request.json(); } catch { return NextResponse.json({ message: "Please submit a valid request." }, { status: 400 }); }
 
-  const { data, errors } = validateLeaveInput(body);
+  // Load the calendar once and hand it to the validator, which stays pure.
+  const holidayRows = await db.holiday.findMany({ select: { date: true } });
+  const holidays = new Set(holidayRows.map((row) => row.date.toISOString().slice(0, 10)));
+
+  const { data, errors } = validateLeaveInput(body, holidays);
   if (!data) return NextResponse.json({ message: "Please correct the highlighted fields.", errors }, { status: 422 });
 
   const leaveType = await db.leaveType.findUnique({ where: { id: data.leaveTypeId } });

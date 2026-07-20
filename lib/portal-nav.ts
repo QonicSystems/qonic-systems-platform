@@ -49,6 +49,7 @@ export const portalNavigation: ReadonlyArray<NavItem | NavGroup> = [
   {
     label: "Reports",
     items: [
+      { label: "Analytics", href: "/reports/analytics", permission: "report.utilization" },
       { label: "Utilisation", href: "/reports", permission: "report.utilization" },
       { label: "Capacity", href: "/reports/capacity", permission: "report.utilization" },
       { label: "Revenue", href: "/reports/revenue", permission: "report.finance" },

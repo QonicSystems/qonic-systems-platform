@@ -47,6 +47,24 @@ describe("workingDaysBetween", () => {
   it("returns zero for a weekend-only range", () => {
     expect(workingDaysBetween(utc("2026-07-25"), utc("2026-07-26"))).toBe(0); // Sat–Sun
   });
+
+  it("excludes a public holiday falling on a weekday", () => {
+    // 15 August 2026 is a Saturday, so use Independence Day 2027-adjacent logic:
+    // 2026-08-14 is a Friday — treat it as a holiday for the test.
+    const holidays = new Set(["2026-08-14"]);
+    expect(workingDaysBetween(utc("2026-08-10"), utc("2026-08-14"))).toBe(5);
+    expect(workingDaysBetween(utc("2026-08-10"), utc("2026-08-14"), holidays)).toBe(4);
+  });
+
+  it("does not double-count a holiday that lands on a weekend", () => {
+    const holidays = new Set(["2026-08-15"]); // a Saturday
+    expect(workingDaysBetween(utc("2026-08-10"), utc("2026-08-16"), holidays)).toBe(5);
+  });
+
+  it("returns zero when a range is entirely weekends and holidays", () => {
+    const holidays = new Set(["2026-08-13", "2026-08-14"]);
+    expect(workingDaysBetween(utc("2026-08-13"), utc("2026-08-16"), holidays)).toBe(0);
+  });
 });
 
 describe("validateLeaveInput", () => {
@@ -70,6 +88,12 @@ describe("validateLeaveInput", () => {
     const { data, errors } = validateLeaveInput({ ...valid, startDate: "2026-07-25", endDate: "2026-07-26" });
     expect(data).toBeUndefined();
     expect(errors.startDate).toMatch(/no working days/i);
+  });
+
+  it("deducts fewer days when a public holiday falls inside the range", () => {
+    const holidays = new Set(["2026-07-22"]); // a Wednesday
+    expect(validateLeaveInput(valid).data?.days).toBe(5);
+    expect(validateLeaveInput(valid, holidays).data?.days).toBe(4);
   });
 
   it("survives a non-object body", () => {

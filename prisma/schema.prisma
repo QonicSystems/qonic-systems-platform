@@ -56,6 +56,8 @@ model User {
   paymentsRecorded   Payment[]           @relation("PaymentRecorder")
   expenses           Expense[]           @relation("ExpenseOwner")
   expenseDecisions   Expense[]           @relation("ExpenseApprover")
+  notifications      Notification[]      @relation("NotificationRecipient")
+  bankDetail         BankDetail?
   projectsManaged    Project[]           @relation("ProjectManager")
   projectAssignments ProjectAssignment[]
   timesheets         Timesheet[]         @relation("TimesheetOwner")
@@ -68,6 +70,15 @@ model User {
   lastLoginAt        DateTime?
   failedLoginCount   Int        @default(0)
   lockedUntil        DateTime?
+
+  // --- Two-factor authentication (Phase 8) ---
+  /// Base32 TOTP secret, encrypted at rest. Null until enrolment starts.
+  totpSecretEnc  String?
+  /// Only true once a code has been verified — a half-finished enrolment
+  /// must never lock someone out.
+  totpEnabled    Boolean  @default(false)
+  /// Hashed single-use recovery codes, newline separated.
+  totpBackupHashes String?
 
   roleId String
   role   Role   @relation(fields: [roleId], references: [id])
@@ -816,6 +827,7 @@ model Invoice {
 
   lines      InvoiceLine[]
   payments   Payment[]
+  creditNotes CreditNote[]
   placements Placement[]
   timeEntries TimeEntry[]
 
@@ -899,4 +911,84 @@ model Expense {
 
   @@index([userId, status])
   @@index([status])
+}
+
+// ------------------------------------ Deferred items + Phases 7 and 8 ------
+
+/// Public holidays. Leave day-counting consults these so a holiday inside a
+/// requested range is not deducted from someone's allowance.
+model Holiday {
+  id     String   @id @default(cuid())
+  date   DateTime @unique @db.Date
+  name   String
+  /// Optional region so a multi-country team can diverge later.
+  region String   @default("IN")
+
+  createdAt DateTime @default(now())
+
+  @@index([date])
+}
+
+enum NotificationKind {
+  LEAVE
+  TIMESHEET
+  CONTRACT
+  EXPENSE
+  INVOICE
+  RECRUITMENT
+  SYSTEM
+}
+
+/// In-app inbox. Written by the same transaction as the event it describes, so
+/// a notification can never reference something that did not happen.
+model Notification {
+  id     String           @id @default(cuid())
+  userId String
+  user   User             @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
+  kind   NotificationKind @default(SYSTEM)
+  title  String
+  body   String?
+  /// Where clicking it should take the person.
+  link   String?
+  readAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, readAt])
+  @@index([createdAt])
+}
+
+/// Payment details, encrypted at rest with AES-256-GCM (see lib/crypto.ts).
+/// Split from User so the ciphertext is not loaded on every session lookup.
+model BankDetail {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// All three hold `iv:authTag:ciphertext`, never plaintext.
+  accountNameEnc   String
+  accountNumberEnc String
+  sortCodeEnc      String
+  /// Safe to show in a list without decrypting anything.
+  lastFour         String
+  bankName         String?
+
+  updatedAt   DateTime @updatedAt
+  updatedById String?
+}
+
+/// A credit note against an invoice — the correct instrument once a payment
+/// exists and voiding is no longer allowed.
+model CreditNote {
+  id        String  @id @default(cuid())
+  number    String  @unique
+  invoiceId String
+  invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  /// Minor units. Never exceeds the invoice total.
+  amount    Int
+  reason    String
+  issuedAt  DateTime @default(now())
+  issuedById String?
+
+  @@index([invoiceId])
 }

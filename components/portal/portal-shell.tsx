@@ -5,12 +5,16 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { LogoMark } from "@/components/icons";
 import { Avatar } from "@/components/portal/avatar";
+import { GlobalSearch } from "@/components/portal/global-search";
 import { isGroup, type NavGroup, type NavItem } from "@/lib/portal-nav";
 
 export type PortalUser = { name: string; email: string; roleLabel: string; photoUrl: string | null };
 
-export function PortalShell({ user, links, children }: {
+
+export function PortalShell({ user, links, unreadCount, children }: {
   user: PortalUser;
+  /** Resolved on the server so the bell is correct on first paint. */
+  unreadCount: number;
   /** Already filtered by permission on the server — this component never decides access. */
   links: ReadonlyArray<NavItem | NavGroup>;
   children: React.ReactNode;
@@ -39,6 +43,11 @@ export function PortalShell({ user, links, children }: {
         </nav>
 
         <div className="portal-account">
+          <GlobalSearch />
+          <Link href="/notifications" className="portal-bell" aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : "Notifications"}>
+            <span aria-hidden="true">🔔</span>
+            {unreadCount > 0 && <span className="portal-badge">{unreadCount > 9 ? "9+" : unreadCount}</span>}
+          </Link>
           <button type="button" className="portal-avatar-button" onClick={() => setOpen((value) => !value)} aria-expanded={open} aria-haspopup="menu" aria-label="Account menu">
             <Avatar name={user.name} photoUrl={user.photoUrl} size={40} />
           </button>

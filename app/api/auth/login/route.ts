@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import { clientIp, recordAudit } from "@/lib/audit";
 import { validateLoginPayload } from "@/lib/auth/login";
 import { verifyDummyPassword, verifyPassword } from "@/lib/auth/password";
+import { verifyCode } from "@/lib/auth/totp";
+import { decrypt, sha256 } from "@/lib/crypto";
 import { ABSOLUTE_TTL_MS, IDLE_TTL_MS, SESSION_COOKIE, createSessionToken, hashSessionToken, safeRedirectPath, sessionCookieOptions } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 
@@ -47,6 +49,47 @@ export async function POST(request: Request) {
     });
     await recordAudit({ actorId: user.id, action: "auth.login.failed", entityType: "User", entityId: user.id, ipAddress: clientIp(request) });
     return NextResponse.json({ message: GENERIC_FAILURE }, { status: 401 });
+  }
+
+  // --- Second factor ---------------------------------------------------
+  // Only reached once the password is known-good, so telling the caller that a
+  // code is required leaks nothing they could not already infer.
+  if (user.totpEnabled && user.totpSecretEnc) {
+    const submitted = String((body as Record<string, unknown>)?.totpCode ?? "").trim();
+    if (!submitted) {
+      return NextResponse.json({ message: "Enter the 6-digit code from your authenticator app.", mfaRequired: true }, { status: 401 });
+    }
+
+    const accepted = verifyCode(decrypt(user.totpSecretEnc), submitted);
+    let usedBackup = false;
+
+    if (!accepted && user.totpBackupHashes) {
+      // Recovery codes are single use: the matching hash is removed as it is
+      // spent, so a leaked code cannot be replayed.
+      const hashes = user.totpBackupHashes.split("\n").filter(Boolean);
+      const submittedHash = sha256(submitted.toUpperCase());
+      const index = hashes.indexOf(submittedHash);
+      if (index !== -1) {
+        hashes.splice(index, 1);
+        await db.user.update({ where: { id: user.id }, data: { totpBackupHashes: hashes.join("\n") } });
+        usedBackup = true;
+      }
+    }
+
+    if (!accepted && !usedBackup) {
+      // Counts toward lockout, so codes cannot be brute-forced indefinitely.
+      const failedLoginCount = user.failedLoginCount + 1;
+      await db.user.update({
+        where: { id: user.id },
+        data: { failedLoginCount, lockedUntil: failedLoginCount >= MAX_FAILED_ATTEMPTS ? new Date(Date.now() + LOCKOUT_MS) : null },
+      });
+      await recordAudit({ actorId: user.id, action: "auth.mfa.failed", entityType: "User", entityId: user.id, ipAddress: clientIp(request) });
+      return NextResponse.json({ message: "That code is not right. Please try again.", mfaRequired: true }, { status: 401 });
+    }
+
+    if (usedBackup) {
+      await recordAudit({ actorId: user.id, action: "auth.mfa.backup_used", entityType: "User", entityId: user.id, ipAddress: clientIp(request) });
+    }
   }
 
   // Correct password, but the account is not permitted to sign in. Kept distinct

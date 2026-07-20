@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { clientIp, recordAudit } from "@/lib/audit";
 import { guardRoute } from "@/lib/auth/guard";
 import { canTransition, canViewLetter } from "@/lib/contracts/workflow";
+import { notify } from "@/lib/notify";
 import { db } from "@/lib/db";
 import type { ContractStatus } from "@/lib/generated/prisma/enums";
 
@@ -47,6 +48,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     await tx.contractLetterEvent.create({
       data: { letterId: letter.id, fromStatus: letter.status, toStatus: to, actorId: context.user.id, note: note || null },
     });
+    // The subject only needs to hear about the outcomes that affect them.
+    if (to === "RELEASED" || to === "REVOKED") {
+      await notify({
+        userId: letter.subjectUserId, kind: "CONTRACT",
+        title: to === "RELEASED" ? "A contract letter has been issued to you" : "A contract letter was withdrawn",
+        body: letter.reference,
+        link: `/contracts/${letter.id}`,
+      }, tx);
+    }
     await recordAudit({
       actorId: context.user.id,
       action: `contract.${to.toLowerCase()}`,

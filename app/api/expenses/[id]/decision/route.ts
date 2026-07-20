@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { clientIp, recordAudit } from "@/lib/audit";
 import { guardRoute } from "@/lib/auth/guard";
+import { notify } from "@/lib/notify";
 import { db } from "@/lib/db";
 
 export const runtime = "nodejs";
@@ -48,6 +49,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         reimbursedAt: decision === "REIMBURSED" ? new Date() : null,
       },
     });
+    await notify({
+      userId: expense.userId, kind: "EXPENSE",
+      title: `Your expense claim was ${decision.toLowerCase()}`,
+      body: note || expense.description,
+      link: "/expenses",
+    }, tx);
     await recordAudit({ actorId: context.user.id, action: `expense.${decision.toLowerCase()}`, entityType: "Expense", entityId: id, before: { status: expense.status }, after: { status: decision, claimant: expense.user.name }, ipAddress: clientIp(request) }, tx);
   });
 

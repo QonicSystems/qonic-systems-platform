@@ -1,6 +1,8 @@
 import { PasswordForm } from "@/components/portal/password-form";
+import { MfaPanel } from "@/components/portal/mfa-panel";
 import { SessionList, type SessionRow } from "@/components/portal/session-list";
 import { requireAuth } from "@/lib/auth/guard";
+import { isEncryptionConfigured } from "@/lib/crypto";
 import { db } from "@/lib/db";
 
 export const metadata = { title: "Account Security" };
@@ -27,7 +29,10 @@ export default async function SecurityPage({ searchParams }: { searchParams: Pro
   const context = await requireAuth();
   const first = (await searchParams).first === "1";
 
-  const sessions = await db.session.findMany({ where: { userId: context.user.id }, orderBy: { createdAt: "desc" } });
+  const [sessions, account] = await Promise.all([
+    db.session.findMany({ where: { userId: context.user.id }, orderBy: { createdAt: "desc" } }),
+    db.user.findUniqueOrThrow({ where: { id: context.user.id }, select: { totpEnabled: true } }),
+  ]);
   const rows: SessionRow[] = sessions.map((session) => ({
     id: session.id,
     current: session.id === context.sessionId,
@@ -56,6 +61,13 @@ export default async function SecurityPage({ searchParams }: { searchParams: Pro
       <h2 className="portal-section-title">Change password</h2>
       <div className="portal-panel"><PasswordForm mustChange={context.user.mustChangePassword} /></div>
     </section>
+
+    {!context.user.mustChangePassword && <section className="portal-section">
+      <h2 className="portal-section-title">Two-factor authentication</h2>
+      <div className="portal-panel">
+        <MfaPanel enabled={account.totpEnabled} available={isEncryptionConfigured()} />
+      </div>
+    </section>}
 
     {/* Hidden during the forced first-time change so the page stays single-purpose. */}
     {!context.user.mustChangePassword && <section className="portal-section">

@@ -17,23 +17,26 @@ export function parseDate(value: string): Date | null {
 }
 
 /**
- * Counts working days inclusive of both ends, skipping weekends.
+ * Counts working days inclusive of both ends, skipping weekends AND any public
+ * holiday supplied in `holidays` (ISO yyyy-mm-dd strings).
  *
- * Public holidays are not modelled yet, so a holiday inside a range still counts
- * as leave. That is a deliberate simplification, not an oversight — see ROADMAP.
+ * Holidays are passed in rather than fetched here so this stays a pure function
+ * — the caller loads the calendar once and this remains directly testable.
  */
-export function workingDaysBetween(start: Date, end: Date): number {
+export function workingDaysBetween(start: Date, end: Date, holidays: ReadonlySet<string> = new Set()): number {
   let days = 0;
   const cursor = new Date(start.getTime());
   while (cursor <= end) {
     const weekday = cursor.getUTCDay();
-    if (weekday !== 0 && weekday !== 6) days += 1;
+    const isWeekend = weekday === 0 || weekday === 6;
+    const isHoliday = holidays.has(cursor.toISOString().slice(0, 10));
+    if (!isWeekend && !isHoliday) days += 1;
     cursor.setUTCDate(cursor.getUTCDate() + 1);
   }
   return days;
 }
 
-export function validateLeaveInput(value: unknown): { data?: LeaveInput & { start: Date; end: Date; days: number }; errors: LeaveErrors } {
+export function validateLeaveInput(value: unknown, holidays: ReadonlySet<string> = new Set()): { data?: LeaveInput & { start: Date; end: Date; days: number }; errors: LeaveErrors } {
   const input = typeof value === "object" && value !== null ? value as Record<string, unknown> : {};
   const data: LeaveInput = {
     leaveTypeId: String(input.leaveTypeId ?? "").trim(),
@@ -52,10 +55,10 @@ export function validateLeaveInput(value: unknown): { data?: LeaveInput & { star
 
   if (Object.keys(errors).length || !start || !end) return { errors };
 
-  const days = workingDaysBetween(start, end);
-  // A range that lands entirely on a weekend costs nothing and is almost
-  // certainly a mistake, so it is rejected rather than silently recorded as 0.
-  if (days === 0) return { errors: { startDate: "That range contains no working days." } };
+  const days = workingDaysBetween(start, end, holidays);
+  // A range made up entirely of weekends and holidays costs nothing and is
+  // almost certainly a mistake, so it is rejected rather than recorded as 0.
+  if (days === 0) return { errors: { startDate: "That range contains no working days — it falls on weekends or public holidays." } };
 
   return { data: { ...data, start, end, days }, errors };
 }
