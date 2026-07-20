@@ -61,7 +61,7 @@ export function ApplyForm({ jobId }: { jobId: string }) {
     <div className="mt-5">
       <label className="inline-check">
         <input type="checkbox" checked={data.consent} onChange={(e) => update("consent", e.target.checked)} aria-invalid={Boolean(errors.consent)} />
-        <span>I am happy for Avenstrix Consulting to hold my details and contact me about this and similar roles.</span>
+        <span>I am happy for QONIC consulting to hold my details and contact me about this and similar roles.</span>
       </label>
       {errors.consent && <p className="form-error">{errors.consent}</p>}
     </div>

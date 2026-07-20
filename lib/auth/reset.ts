@@ -18,7 +18,7 @@ export function resetUrl(origin: string, token: string): string {
 
 export function resetEmail(name: string, url: string): { subject: string; text: string } {
   return {
-    subject: "Reset your Avenstrix Consulting password",
+    subject: "Reset your QONIC consulting password",
     text: [
       `Hello ${name},`,
       "",
@@ -28,7 +28,7 @@ export function resetEmail(name: string, url: string): { subject: string; text: 
       "The link expires in one hour and can only be used once.",
       "If you did not request this, you can ignore this email — your password has not changed.",
       "",
-      "Avenstrix Consulting",
+      "QONIC consulting",
     ].join("\n"),
   };
 }

@@ -4,13 +4,13 @@ import { Reveal } from "@/components/reveal";
 import { SectionHeading } from "@/components/section-heading";
 import { site } from "@/lib/site";
 
-export const metadata: Metadata = { title: "Contact Us", description: "Talk to Avenstrix Consulting about your next hire or career move." };
+export const metadata: Metadata = { title: "Contact Us", description: "Talk to QONIC consulting about your next hire or career move." };
 
 export default function ContactPage() {
   return <main id="main-content">
     <section className="page-hero">
       <div className="hero-grid" aria-hidden="true" /><div className="aurora aurora--one" aria-hidden="true" />
-      <div className="site-container relative"><div className="hero-in"><SectionHeading eyebrow="Contact Avenstrix" title="Ready to scale your team?"><p>Tell us about your hiring needs and one of our specialists will be in touch.</p></SectionHeading></div></div>
+      <div className="site-container relative"><div className="hero-in"><SectionHeading eyebrow="Contact QONIC" title="Ready to scale your team?"><p>Tell us about your hiring needs and one of our specialists will be in touch.</p></SectionHeading></div></div>
     </section>
     <section className="section">
       <div className="site-container grid items-start gap-12 lg:grid-cols-5">

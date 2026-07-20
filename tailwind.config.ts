@@ -5,10 +5,11 @@ export default {
   theme: {
     extend: {
       colors: {
-        ink: { DEFAULT: "#0F1419", soft: "#2A313B", muted: "#565F6B", faint: "#8A93A0" },
-        canvas: { DEFAULT: "#FCFBF9", sub: "#F5F3EF", line: "#E9E5DE" },
-        accent: { DEFAULT: "#0E9384", deep: "#0B6E63", dark: "#07504A", tint: "#EDF8F5", soft: "#CFEBE4" },
-        sand: { DEFAULT: "#C2A878", tint: "#F7F1E6" },
+        // Mirrors the :root tokens in globals.css, both derived from the logo.
+        ink: { DEFAULT: "#09142E", soft: "#1D2B47", muted: "#4C5A72", faint: "#8B96A9" },
+        canvas: { DEFAULT: "#FFFFFF", sub: "#F4F6FA", line: "#E2E7F0" },
+        accent: { DEFAULT: "#E84218", deep: "#C53410", dark: "#9C2809", tint: "#FDF0EB", soft: "#F8CCBD" },
+        navy: { DEFAULT: "#09142E", soft: "#16244A", tint: "#EEF1F7" },
       },
       fontFamily: {
         display: ["var(--font-display)", "system-ui", "sans-serif"],

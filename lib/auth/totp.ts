@@ -97,7 +97,7 @@ export function verifyCode(secretBase32: string, submitted: string, atMs: number
 }
 
 /** The `otpauth://` URI an authenticator app scans. */
-export function provisioningUri(secretBase32: string, account: string, issuer = "Avenstrix Consulting"): string {
+export function provisioningUri(secretBase32: string, account: string, issuer = "QONIC Consulting"): string {
   const label = encodeURIComponent(`${issuer}:${account}`);
   const params = new URLSearchParams({ secret: secretBase32, issuer, algorithm: "SHA1", digits: String(DIGITS), period: String(PERIOD_SECONDS) });
   return `otpauth://totp/${label}?${params.toString()}`;

@@ -1,12 +1,22 @@
+import { PurgeAudit } from "@/components/admin/purge-audit";
 import { requirePermission } from "@/lib/auth/guard";
 import { db } from "@/lib/db";
 
 export const metadata = { title: "Audit Log" };
 
 export default async function AuditPage() {
-  await requirePermission("audit.view");
-
+  const context = await requirePermission("audit.view");
   const entries = await db.auditLog.findMany({ include: { actor: true }, orderBy: { createdAt: "desc" }, take: 100 });
+
+  // How much each retention window would remove, so the dialog can state the
+  // real consequence rather than a vague warning.
+  const now = new Date().getTime();
+  const [total, ...counts] = await Promise.all([
+    db.auditLog.count(),
+    ...[30, 90, 180, 365].map((days) =>
+      db.auditLog.count({ where: { createdAt: { lt: new Date(now - days * 86_400_000) } } })),
+  ]);
+  const olderThanOptions = [30, 90, 180, 365].map((days, index) => ({ days, count: counts[index] }));
 
   return <section className="portal-section">
     <h2 className="portal-section-title">Audit log</h2>
@@ -26,5 +36,7 @@ export default async function AuditPage() {
         </tbody>
       </table>
     </div>
+
+    {context.role.isSuperAdmin && <PurgeAudit olderThanOptions={olderThanOptions} totalEntries={total} />}
   </section>;
 }

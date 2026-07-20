@@ -2,8 +2,8 @@ import { expect, test } from "@playwright/test";
 
 // Seeded by `npx tsx prisma/seed-demo.ts`.
 const DEMO_PASSWORD = "Demo-Passw0rd-2026";
-const EMPLOYEE = "developer@avenstrixconsulting.com";
-const HR = "hr@avenstrixconsulting.com";
+const EMPLOYEE = "developer@qonic.com";
+const HR = "hr@qonic.com";
 
 const portalNav = (page: import("@playwright/test").Page) =>
   page.getByRole("navigation", { name: "Portal navigation" });
@@ -64,7 +64,7 @@ test.describe("authentication", () => {
 
   test("gives an unknown email the exact same message as a wrong password", async ({ page }) => {
     await page.goto("/login");
-    await page.getByLabel("Work Email").fill("does-not-exist@avenstrixconsulting.com");
+    await page.getByLabel("Work Email").fill("does-not-exist@qonic.com");
     await page.getByLabel("Password").fill("definitely-not-the-password");
     await page.getByRole("button", { name: "Sign In" }).click();
 

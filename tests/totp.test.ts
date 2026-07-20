@@ -42,7 +42,7 @@ describe("RFC 6238 — TOTP test vectors", () => {
 
 describe("base32", () => {
   it("round-trips arbitrary bytes", () => {
-    const original = Buffer.from("Avenstrix Consulting TOTP", "utf8");
+    const original = Buffer.from("QONIC consulting TOTP", "utf8");
     expect(base32Decode(base32Encode(original)).equals(original)).toBe(true);
   });
 
@@ -97,10 +97,10 @@ describe("verifyCode", () => {
 
 describe("enrolment helpers", () => {
   it("builds a scannable otpauth URI", () => {
-    const uri = provisioningUri("JBSWY3DPEHPK3PXP", "hr@avenstrixconsulting.com");
+    const uri = provisioningUri("JBSWY3DPEHPK3PXP", "hr@qonic.com");
     expect(uri).toMatch(/^otpauth:\/\/totp\//);
     expect(uri).toContain("secret=JBSWY3DPEHPK3PXP");
-    expect(uri).toContain("issuer=Avenstrix+Consulting");
+    expect(uri).toContain("issuer=QONIC+Consulting");
     expect(uri).toContain("digits=6");
   });
 

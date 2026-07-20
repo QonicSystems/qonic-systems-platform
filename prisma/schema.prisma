@@ -1,4 +1,4 @@
-// Avenstrix Consulting — internal platform schema.
+// Qonic Consulting — internal platform schema.
 //
 // Design note: roles are ROWS, not an enum, so new roles ("Legal", "Marketing")
 // are created through the admin UI with no migration and no deploy. Application

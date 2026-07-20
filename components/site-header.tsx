@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { navigation, site } from "@/lib/site";
-import { LogoMark } from "@/components/icons";
+import { BrandLockup } from "@/components/brand";
 
 export function SiteHeader() {
   const [open, setOpen] = useState(false);
@@ -25,8 +25,7 @@ export function SiteHeader() {
     <header className={`site-header ${scrolled ? "site-header--scrolled" : ""}`}>
       <nav className="site-container flex items-center justify-between" aria-label="Primary navigation">
         <a href="/" className="brand" aria-label={`${site.name} — Home`}>
-          <span className="brand-mark"><LogoMark /></span>
-          <span>Avenstrix<span>Consulting</span></span>
+          <BrandLockup />
         </a>
         <div className="hidden items-center gap-1 lg:flex">
           {navigation.map(([label, href]) => <a key={href} href={href} className="nav-link">{label}</a>)}

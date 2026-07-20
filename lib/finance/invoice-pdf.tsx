@@ -20,44 +20,44 @@ export type InvoiceContext = {
 };
 
 const styles = StyleSheet.create({
-  page: { paddingTop: 48, paddingBottom: 56, paddingHorizontal: 52, fontSize: 9.5, lineHeight: 1.5, color: "#2a313b" },
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", borderBottomWidth: 2, borderBottomColor: "#0e9384", paddingBottom: 10, marginBottom: 18 },
-  brand: { fontSize: 16, fontWeight: 700, color: "#0f1419" },
-  brandAccent: { color: "#0b6e63" },
-  meta: { fontSize: 8.5, color: "#8a93a0", textAlign: "right" },
-  title: { fontSize: 20, fontWeight: 700, color: "#0f1419", marginBottom: 2, textAlign: "right" },
+  page: { paddingTop: 48, paddingBottom: 56, paddingHorizontal: 52, fontSize: 9.5, lineHeight: 1.5, color: "#1d2b47" },
+  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", borderBottomWidth: 2, borderBottomColor: "#e84218", paddingBottom: 10, marginBottom: 18 },
+  brand: { fontSize: 16, fontWeight: 700, color: "#09142e" },
+  brandAccent: { color: "#8b96a9", fontWeight: 400 },
+  meta: { fontSize: 8.5, color: "#8b96a9", textAlign: "right" },
+  title: { fontSize: 20, fontWeight: 700, color: "#09142e", marginBottom: 2, textAlign: "right" },
   /// The reference is how this document is identified in correspondence, so it
   /// needs real contrast rather than the muted grey used for supporting text.
-  number: { fontSize: 10, fontWeight: 700, color: "#0b6e63", textAlign: "right" },
+  number: { fontSize: 10, fontWeight: 700, color: "#c53410", textAlign: "right" },
   billTo: { flexDirection: "row", justifyContent: "space-between", marginBottom: 18 },
-  label: { fontSize: 7.5, color: "#8a93a0", textTransform: "uppercase", letterSpacing: 1, marginBottom: 3 },
-  strong: { fontSize: 10.5, fontWeight: 700, color: "#0f1419" },
-  tableHead: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: "#0f1419", paddingBottom: 5, marginBottom: 2 },
-  row: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: "#e9e5de", paddingVertical: 5 },
+  label: { fontSize: 7.5, color: "#8b96a9", textTransform: "uppercase", letterSpacing: 1, marginBottom: 3 },
+  strong: { fontSize: 10.5, fontWeight: 700, color: "#09142e" },
+  tableHead: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: "#09142e", paddingBottom: 5, marginBottom: 2 },
+  row: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: "#e2e7f0", paddingVertical: 5 },
   cDesc: { width: "52%" },
   cQty: { width: "12%", textAlign: "right" },
   cRate: { width: "18%", textAlign: "right" },
   cAmt: { width: "18%", textAlign: "right" },
-  headCell: { fontSize: 8, fontWeight: 700, color: "#0f1419" },
+  headCell: { fontSize: 8, fontWeight: 700, color: "#09142e" },
   totals: { marginTop: 12, marginLeft: "auto", width: "48%" },
   totalRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 3 },
-  grand: { flexDirection: "row", justifyContent: "space-between", borderTopWidth: 2, borderTopColor: "#0f1419", marginTop: 4, paddingTop: 6 },
-  grandText: { fontSize: 12, fontWeight: 700, color: "#0f1419" },
-  paid: { marginTop: 14, borderWidth: 1, borderColor: "#cfebe4", backgroundColor: "#edf8f5", padding: 8, color: "#07504a", fontSize: 9, fontWeight: 700 },
+  grand: { flexDirection: "row", justifyContent: "space-between", borderTopWidth: 2, borderTopColor: "#09142e", marginTop: 4, paddingTop: 6 },
+  grandText: { fontSize: 12, fontWeight: 700, color: "#09142e" },
+  paid: { marginTop: 14, borderWidth: 1, borderColor: "#cfe3d6", backgroundColor: "#f0f7f2", padding: 8, color: "#1f5c3d", fontSize: 9, fontWeight: 700 },
   void: { marginBottom: 14, borderWidth: 1, borderColor: "#fecaca", backgroundColor: "#fef2f2", padding: 8, color: "#b91c1c", fontSize: 10, fontWeight: 700 },
-  notes: { marginTop: 18, fontSize: 8.5, color: "#565f6b" },
-  footer: { position: "absolute", bottom: 30, left: 52, right: 52, borderTopWidth: 1, borderTopColor: "#e9e5de", paddingTop: 8, fontSize: 7.5, color: "#8a93a0", flexDirection: "row", justifyContent: "space-between" },
+  notes: { marginTop: 18, fontSize: 8.5, color: "#4c5a72" },
+  footer: { position: "absolute", bottom: 30, left: 52, right: 52, borderTopWidth: 1, borderTopColor: "#e2e7f0", paddingTop: 8, fontSize: 7.5, color: "#8b96a9", flexDirection: "row", justifyContent: "space-between" },
 });
 
 const day = (date: Date) => date.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
 
 function InvoiceDocument({ context }: { context: InvoiceContext }) {
   const outstanding = context.total - context.paidAmount;
-  return <Document title={`Invoice ${context.number}`} author="Avenstrix Consulting">
+  return <Document title={`Invoice ${context.number}`} author="QONIC consulting">
     <Page size="A4" style={styles.page}>
       <View style={styles.header}>
         <View>
-          <Text style={styles.brand}>Avenstrix<Text style={styles.brandAccent}>Consulting</Text></Text>
+          <Text style={styles.brand}>QONIC<Text style={styles.brandAccent}> consulting</Text></Text>
           <Text style={styles.meta}>Global Plaza, Innovation District, Suite 400</Text>
         </View>
         <View>
@@ -119,7 +119,7 @@ function InvoiceDocument({ context }: { context: InvoiceContext }) {
       {context.notes ? <Text style={styles.notes}>{context.notes}</Text> : null}
 
       <View style={styles.footer} fixed>
-        <Text>Avenstrix Consulting · {context.number}</Text>
+        <Text>QONIC consulting · {context.number}</Text>
         <Text render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />
       </View>
     </Page>

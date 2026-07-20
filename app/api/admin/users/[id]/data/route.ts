@@ -50,7 +50,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   return new NextResponse(JSON.stringify({ exportedAt: new Date().toISOString(), subject: safe }, null, 2), {
     headers: {
       "Content-Type": "application/json",
-      "Content-Disposition": `attachment; filename="avenstrix-data-${user.email}.json"`,
+      "Content-Disposition": `attachment; filename="qonic-data-${user.email}.json"`,
       "Cache-Control": "private, no-store",
     },
   });

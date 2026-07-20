@@ -7,7 +7,7 @@ import { db } from "@/lib/db";
 
 export const metadata: Metadata = {
   title: "Careers",
-  description: "Open roles at Avenstrix Consulting and with the clients we recruit for.",
+  description: "Open roles at QONIC consulting and with the clients we recruit for.",
 };
 
 // Published roles change through the day, so this page is always current.

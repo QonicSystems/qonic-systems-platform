@@ -3,13 +3,13 @@ import { ArrowRight } from "@/components/icons";
 import { Reveal } from "@/components/reveal";
 import { SectionHeading } from "@/components/section-heading";
 
-export const metadata: Metadata = { title: "About Us", description: "Learn how Avenstrix Consulting creates exceptional recruitment partnerships." };
+export const metadata: Metadata = { title: "About Us", description: "Learn how QONIC consulting creates exceptional recruitment partnerships." };
 
 export default function AboutPage() {
   return <main id="main-content">
     <section className="page-hero">
       <div className="hero-grid" aria-hidden="true" /><div className="aurora aurora--one" aria-hidden="true" />
-      <div className="site-container relative"><div className="hero-in"><SectionHeading eyebrow="About Avenstrix" title="Recruitment excellence, built on genuine partnership."><p>For more than 15 years, Avenstrix Consulting has connected high-impact organizations with the people who help them grow.</p></SectionHeading></div></div>
+      <div className="site-container relative"><div className="hero-in"><SectionHeading eyebrow="About QONIC" title="Recruitment excellence, built on genuine partnership."><p>For more than 15 years, QONIC consulting has connected high-impact organizations with the people who help them grow.</p></SectionHeading></div></div>
     </section>
     <section className="section">
       <div className="site-container grid items-start gap-12 lg:grid-cols-2">

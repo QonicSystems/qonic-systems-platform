@@ -13,23 +13,23 @@ export type LetterContext = {
 };
 
 const styles = StyleSheet.create({
-  page: { paddingTop: 48, paddingBottom: 56, paddingHorizontal: 52, fontSize: 10, lineHeight: 1.5, color: "#2a313b" },
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", borderBottomWidth: 2, borderBottomColor: "#0e9384", paddingBottom: 10, marginBottom: 20 },
-  brand: { fontSize: 16, fontWeight: 700, color: "#0f1419" },
-  brandAccent: { color: "#0b6e63" },
-  meta: { fontSize: 8.5, color: "#8a93a0", textAlign: "right" },
-  title: { fontSize: 15, fontWeight: 700, color: "#0f1419", marginBottom: 4 },
-  subtitle: { fontSize: 9.5, color: "#8a93a0", marginBottom: 16 },
+  page: { paddingTop: 48, paddingBottom: 56, paddingHorizontal: 52, fontSize: 10, lineHeight: 1.5, color: "#1d2b47" },
+  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", borderBottomWidth: 2, borderBottomColor: "#e84218", paddingBottom: 10, marginBottom: 20 },
+  brand: { fontSize: 16, fontWeight: 700, color: "#09142e" },
+  brandAccent: { color: "#8b96a9", fontWeight: 400 },
+  meta: { fontSize: 8.5, color: "#8b96a9", textAlign: "right" },
+  title: { fontSize: 15, fontWeight: 700, color: "#09142e", marginBottom: 4 },
+  subtitle: { fontSize: 9.5, color: "#8b96a9", marginBottom: 16 },
   paragraph: { marginBottom: 9 },
-  sectionTitle: { fontSize: 10.5, fontWeight: 700, color: "#0f1419", marginTop: 11, marginBottom: 6 },
-  row: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: "#e9e5de", paddingVertical: 4.5 },
-  rowLabel: { width: "38%", color: "#8a93a0" },
-  rowValue: { width: "62%", color: "#0f1419", fontWeight: 700 },
-  signature: { marginTop: 22, paddingTop: 12, borderTopWidth: 1, borderTopColor: "#e9e5de", flexDirection: "row", justifyContent: "space-between" },
-  signatureName: { fontSize: 10.5, fontWeight: 700, color: "#0f1419" },
-  signatureRole: { fontSize: 8.5, color: "#8a93a0" },
+  sectionTitle: { fontSize: 10.5, fontWeight: 700, color: "#09142e", marginTop: 11, marginBottom: 6 },
+  row: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: "#e2e7f0", paddingVertical: 4.5 },
+  rowLabel: { width: "38%", color: "#8b96a9" },
+  rowValue: { width: "62%", color: "#09142e", fontWeight: 700 },
+  signature: { marginTop: 22, paddingTop: 12, borderTopWidth: 1, borderTopColor: "#e2e7f0", flexDirection: "row", justifyContent: "space-between" },
+  signatureName: { fontSize: 10.5, fontWeight: 700, color: "#09142e" },
+  signatureRole: { fontSize: 8.5, color: "#8b96a9" },
   revoked: { marginBottom: 14, borderWidth: 1, borderColor: "#fecaca", backgroundColor: "#fef2f2", padding: 8, color: "#b91c1c", fontSize: 9.5, fontWeight: 700 },
-  footer: { position: "absolute", bottom: 30, left: 52, right: 52, borderTopWidth: 1, borderTopColor: "#e9e5de", paddingTop: 8, fontSize: 7.5, color: "#8a93a0", flexDirection: "row", justifyContent: "space-between" },
+  footer: { position: "absolute", bottom: 30, left: 52, right: 52, borderTopWidth: 1, borderTopColor: "#e2e7f0", paddingTop: 8, fontSize: 7.5, color: "#8b96a9", flexDirection: "row", justifyContent: "space-between" },
 });
 
 function Field({ label, value }: { label: string; value: string }) {
@@ -46,10 +46,10 @@ function LetterDocument({ template, context }: { template: LetterTemplate; conte
   const { payload } = context;
   const firstName = context.subjectName.split(" ")[0];
 
-  return <Document title={`${template.label} ${context.reference}`} author="Avenstrix Consulting">
+  return <Document title={`${template.label} ${context.reference}`} author="QONIC consulting">
     <Page size="A4" style={styles.page}>
       <View style={styles.header}>
-        <Text style={styles.brand}>Avenstrix<Text style={styles.brandAccent}>Consulting</Text></Text>
+        <Text style={styles.brand}>QONIC<Text style={styles.brandAccent}> consulting</Text></Text>
         <View>
           <Text style={styles.meta}>Reference: {context.reference}</Text>
           <Text style={styles.meta}>Issued: {formatDate(context.releasedAt.toISOString().slice(0, 10))}</Text>
@@ -85,7 +85,7 @@ function LetterDocument({ template, context }: { template: LetterTemplate; conte
       <View style={styles.signature} wrap={false}>
         <View>
           <Text style={styles.signatureName}>{context.releasedByName}</Text>
-          <Text style={styles.signatureRole}>Released on behalf of Avenstrix Consulting</Text>
+          <Text style={styles.signatureRole}>Released on behalf of QONIC consulting</Text>
         </View>
         <View>
           <Text style={styles.signatureName}>{context.subjectName}</Text>
@@ -96,7 +96,7 @@ function LetterDocument({ template, context }: { template: LetterTemplate; conte
       </View>
 
       <View style={styles.footer} fixed>
-        <Text>Avenstrix Consulting · {context.reference} · Confidential</Text>
+        <Text>QONIC consulting · {context.reference} · Confidential</Text>
         <Text render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />
       </View>
     </Page>

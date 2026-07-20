@@ -3,7 +3,7 @@ import { ProcessSteps } from "@/components/process-steps";
 import { Reveal } from "@/components/reveal";
 import { SectionHeading } from "@/components/section-heading";
 
-export const metadata: Metadata = { title: "Services", description: "Avenstrix Consulting delivers tailored recruitment and talent solutions." };
+export const metadata: Metadata = { title: "Services", description: "QONIC consulting delivers tailored recruitment and talent solutions." };
 
 export default function ServicesPage() {
   return <main id="main-content">

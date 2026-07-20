@@ -51,7 +51,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       subjectName: letter.subject.name,
       subjectEmail: letter.subject.email,
       payload: letter.payload as unknown as ContractPayload,
-      releasedByName: letter.releasedBy?.name ?? "Avenstrix Consulting",
+      releasedByName: letter.releasedBy?.name ?? "QONIC consulting",
       releasedAt: letter.releasedAt,
       revokedAt: letter.revokedAt,
     });

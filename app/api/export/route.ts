@@ -35,7 +35,7 @@ export async function GET(request: Request) {
   const { context, response } = await guardRoute(permission);
   if (response) return response;
 
-  let filename = `avenstrix-${type}.csv`;
+  let filename = `qonic-${type}.csv`;
   let csv = "";
 
   if (type === "invoices") {

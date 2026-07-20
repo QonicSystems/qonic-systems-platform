@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LogoMark } from "@/components/icons";
+import { BrandLockup } from "@/components/brand";
 import { Avatar } from "@/components/portal/avatar";
 import { GlobalSearch } from "@/components/portal/global-search";
 import { isGroup, type NavGroup, type NavItem } from "@/lib/portal-nav";
@@ -38,7 +38,7 @@ export function PortalShell({ user, links, unreadCount, children }: {
   return <div className="portal">
     <header className="portal-bar">
       <div className="portal-bar-inner">
-        <Link href="/dashboard" className="brand"><span className="brand-mark"><LogoMark /></span><span>Avenstrix<span>Consulting</span></span></Link>
+        <Link href="/dashboard" className="brand"><BrandLockup /></Link>
 
         <nav className="portal-nav" aria-label="Portal navigation">
           {links.map((entry) => isGroup(entry)

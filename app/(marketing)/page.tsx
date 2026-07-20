@@ -31,7 +31,7 @@ export default function HomePage() {
             <svg viewBox="0 0 500 500" fill="none">
               <path d="m250 100 150 100-50 150-100 70-100-70-50-150 150-100Zm0 150 100-50m-100 50-100-50m100 0v-150m0 150-100 100m100-100 100 100" />
               <circle cx="250" cy="100" r="30" /><circle cx="100" cy="200" r="33" /><circle cx="400" cy="200" r="33" /><circle cx="250" cy="250" r="38" /><circle cx="150" cy="350" r="33" /><circle cx="350" cy="350" r="29" /><circle cx="250" cy="420" r="31" />
-              <text x="250" y="105">IT</text><text x="100" y="205">Pharma</text><text x="400" y="205">Biotech</text><text x="250" y="256">AVX</text><text x="150" y="355">Devices</text><text x="350" y="355">Corp</text><text x="250" y="426">Talent</text>
+              <text x="250" y="105">IT</text><text x="100" y="205">Pharma</text><text x="400" y="205">Biotech</text><text x="250" y="256">QONIC</text><text x="150" y="355">Devices</text><text x="350" y="355">Corp</text><text x="250" y="426">Talent</text>
             </svg>
           </div>
         </div>
@@ -52,11 +52,11 @@ export default function HomePage() {
       <div className="site-container grid items-center gap-14 lg:grid-cols-2">
         <Reveal className="about-panel"><div><strong>15+ Years</strong><p>of Strategic Partnership</p></div></Reveal>
         <Reveal delay={120}>
-          <SectionHeading eyebrow="About Avenstrix" title="The right connection changes everything.">
+          <SectionHeading eyebrow="About QONIC" title="The right connection changes everything.">
             <p>We are a specialist consulting partner built around a simple belief: exceptional people deserve exceptional opportunities.</p>
           </SectionHeading>
           <ul className="check-list"><li>Deep sector expertise</li><li>Global reach, personal approach</li><li>Long-term partnerships</li></ul>
-          <a className="text-link" href="/about">Meet Avenstrix Consulting <ArrowRight /></a>
+          <a className="text-link" href="/about">Meet QONIC consulting <ArrowRight /></a>
         </Reveal>
       </div>
     </section>
@@ -87,7 +87,7 @@ export default function HomePage() {
       <div className="site-container">
         <Reveal>
           <SectionHeading eyebrow="Client Stories" title="Trusted Partnerships. Measurable Impact.">
-            <p>See why ambitious organizations choose Avenstrix for their most important hires.</p>
+            <p>See why ambitious organizations choose QONIC for their most important hires.</p>
           </SectionHeading>
         </Reveal>
         <div className="mx-auto mt-12 max-w-3xl"><TestimonialCarousel /></div>
