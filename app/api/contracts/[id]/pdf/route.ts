@@ -5,6 +5,7 @@ import { renderLetterPdf } from "@/lib/contracts/pdf";
 import type { ContractPayload } from "@/lib/contracts/payload";
 import { canViewLetter } from "@/lib/contracts/workflow";
 import { db } from "@/lib/db";
+import { signatureFor } from "@/lib/signatures";
 
 export const runtime = "nodejs";
 
@@ -52,6 +53,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       subjectEmail: letter.subject.email,
       payload: letter.payload as unknown as ContractPayload,
       releasedByName: letter.releasedBy?.name ?? "QONIC consulting",
+      releasedByEmail: letter.releasedBy?.email,
+      // Keyed to whoever actually released this letter — see lib/signatures.ts.
+      releasedBySignature: signatureFor(letter.releasedBy?.email),
       releasedAt: letter.releasedAt,
       revokedAt: letter.revokedAt,
     });

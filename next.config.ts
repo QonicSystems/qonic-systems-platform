@@ -7,6 +7,12 @@ const nextConfig: NextConfig = {
   outputFileTracingRoot: import.meta.dirname,
   // Native binary — must not be bundled.
   serverExternalPackages: ["@node-rs/argon2"],
+  // Signatures are read from disk at render time, so the tracer cannot see them
+  // as imports. Without this the files are dropped from a standalone build and
+  // documents silently lose their signature block.
+  outputFileTracingIncludes: {
+    "/api/contracts/[id]/pdf": ["./assets/signatures/**"],
+  },
   // Hides the floating dev-tools badge, which overlapped the hero CTA on small screens.
   // Dev-only UI — it never shipped in production builds.
   devIndicators: false,

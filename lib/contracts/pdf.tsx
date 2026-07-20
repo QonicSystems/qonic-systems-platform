@@ -1,6 +1,9 @@
-import { Document, Page, StyleSheet, Text, View, renderToBuffer } from "@react-pdf/renderer";
+import { Document, Image, Page, Path, StyleSheet, Svg, Text, View, renderToBuffer } from "@react-pdf/renderer";
+import { LOGO_PATHS, LOGO_VIEWBOX } from "@/lib/brand-art";
 import { formatDate, formatSalary, type ContractPayload } from "@/lib/contracts/payload";
 import { FIELD_LABELS, findTemplate, type LetterTemplate } from "@/lib/contracts/templates";
+
+const BRAND_YELLOW = "#FFD700";
 
 export type LetterContext = {
   reference: string;
@@ -8,6 +11,9 @@ export type LetterContext = {
   subjectEmail: string;
   payload: ContractPayload;
   releasedByName: string;
+  /** Used to look up that person's signature — never the CEO's by default. */
+  releasedByEmail?: string | null;
+  releasedBySignature?: Buffer | null;
   releasedAt: Date;
   revokedAt?: Date | null;
 };
@@ -15,6 +21,7 @@ export type LetterContext = {
 const styles = StyleSheet.create({
   page: { paddingTop: 48, paddingBottom: 56, paddingHorizontal: 52, fontSize: 10, lineHeight: 1.5, color: "#2b2b2b" },
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", borderBottomWidth: 2, borderBottomColor: "#FFD700", paddingBottom: 10, marginBottom: 20 },
+  brandRow: { flexDirection: "row", alignItems: "center", gap: 7 },
   brand: { fontSize: 16, fontWeight: 700, color: "#111111" },
   brandAccent: { color: "#8a8a8a", fontWeight: 400 },
   meta: { fontSize: 8.5, color: "#8a8a8a", textAlign: "right" },
@@ -26,6 +33,7 @@ const styles = StyleSheet.create({
   rowLabel: { width: "38%", color: "#8a8a8a" },
   rowValue: { width: "62%", color: "#111111", fontWeight: 700 },
   signature: { marginTop: 22, paddingTop: 12, borderTopWidth: 1, borderTopColor: "#e7e4da", flexDirection: "row", justifyContent: "space-between" },
+  signatureImage: { width: 130, height: 37, marginBottom: 2, objectFit: "contain" },
   signatureName: { fontSize: 10.5, fontWeight: 700, color: "#111111" },
   signatureRole: { fontSize: 8.5, color: "#8a8a8a" },
   revoked: { marginBottom: 14, borderWidth: 1, borderColor: "#fecaca", backgroundColor: "#fef2f2", padding: 8, color: "#b91c1c", fontSize: 9.5, fontWeight: 700 },
@@ -49,7 +57,13 @@ function LetterDocument({ template, context }: { template: LetterTemplate; conte
   return <Document title={`${template.label} ${context.reference}`} author="QONIC consulting">
     <Page size="A4" style={styles.page}>
       <View style={styles.header}>
-        <Text style={styles.brand}>QONIC<Text style={styles.brandAccent}> consulting</Text></Text>
+        <View style={styles.brandRow}>
+          <Text style={styles.brand}>QONIC</Text>
+          <Svg viewBox={LOGO_VIEWBOX} style={{ width: 15, height: 16 }}>
+            {LOGO_PATHS.map((d) => <Path key={d} d={d} fill={BRAND_YELLOW} />)}
+          </Svg>
+          <Text style={styles.brandAccent}>consulting</Text>
+        </View>
         <View>
           <Text style={styles.meta}>Reference: {context.reference}</Text>
           <Text style={styles.meta}>Issued: {formatDate(context.releasedAt.toISOString().slice(0, 10))}</Text>
@@ -84,6 +98,13 @@ function LetterDocument({ template, context }: { template: LetterTemplate; conte
 
       <View style={styles.signature} wrap={false}>
         <View>
+          {/* Only the actual releaser's own signature, and never on a letter
+              that has been withdrawn — a revoked document must not carry what
+              looks like a live authorisation. */}
+          {context.releasedBySignature && !context.revokedAt
+            // eslint-disable-next-line jsx-a11y/alt-text -- @react-pdf's Image is not an <img>; it has no alt prop. The signer's name is printed directly beneath.
+            ? <Image style={styles.signatureImage} src={{ data: context.releasedBySignature, format: "png" }} />
+            : null}
           <Text style={styles.signatureName}>{context.releasedByName}</Text>
           <Text style={styles.signatureRole}>Released on behalf of QONIC consulting</Text>
         </View>
