@@ -4,24 +4,28 @@
 
 /* ── Design tokens ─────────────────────────────────────────────────────── */
 :root {
-  /* Both hues come straight from the logo: #09142e for the chevrons and
-     #e84218 for the accent notch. Everything below is derived from those two,
-     so the site and the mark cannot drift apart. */
-  --ink: #09142e; --ink-soft: #1d2b47; --body: #4c5a72; --faint: #8b96a9;
-  --canvas: #ffffff; --canvas-sub: #f4f6fa; --line: #e2e7f0;
+  /* Straight from the logo: a black wordmark and the #ffd700 cube.
+     The site is black-and-white with yellow as the single highlight. */
+  --ink: #111111; --ink-soft: #2b2b2b; --body: #4f4f4f; --faint: #8a8a8a;
+  --canvas: #ffffff; --canvas-sub: #f8f7f3; --line: #e7e4da;
 
-  --accent: #e84218; --accent-deep: #c53410; --accent-dark: #9c2809;
-  --accent-tint: #fdf0eb; --accent-soft: #f8ccbd;
+  /* IMPORTANT: --accent is the brand yellow and is only ever safe as a FILL.
+     At 1.6:1 on white it is unreadable as text, so every text role uses the
+     -deep / -dark ramp below, which stays visibly gold but passes WCAG AA.
+     Do not "simplify" these back to a single token. */
+  --accent: #ffd700;
+  --accent-deep: #8a6a08;   /* AA on white  */
+  --accent-dark: #6b5206;   /* AAA on white */
+  --accent-tint: #fff9dd; --accent-soft: #ffe98a;
 
-  /* The navy, for surfaces and fills that need the brand rather than the accent. */
-  --navy: #09142e; --navy-soft: #16244a; --navy-tint: #eef1f7;
+  /* Black, for surfaces that carry the brand rather than the highlight. */
+  --navy: #111111; --navy-soft: #2b2b2b; --navy-tint: #f3f2ee;
 
-  /* Shadows are deliberately shallow: content should sit IN the page rather
-     than float on top of it. Depth comes from the hairline and a tint. */
-  --shadow-sm: 0 1px 2px rgb(9 20 46 / .04);
-  --shadow-md: 0 2px 8px -4px rgb(9 20 46 / .08);
-  --shadow-lg: 0 8px 28px -14px rgb(9 20 46 / .14);
-  --ring: 0 0 0 1px rgb(9 20 46 / .06);
+  /* Shallow by design: content sits IN the page, not on it. */
+  --shadow-sm: 0 1px 2px rgb(17 17 17 / .05);
+  --shadow-md: 0 2px 8px -4px rgb(17 17 17 / .1);
+  --shadow-lg: 0 8px 28px -14px rgb(17 17 17 / .16);
+  --ring: 0 0 0 1px rgb(17 17 17 / .07);
   --ease: cubic-bezier(.22, 1, .36, 1);
   --header-h: 5rem;
 }
@@ -43,7 +47,7 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 @keyframes fade-up { from { opacity: 0; transform: translate3d(0, 18px, 0); } to { opacity: 1; transform: none; } }
 @keyframes drift { 0%, 100% { transform: translate3d(0, 0, 0) scale(1); } 50% { transform: translate3d(2.5rem, -1.8rem, 0) scale(1.08); } }
 @keyframes float-y { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-.9rem); } }
-@keyframes pulse-ring { 0% { box-shadow: 0 0 0 0 rgb(232 66 24 / .35); } 70% { box-shadow: 0 0 0 .55rem rgb(232 66 24 / 0); } 100% { box-shadow: 0 0 0 0 rgb(232 66 24 / 0); } }
+@keyframes pulse-ring { 0% { box-shadow: 0 0 0 0 rgb(255 215 0 / .35); } 70% { box-shadow: 0 0 0 .55rem rgb(255 215 0 / 0); } 100% { box-shadow: 0 0 0 0 rgb(255 215 0 / 0); } }
 @keyframes marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
 @keyframes quote-in { from { opacity: 0; transform: translate3d(0, 10px, 0); } to { opacity: 1; transform: none; } }
 @keyframes trace { to { stroke-dashoffset: 0; } }
@@ -60,10 +64,6 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 .site-header nav { height: var(--header-h); transition: height .3s var(--ease); }
 .site-header--scrolled nav { height: 4.25rem; }
 .brand { display: inline-flex; align-items: center; gap: .7rem; color: var(--ink); font-family: var(--font-display), sans-serif; font-size: 1.1rem; font-weight: 800; letter-spacing: -.04em; text-decoration: none; }
-.brand > span:last-child > span { color: var(--accent-deep); }
-.qonic-markwrap { display: grid; width: 2.4rem; height: 2.4rem; place-items: center; border-radius: .7rem; background: linear-gradient(140deg, var(--accent), var(--accent-dark)); color: #fff; box-shadow: 0 6px 16px -6px rgb(11 110 99 / .6); transition: transform .4s var(--ease); }
-.brand:hover .qonic-markwrap { transform: rotate(-8deg) scale(1.06); }
-.qonic-markwrap svg { width: 1.25rem; height: 1.25rem; }
 .nav-link { position: relative; border-radius: .5rem; padding: .5rem .8rem; color: var(--body); font-size: .9rem; font-weight: 600; text-decoration: none; transition: color .2s var(--ease); }
 .nav-link::after { position: absolute; bottom: .2rem; left: .8rem; width: 0; height: 1.5px; border-radius: 2px; background: var(--accent); content: ""; transition: width .3s var(--ease); }
 .nav-link:hover { color: var(--ink); }
@@ -86,15 +86,15 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 .button:disabled { cursor: wait; opacity: .65; transform: none; }
 .button svg, .text-link svg { width: 1.15rem; height: 1.15rem; transition: transform .3s var(--ease); }
 .button:hover svg, .text-link:hover svg { transform: translateX(3px); }
-.button-primary { background: linear-gradient(135deg, var(--accent), var(--accent-dark)); color: #fff; box-shadow: 0 8px 20px -8px rgb(11 110 99 / .7); }
-.button-primary:hover { box-shadow: 0 14px 30px -8px rgb(11 110 99 / .6); }
+.button-primary { background: var(--accent); color: var(--ink); box-shadow: 0 8px 20px -8px rgb(17 17 17 / .7); }
+.button-primary:hover { box-shadow: 0 14px 30px -8px rgb(17 17 17 / .6); }
 /* Sheen sweep — decorative, sits above the gradient but below the label. */
 .button-primary::after { position: absolute; inset: 0; width: 35%; background: linear-gradient(90deg, transparent, rgb(255 255 255 / .3), transparent); content: ""; transform: translateX(-120%) skewX(-18deg); }
 .button-primary:hover::after { animation: sheen .8s var(--ease); }
 .button-outline { border: 1px solid var(--line); background: rgb(255 255 255 / .6); color: var(--ink); box-shadow: var(--shadow-sm); }
 .button-outline:hover { border-color: var(--accent-soft); background: #fff; color: var(--accent-dark); box-shadow: var(--shadow-md); }
-.button-white { background: #fff; color: var(--accent-dark); box-shadow: 0 10px 26px -10px rgb(0 0 0 / .45); }
-.button-white:hover { box-shadow: 0 16px 34px -10px rgb(0 0 0 / .5); }
+.button-white { background: var(--accent); color: var(--ink); box-shadow: none; }
+.button-white:hover { background: var(--accent-soft); box-shadow: none; }
 .button-large { padding: .95rem 1.7rem; }
 /* Header CTA: hidden on small screens, where the mobile menu already offers it.
    Declared here rather than via Tailwind's `hidden` — that utility and `.button` have
@@ -109,10 +109,10 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 .hero .site-container > * { min-width: 0; }
 .hero-grid { position: absolute; inset: 0; background-image: radial-gradient(circle at 1px 1px, rgb(15 20 25 / .09) 1px, transparent 0); background-size: 38px 38px; mask-image: radial-gradient(ellipse 90% 60% at 50% 0%, black, transparent 75%); }
 .aurora { position: absolute; z-index: 0; border-radius: 999px; filter: blur(70px); pointer-events: none; }
-.aurora--one { top: -12rem; right: -8rem; width: 38rem; height: 38rem; background: radial-gradient(circle, rgb(232 66 24 / .13), transparent 65%); animation: drift 20s ease-in-out infinite; }
-.aurora--two { bottom: -16rem; left: -10rem; width: 34rem; height: 34rem; background: radial-gradient(circle, rgb(9 20 46 / .10), transparent 65%); animation: drift 26s ease-in-out infinite reverse; }
+.aurora--one { top: -12rem; right: -8rem; width: 38rem; height: 38rem; background: radial-gradient(circle, rgb(255 215 0 / .13), transparent 65%); animation: drift 20s ease-in-out infinite; }
+.aurora--two { bottom: -16rem; left: -10rem; width: 34rem; height: 34rem; background: radial-gradient(circle, rgb(17 17 17 / .10), transparent 65%); animation: drift 26s ease-in-out infinite reverse; }
 .hero h1 { max-width: 46rem; margin: 1.5rem 0; font-family: var(--font-display), sans-serif; font-size: clamp(2.7rem, 6vw, 4.9rem); font-weight: 800; line-height: 1.06; letter-spacing: -.055em; color: var(--ink); }
-.hero h1 span { position: relative; background: linear-gradient(100deg, var(--accent), var(--accent-deep) 50%, var(--accent-dark)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.hero h1 span { position: relative; background: linear-gradient(100deg, var(--accent-deep), var(--accent-dark) 60%, var(--ink)); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .hero-copy { max-width: 36rem; margin-bottom: 2.3rem; color: var(--body); font-size: 1.13rem; line-height: 1.75; }
 .hero-pill { display: inline-flex; align-items: center; gap: .6rem; margin: 0; border: 1px solid var(--accent-soft); border-radius: 999px; background: var(--accent-tint); padding: .5rem .9rem; color: var(--accent-dark); font-size: .85rem; font-weight: 700; letter-spacing: .01em; }
 .hero-pill span { width: .5rem; height: .5rem; border-radius: 50%; background: var(--accent); animation: pulse-ring 2.4s ease-out infinite; }
@@ -128,9 +128,9 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 .network-visual { position: relative; display: none; animation: float-y 7s ease-in-out infinite; }
 .network-visual svg { width: 100%; color: var(--accent); }
 .network-visual path { stroke: currentColor; stroke-width: 1.2; opacity: .35; stroke-dasharray: 1200; stroke-dashoffset: 1200; animation: trace 2.6s var(--ease) .3s forwards; }
-.network-visual circle { fill: #fff; stroke: var(--accent); stroke-width: 1.6; filter: drop-shadow(0 6px 14px rgb(15 20 25 / .08)); }
+.network-visual circle { fill: #fff; stroke: var(--accent); stroke-width: 1.6; filter: drop-shadow(0 6px 14px rgb(17 17 17 / .08)); }
 .network-visual text { fill: var(--ink-soft); font-family: var(--font-display), sans-serif; font-size: 11px; font-weight: 700; letter-spacing: -.01em; text-anchor: middle; dominant-baseline: middle; }
-.network-visual circle:nth-of-type(4) { fill: var(--accent-dark); stroke: var(--accent-dark); }
+.network-visual circle:nth-of-type(4) { fill: var(--ink); stroke: var(--ink); }
 .network-visual text:nth-of-type(4) { fill: #fff; font-size: 15px; }
 
 /* Floating glass stat card over the diagram */
@@ -153,7 +153,7 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 .page-hero { position: relative; overflow: hidden; border-bottom: 1px solid var(--line); background: var(--canvas); padding: calc(var(--header-h) + 5rem) 0 4.5rem; }
 .eyebrow { display: inline-flex; align-items: center; gap: .55rem; margin: 0 0 .9rem; color: var(--accent-deep); font-family: var(--font-display), sans-serif; font-size: .76rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
 .eyebrow::before { width: 1.6rem; height: 1.5px; border-radius: 2px; background: currentColor; content: ""; }
-.eyebrow-light { color: rgb(255 255 255 / .85); }
+.eyebrow-light { color: var(--accent-deep); }
 .section-title { margin: 0; color: var(--ink); font-family: var(--font-display), sans-serif; font-size: clamp(2.1rem, 4.5vw, 3.35rem); font-weight: 800; line-height: 1.12; letter-spacing: -.045em; }
 
 /* ── About panel ───────────────────────────────────────────────────────── */
@@ -162,7 +162,7 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
    sitting on top of it. */
 .about-panel { position: relative; display: grid; overflow: visible; min-height: 18rem; place-items: center; border: 0; border-radius: 0; background: none; box-shadow: none; text-align: center; }
 .about-panel::after { position: absolute; inset: -12% -8%; z-index: 0; border-radius: 50%; background: radial-gradient(ellipse at center, var(--navy-tint) 0%, rgb(238 241 247 / .55) 45%, transparent 72%); content: ""; }
-.about-panel::before { position: absolute; inset: -30% -30% auto auto; width: 24rem; height: 24rem; border-radius: 999px; background: radial-gradient(circle, rgb(9 20 46 / .22), transparent 65%); filter: blur(30px); content: ""; animation: drift 22s ease-in-out infinite; }
+.about-panel::before { position: absolute; inset: -30% -30% auto auto; width: 24rem; height: 24rem; border-radius: 999px; background: radial-gradient(circle, rgb(17 17 17 / .22), transparent 65%); filter: blur(30px); content: ""; animation: drift 22s ease-in-out infinite; }
 .about-panel > div { position: relative; z-index: 1; }
 .about-panel strong { display: block; background: linear-gradient(150deg, var(--ink), var(--accent-dark)); -webkit-background-clip: text; background-clip: text; color: transparent; font-family: var(--font-display), sans-serif; font-size: 3rem; font-weight: 800; letter-spacing: -.05em; }
 .about-panel p { margin: .5rem 0 0; color: var(--body); font-weight: 600; }
@@ -188,29 +188,33 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 .process-card { position: relative; border-top: 1px solid var(--line); padding-top: 1.8rem; transition: border-color .3s; }
 .process-card::before { position: absolute; inset: -1px 0 auto; width: 0; height: 2px; background: linear-gradient(90deg, var(--accent), var(--accent)); content: ""; transition: width .6s var(--ease); }
 .process-card:hover::before { width: 100%; }
-.process-card > span { display: inline-block; background: linear-gradient(140deg, var(--accent), var(--accent-dark)); -webkit-background-clip: text; background-clip: text; color: transparent; font-family: var(--font-display), sans-serif; font-size: .9rem; font-weight: 800; letter-spacing: .1em; }
+.process-card > span { display: inline-block; background: linear-gradient(140deg, var(--accent-deep), var(--accent-dark)); -webkit-background-clip: text; background-clip: text; color: transparent; font-family: var(--font-display), sans-serif; font-size: .9rem; font-weight: 800; letter-spacing: .1em; }
 
 /* ── Testimonials ──────────────────────────────────────────────────────── */
 .testimonials { position: relative; overflow: hidden; border-block: 1px solid var(--line); background: var(--canvas-sub); }
-.testimonials::before { position: absolute; inset: -20rem -10rem auto auto; width: 40rem; height: 40rem; border-radius: 999px; background: radial-gradient(circle, rgb(232 66 24 / .1), transparent 65%); filter: blur(60px); content: ""; animation: drift 24s ease-in-out infinite; }
+.testimonials::before { position: absolute; inset: -20rem -10rem auto auto; width: 40rem; height: 40rem; border-radius: 999px; background: radial-gradient(circle, rgb(255 215 0 / .1), transparent 65%); filter: blur(60px); content: ""; animation: drift 24s ease-in-out infinite; }
 .testimonial-region { position: relative; z-index: 1; }
-.testimonial-card { position: relative; overflow: hidden; border: 1px solid var(--line); border-radius: 1.4rem; background: #fff; padding: clamp(1.8rem, 5vw, 3.2rem); color: var(--ink); box-shadow: var(--shadow-sm); }
-.testimonial-card::before { position: absolute; top: -1.5rem; left: 1.5rem; color: var(--accent-soft); font-family: var(--font-display), sans-serif; font-size: 9rem; line-height: 1; content: "\201C"; pointer-events: none; }
+.testimonial-card { position: relative; overflow: visible; border: 0; border-radius: 0; background: none; padding: clamp(1.5rem, 4vw, 2.6rem); color: var(--ink); box-shadow: none; text-align: center; }
+.testimonial-card::after { position: absolute; inset: -18% -12%; z-index: -1; border-radius: 50%; background: radial-gradient(ellipse at center, var(--accent-tint) 0%, rgb(255 249 221 / .45) 45%, transparent 72%); content: ""; }
 .testimonial-stars { position: relative; color: var(--accent); letter-spacing: .2em; }
 .testimonial-card blockquote { position: relative; margin: 1.4rem 0 0; color: var(--ink); font-family: var(--font-display), sans-serif; font-size: clamp(1.2rem, 2.5vw, 1.5rem); font-weight: 600; line-height: 1.6; letter-spacing: -.02em; animation: quote-in .5s var(--ease); }
-.avatar { display: grid; width: 3rem; height: 3rem; place-items: center; border-radius: 50%; background: linear-gradient(140deg, var(--accent), var(--accent-dark)); color: #fff; font-family: var(--font-display), sans-serif; font-weight: 800; box-shadow: 0 8px 18px -8px rgb(11 110 99 / .7); }
+.testimonial-card .mt-8 { justify-content: center; }
+.avatar { display: grid; width: 3rem; height: 3rem; place-items: center; border-radius: 50%; background: var(--accent); color: var(--ink); font-family: var(--font-display), sans-serif; font-weight: 800; box-shadow: none; }
 .testimonial-card strong { color: var(--ink); font-family: var(--font-display), sans-serif; }
 .testimonial-card p { margin: .2rem 0; color: var(--faint); font-size: .9rem; }
-.carousel-button { display: grid; width: 2.6rem; height: 2.6rem; place-items: center; border: 1px solid var(--line); border-radius: 50%; background: #fff; color: var(--ink-soft); cursor: pointer; box-shadow: var(--shadow-sm); transition: transform .3s var(--ease), background .25s, color .25s, border-color .25s; }
+.carousel-button { display: grid; width: 2.6rem; height: 2.6rem; place-items: center; border: 1px solid var(--line); border-radius: 50%; background: transparent; color: var(--ink-soft); cursor: pointer; box-shadow: none; transition: transform .3s var(--ease), background .25s, color .25s, border-color .25s; }
 .carousel-button:hover { transform: translateY(-2px); border-color: var(--accent-soft); background: var(--accent-tint); color: var(--accent-dark); }
 .carousel-dot { width: .5rem; height: .5rem; border: 0; border-radius: 999px; background: var(--line); cursor: pointer; transition: width .4s var(--ease), background .3s; }
 .carousel-dot:hover { background: var(--accent-soft); }
-.carousel-dot.is-active { width: 1.7rem; background: linear-gradient(90deg, var(--accent), var(--accent-dark)); }
+.carousel-dot.is-active { width: 1.7rem; background: var(--accent-deep); }
 
 /* ── CTA (the one deep band — deliberate contrast against the light canvas) */
-.cta { position: relative; overflow: hidden; background: linear-gradient(115deg, var(--accent-dark), var(--accent-deep) 55%, var(--accent)); padding-block: 4.5rem; color: #fff; }
-.cta::before { position: absolute; inset: 0; background-image: radial-gradient(circle at 1px 1px, rgb(255 255 255 / .16) 1px, transparent 0); background-size: 32px 32px; mask-image: linear-gradient(105deg, black, transparent 70%); content: ""; }
-.cta::after { position: absolute; inset: auto -8rem -14rem auto; width: 30rem; height: 30rem; border-radius: 999px; background: radial-gradient(circle, rgb(9 20 46 / .3), transparent 65%); filter: blur(50px); content: ""; animation: drift 18s ease-in-out infinite; }
+/* The band is black with a yellow heading — yellow behind white text is
+   illegible, and this is how the mark itself is composed. */
+.cta { position: relative; overflow: hidden; background: none; padding-block: clamp(3.5rem, 8vw, 5.5rem); color: var(--ink); }
+/* A wash that dissolves on all four sides — no border, no slab edge. */
+.cta::before { position: absolute; inset: 0; background: radial-gradient(ellipse 70% 100% at 30% 50%, var(--accent-tint) 0%, rgb(255 249 221 / .5) 45%, transparent 78%); content: ""; }
+.cta::after { position: absolute; inset: auto -6rem -10rem auto; width: 26rem; height: 26rem; border-radius: 999px; background: radial-gradient(circle, rgb(255 215 0 / .18), transparent 65%); filter: blur(50px); content: ""; animation: drift 18s ease-in-out infinite; }
 .cta > div { position: relative; z-index: 1; }
 .cta h2 { max-width: 42rem; margin: 0; font-family: var(--font-display), sans-serif; font-size: clamp(1.8rem, 4vw, 2.7rem); font-weight: 800; line-height: 1.2; letter-spacing: -.04em; }
 
@@ -226,7 +230,7 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 .contact-form input, .contact-form select, .contact-form textarea { width: 100%; border: 1px solid var(--line); border-radius: .7rem; background: var(--canvas); padding: .8rem .9rem; color: var(--ink); outline: none; transition: border-color .2s, box-shadow .2s, background .2s; }
 .contact-form input::placeholder, .contact-form textarea::placeholder { color: var(--faint); }
 .contact-form input:hover, .contact-form select:hover, .contact-form textarea:hover { border-color: var(--accent-soft); }
-.contact-form input:focus, .contact-form select:focus, .contact-form textarea:focus { border-color: var(--accent); background: #fff; box-shadow: 0 0 0 4px rgb(232 66 24 / .12); outline: none; }
+.contact-form input:focus, .contact-form select:focus, .contact-form textarea:focus { border-color: var(--accent); background: #fff; box-shadow: 0 0 0 4px rgb(255 215 0 / .12); outline: none; }
 .contact-form [aria-invalid="true"] { border-color: #dc2626; }
 .contact-form [aria-invalid="true"]:focus { box-shadow: 0 0 0 4px rgb(220 38 38 / .12); }
 .form-error { margin: .4rem 0 0; color: #b91c1c; font-size: .8rem; animation: fade-up .3s var(--ease); }
@@ -244,7 +248,7 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 .footer-link:hover { color: var(--accent-deep); padding-left: .3rem; }
 
 @media (min-width: 1024px) { .network-visual { display: block; } }
-@media (max-width: 420px) { .brand { font-size: .95rem; } .qonic-markwrap { width: 2.15rem; height: 2.15rem; } .site-container { width: min(100% - 1.25rem, 78rem); } }
+@media (max-width: 420px) { .brand { font-size: .95rem; } .site-container { width: min(100% - 1.25rem, 78rem); } }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
@@ -262,7 +266,7 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 
 /* --- Auth shell --- */
 .auth-shell { position: relative; display: grid; min-height: 100dvh; place-content: center; gap: 1.5rem; overflow: hidden; padding: 2rem 1.25rem; background: var(--canvas); }
-.auth-aurora { position: absolute; top: -20rem; left: 50%; width: 46rem; height: 46rem; transform: translateX(-50%); border-radius: 999px; background: radial-gradient(circle, rgb(232 66 24 / .10), transparent 65%); filter: blur(70px); pointer-events: none; }
+.auth-aurora { position: absolute; top: -20rem; left: 50%; width: 46rem; height: 46rem; transform: translateX(-50%); border-radius: 999px; background: radial-gradient(circle, rgb(255 215 0 / .10), transparent 65%); filter: blur(70px); pointer-events: none; }
 .auth-card { position: relative; width: min(100%, 27rem); border: 1px solid var(--line); border-radius: 1.4rem; background: #fff; padding: clamp(1.75rem, 5vw, 2.5rem); box-shadow: var(--shadow-lg); }
 .auth-title { margin: 0 0 .5rem; color: var(--ink); font-family: var(--font-display), sans-serif; font-size: 1.6rem; font-weight: 800; letter-spacing: -.03em; }
 .auth-subtitle { margin: 0 0 1.75rem; color: var(--body); font-size: .95rem; line-height: 1.6; }
@@ -286,7 +290,7 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 @media (min-width: 1150px) { .portal-nav { display: flex; } }
 
 .portal-account { position: relative; display: flex; align-items: center; gap: .4rem; flex: 0 0 auto; }
-.portal-avatar { display: grid; width: 2.5rem; height: 2.5rem; place-items: center; border: 0; border-radius: 50%; background: linear-gradient(140deg, var(--accent), var(--accent-dark)); color: #fff; font-family: var(--font-display), sans-serif; font-size: .82rem; font-weight: 800; cursor: pointer; box-shadow: 0 8px 18px -8px rgb(11 110 99 / .7); transition: transform .25s var(--ease); }
+.portal-avatar { display: grid; width: 2.5rem; height: 2.5rem; place-items: center; border: 0; border-radius: 50%; background: linear-gradient(140deg, var(--accent), var(--accent-dark)); color: #fff; font-family: var(--font-display), sans-serif; font-size: .82rem; font-weight: 800; cursor: pointer; box-shadow: 0 8px 18px -8px rgb(17 17 17 / .7); transition: transform .25s var(--ease); }
 .portal-avatar:hover { transform: translateY(-1px) scale(1.04); }
 .portal-menu { position: absolute; right: 0; top: calc(100% + .6rem); width: 15rem; overflow: hidden; border: 1px solid var(--line); border-radius: .9rem; background: #fff; box-shadow: var(--shadow-lg); animation: fade-up .22s var(--ease); }
 .portal-menu-head { display: grid; gap: .15rem; border-bottom: 1px solid var(--line); padding: .9rem 1rem; }
@@ -542,75 +546,45 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 
 /* ══════════════════════════════════════════════════════════════════════════
    QONIC brand lockup
+   QONIC · cube · consulting on one baseline, tagline beneath — as the artwork.
    ══════════════════════════════════════════════════════════════════════════ */
 
-/* Chevrons sweep in from behind and to the left, so the mark reads as forward
-   motion. Runs once on mount — a looping mark in a fixed header is a
-   distraction — and the reduced-motion block below stops it entirely. */
-@keyframes qonic-sweep {
-  from { opacity: 0; transform: translateX(-38%); }
-  60%  { opacity: 1; }
-  to   { opacity: 1; transform: translateX(0); }
-}
-@keyframes qonic-spark-in {
-  from { opacity: 0; transform: scale(.4) rotate(-25deg); }
-  to   { opacity: 1; transform: none; }
-}
 
-.qonic-mark { width: 100%; height: 100%; overflow: visible; }
-.qonic-chevron { opacity: 1; }
-.qonic-spark { transform-box: fill-box; transform-origin: center; }
+/* Without this the SVG falls back to a replaced-element default size and the
+   cube collapses to an unreadable blob inside the wordmark. */
+.qonic-mark { display: block; width: 100%; height: 100%; overflow: visible; }
 
-.qonic-mark.is-animated .qonic-chevron,
-.qonic-mark.is-animated .qonic-spark { transform-box: fill-box; transform-origin: center; }
-/* The back chevron leads, the front follows — the offset is what creates the
-   sense of travel rather than two shapes appearing at once. */
-.qonic-mark.is-animated .qonic-chevron--back  { animation: qonic-sweep .7s var(--ease) both; }
-.qonic-mark.is-animated .qonic-chevron--front { animation: qonic-sweep .7s var(--ease) .12s both; }
-.qonic-mark.is-animated .qonic-spark        { animation: qonic-spark-in .5s var(--ease) .34s both; }
-
-.qonic-lockup { display: inline-flex; align-items: center; gap: .7rem; color: var(--ink); text-decoration: none; }
-.qonic-lockup .qonic-markwrap {
-  display: grid; place-items: center; flex: 0 0 auto;
-  width: 2.4rem; height: 2.4rem;
-  /* The artwork sits on white; no tile, no gradient — the chevrons are the mark. */
-  background: none; box-shadow: none; border-radius: 0;
-}
-.qonic-lockup:hover .qonic-markwrap { transform: none; }
-.qonic-words { display: inline-flex; flex-direction: column; justify-content: center; min-width: 0; }
+.qonic-lockup { display: inline-flex; flex-direction: column; align-items: center; min-width: 0; color: var(--ink); text-decoration: none; }
 
 .qonic-wordmark {
-  display: inline-flex; align-items: baseline; gap: .34em;
+  display: inline-flex; align-items: center; gap: .3em;
   font-family: var(--font-wordmark), system-ui, sans-serif;
-  font-size: 1.12rem; line-height: 1.05; letter-spacing: -.012em; white-space: nowrap;
+  font-size: 1.12rem; line-height: 1; letter-spacing: -.01em; white-space: nowrap;
+  color: var(--ink);
 }
-.qonic-wordmark strong { font-weight: 700; letter-spacing: .012em; color: var(--ink); }
-.qonic-wordmark > span { font-weight: 500; color: var(--accent); }
+.qonic-wordmark strong { font-weight: 700; letter-spacing: .01em; }
+.qonic-word-soft { font-weight: 500; color: var(--ink); }
+
+/* The cube is set in em so it scales with the wordmark it sits inside —
+   the two must never drift apart at different breakpoints. */
+.qonic-markwrap { display: inline-block; flex: 0 0 auto; width: 1.04em; height: 1.1em; }
 
 /* Rule–text–rule, as in the artwork. The rules flex so they always meet the
    text regardless of how wide the lockup is. */
 .qonic-tagline {
-  display: flex; align-items: center; gap: .55em; margin-top: .3rem;
+  display: flex; align-items: center; gap: .55em; margin-top: .45rem; width: 100%;
   font-family: var(--font-tagline), system-ui, sans-serif;
-  font-size: .8rem; font-weight: 400; letter-spacing: .04em; white-space: nowrap;
+  font-size: .78rem; font-weight: 400; letter-spacing: .05em; white-space: nowrap;
+  color: var(--accent-deep);
 }
-.qonic-tagline i { flex: 1 1 auto; min-width: 1.1rem; height: 1.5px; background: currentColor; border-radius: 2px; }
+.qonic-tagline i { flex: 1 1 auto; min-width: 1rem; height: 1.5px; background: currentColor; border-radius: 2px; }
 
-/* The stacked lockup sits in a ~280px footer column as well as on the roomy
-   login page, and the wordmark is nowrap — so it must be sized to the narrower
-   of the two or it overruns its neighbour. max-width keeps it inside the column
-   whatever the container. */
-.qonic-lockup--stacked { align-items: center; gap: .8rem; max-width: 100%; }
-.qonic-lockup--stacked .qonic-markwrap { width: 2.9rem; height: 2.9rem; }
-.qonic-lockup--stacked .qonic-wordmark { font-size: 1.5rem; }
-.qonic-lockup--stacked .qonic-tagline { font-size: .78rem; }
+.qonic-lockup--compact { flex-direction: row; }
+.qonic-lockup--stacked { max-width: 100%; }
+.qonic-lockup--stacked .qonic-wordmark { font-size: 1.6rem; }
+.qonic-lockup--stacked .qonic-tagline { font-size: .82rem; }
 
 @media (max-width: 420px) {
   .qonic-wordmark { font-size: 1rem; }
-  .qonic-lockup .qonic-markwrap { width: 2.1rem; height: 2.1rem; }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .qonic-mark.is-animated .qonic-chevron,
-  .qonic-mark.is-animated .qonic-spark { animation: none !important; opacity: 1 !important; transform: none !important; }
-}

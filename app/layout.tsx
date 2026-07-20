@@ -17,6 +17,8 @@ export const metadata: Metadata = {
   title: { default: `${site.name} | ${site.tagline}`, template: `%s | ${site.name}` },
   description: site.description,
   openGraph: { type: "website", siteName: site.name, title: `${site.name} — ${site.description}`, description: site.description },
+  // Served straight from the stored artwork — see public/brand/logo.svg.
+  icons: { icon: "/brand/logo.svg", apple: "/brand/logo.svg" },
 };
 
 // Chrome-free shell. The public header/footer live in app/(marketing)/layout.tsx

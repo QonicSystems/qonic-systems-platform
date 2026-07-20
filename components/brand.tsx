@@ -3,59 +3,58 @@ import { site } from "@/lib/site";
 /**
  * The QONIC mark — the supplied artwork verbatim.
  *
- * The three paths and the 0 0 80 79.8 viewBox are exactly as provided; nothing
- * has been redrawn. Only the fills are bound to the brand tokens so a palette
- * change stays in one place, and the paths carry classes so the sweep can
- * animate them.
+ * The three paths and the 0 0 181.17 191.19 viewBox are exactly as provided;
+ * nothing has been redrawn. Only the fills are bound to the brand token so a
+ * palette change stays in one place. The mark is static — deliberately not
+ * animated.
  *
- * Path 1 — outer chevron (the large forward arrow)
- * Path 2 — inner chevron, nested behind it
- * Path 3 — the small accent notch
+ * Path 1 — the right face of the cube
+ * Path 2 — the left face, the large body of the mark
+ * Path 3 — the small detached shard at the lower left
  */
-export function LogoMark({ animated = true }: { animated?: boolean }) {
+export function LogoMark() {
   return (
     <svg
-      viewBox="0 0 80 79.8"
+      viewBox="0 0 181.17 191.19"
       xmlns="http://www.w3.org/2000/svg"
       role="img"
       aria-label={`${site.name} mark`}
-      className={animated ? "qonic-mark is-animated" : "qonic-mark"}
+      className="qonic-mark"
     >
       <path
-        className="qonic-chevron qonic-chevron--front"
-        d="M40.14 79.8a2.66 2.66 0 0 1-2-1.07c-1.58-1.61-3.14-3.33-4.84-4.82-2-1.72-1.77-3 0-4.8 9-8.88 17.85-18 27-26.75 2.43-2.36 2.29-3.67-.06-6-9-8.74-17.75-17.74-26.71-26.53-1.94-1.91-1.92-3.12 0-5 6.45-6.43 6.38-6.5 12.87 0C57 15.48 67.63 26.17 78.37 36.72c2.14 2.1 2.2 3.39 0 5.53C66.41 54 54.58 66 42.69 77.83a5.82 5.82 0 0 1-2.55 1.97z"
+        d="M40.36 27.65C56.27 18.57 71.69 9.76 87.13 1a7.35 7.35 0 0 1 7.73.25q42.28 24.25 84.55 48.56a4.08 4.08 0 0 1 1.69 3c.08 32.3.13 64.61-.09 96.91a8.34 8.34 0 0 1-3.35 6.13c-15.19 9-30.59 17.63-45.94 26.36-.15.09-.41 0-1.05 0v-3.73c0-31.65 0-63.3.07-94.95 0-3-.84-4.6-3.46-6.08q-42.39-24-84.67-48.33c-.61-.35-1.23-.79-2.25-1.47z"
         fill={site.brand.mark}
       />
       <path
-        className="qonic-chevron qonic-chevron--back"
-        d="M23.3 16a4 4 0 0 1 2.15 1.4c6.63 6.6 13.23 13.26 19.92 19.82 1.65 1.62 1.52 2.83 0 4.36q-10 9.89-19.9 19.87c-1.64 1.65-2.93 1.62-4.66 0-7-6.67-7-6.62-.35-13.32 2.24-2.23 4.42-4.52 6.73-6.68 1.66-1.56 1.56-2.83 0-4.38-3.6-3.48-7.06-7.11-10.67-10.59-1.69-1.63-1.89-2.92 0-4.54 1.74-1.48 3.27-3.21 4.9-4.81A3 3 0 0 1 23.3 16z"
+        d="M65.48 191.19v-3.93c0-22.22-.06-44.44.07-66.66 0-2.91-1-4.39-3.42-5.78C42.5 103.75 23 92.54 3.39 81.37c-.93-.53-1.85-1.09-3.39-2 .67-.32 1.06-.47 1.43-.68C14.3 71.29 27.22 64 40 56.47c3.79-2.22 7.06-2.24 10.9 0Q79.45 73 108.18 89.2a4.53 4.53 0 0 1 2.71 4.53q-.14 33.33 0 66.66c0 3.34-1.08 5.89-4 7.57L67.3 190.47a19.1 19.1 0 0 1-1.82.72z"
         fill={site.brand.mark}
       />
       <path
-        className="qonic-spark"
-        d="M12.8 39.51a19.94 19.94 0 0 1-5.8 6c-1.71 1.16-2.69-.79-3.71-1.77-4.38-4.23-4.36-4.25-.08-8.39 3-2.88 3.28-2.91 6.24.12 1.19 1.17 2.74 2.12 3.35 4.04z"
-        fill={site.brand.accent}
+        d="M45.43 128.11V180L.05 154z"
+        fill={site.brand.mark}
       />
     </svg>
   );
 }
 
 /**
- * Full lockup: mark, wordmark, and the rule-flanked tagline.
+ * Full lockup: QONIC · mark · consulting, with the rule-flanked tagline beneath.
+ *
+ * The mark sits BETWEEN the two words, exactly as in the artwork — it is part of
+ * the wordmark's baseline, not a separate badge alongside it.
  *
  * `stacked` is the large treatment (login, footer); the compact form drops the
  * tagline, which is unreadable at header size.
  */
-export function BrandLockup({ stacked = false, animated = true }: { stacked?: boolean; animated?: boolean }) {
+export function BrandLockup({ stacked = false }: { stacked?: boolean }) {
   return (
     <span className={`qonic-lockup ${stacked ? "qonic-lockup--stacked" : "qonic-lockup--compact"}`}>
-      <span className="qonic-markwrap"><LogoMark animated={animated} /></span>
-      <span className="qonic-words">
-        <span className="qonic-wordmark">
-          <strong>QONIC</strong> <span>consulting</span>
-        </span>
-        {stacked && <span className="qonic-tagline"><i />{site.tagline}<i /></span>}
+      <span className="qonic-wordmark">
+        <strong>QONIC</strong>
+        <span className="qonic-markwrap"><LogoMark /></span>
+        <span className="qonic-word-soft">consulting</span>
       </span>
+      {stacked && <span className="qonic-tagline"><i />{site.tagline}<i /></span>}
     </span>
   );
 }

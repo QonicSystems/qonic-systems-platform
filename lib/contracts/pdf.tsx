@@ -13,23 +13,23 @@ export type LetterContext = {
 };
 
 const styles = StyleSheet.create({
-  page: { paddingTop: 48, paddingBottom: 56, paddingHorizontal: 52, fontSize: 10, lineHeight: 1.5, color: "#1d2b47" },
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", borderBottomWidth: 2, borderBottomColor: "#e84218", paddingBottom: 10, marginBottom: 20 },
-  brand: { fontSize: 16, fontWeight: 700, color: "#09142e" },
-  brandAccent: { color: "#8b96a9", fontWeight: 400 },
-  meta: { fontSize: 8.5, color: "#8b96a9", textAlign: "right" },
-  title: { fontSize: 15, fontWeight: 700, color: "#09142e", marginBottom: 4 },
-  subtitle: { fontSize: 9.5, color: "#8b96a9", marginBottom: 16 },
+  page: { paddingTop: 48, paddingBottom: 56, paddingHorizontal: 52, fontSize: 10, lineHeight: 1.5, color: "#2b2b2b" },
+  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", borderBottomWidth: 2, borderBottomColor: "#FFD700", paddingBottom: 10, marginBottom: 20 },
+  brand: { fontSize: 16, fontWeight: 700, color: "#111111" },
+  brandAccent: { color: "#8a8a8a", fontWeight: 400 },
+  meta: { fontSize: 8.5, color: "#8a8a8a", textAlign: "right" },
+  title: { fontSize: 15, fontWeight: 700, color: "#111111", marginBottom: 4 },
+  subtitle: { fontSize: 9.5, color: "#8a8a8a", marginBottom: 16 },
   paragraph: { marginBottom: 9 },
-  sectionTitle: { fontSize: 10.5, fontWeight: 700, color: "#09142e", marginTop: 11, marginBottom: 6 },
-  row: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: "#e2e7f0", paddingVertical: 4.5 },
-  rowLabel: { width: "38%", color: "#8b96a9" },
-  rowValue: { width: "62%", color: "#09142e", fontWeight: 700 },
-  signature: { marginTop: 22, paddingTop: 12, borderTopWidth: 1, borderTopColor: "#e2e7f0", flexDirection: "row", justifyContent: "space-between" },
-  signatureName: { fontSize: 10.5, fontWeight: 700, color: "#09142e" },
-  signatureRole: { fontSize: 8.5, color: "#8b96a9" },
+  sectionTitle: { fontSize: 10.5, fontWeight: 700, color: "#111111", marginTop: 11, marginBottom: 6 },
+  row: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: "#e7e4da", paddingVertical: 4.5 },
+  rowLabel: { width: "38%", color: "#8a8a8a" },
+  rowValue: { width: "62%", color: "#111111", fontWeight: 700 },
+  signature: { marginTop: 22, paddingTop: 12, borderTopWidth: 1, borderTopColor: "#e7e4da", flexDirection: "row", justifyContent: "space-between" },
+  signatureName: { fontSize: 10.5, fontWeight: 700, color: "#111111" },
+  signatureRole: { fontSize: 8.5, color: "#8a8a8a" },
   revoked: { marginBottom: 14, borderWidth: 1, borderColor: "#fecaca", backgroundColor: "#fef2f2", padding: 8, color: "#b91c1c", fontSize: 9.5, fontWeight: 700 },
-  footer: { position: "absolute", bottom: 30, left: 52, right: 52, borderTopWidth: 1, borderTopColor: "#e2e7f0", paddingTop: 8, fontSize: 7.5, color: "#8b96a9", flexDirection: "row", justifyContent: "space-between" },
+  footer: { position: "absolute", bottom: 30, left: 52, right: 52, borderTopWidth: 1, borderTopColor: "#e7e4da", paddingTop: 8, fontSize: 7.5, color: "#8a8a8a", flexDirection: "row", justifyContent: "space-between" },
 });
 
 function Field({ label, value }: { label: string; value: string }) {

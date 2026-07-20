@@ -8,12 +8,13 @@ export const site = {
   email: "hello@qonic.com",
   phone: "+1 (555) 123-4567",
   address: ["Global Plaza, Innovation District,", "Suite 400"],
-  /** Taken directly from the supplied logo SVG. */
+  /** Taken directly from the supplied logo artwork. */
   brand: {
-    /** The chevrons. */
-    mark: "#09142e",
-    /** The accent notch — the site's single highlight colour. */
-    accent: "#e84218",
+    /** The cube — the site's single highlight colour. */
+    mark: "#FFD700",
+    /** The wordmark, and the site's ink. */
+    ink: "#111111",
+    accent: "#FFD700",
   },
 };
 
