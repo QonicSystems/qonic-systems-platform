@@ -16,6 +16,29 @@ async function signIn(page: import("@playwright/test").Page, email: string) {
   await page.waitForURL("**/dashboard");
 }
 
+test.describe("finding the way in", () => {
+  test("offers a sign-in link from the public site on desktop", async ({ page }) => {
+    await page.goto("/");
+    await page.getByRole("link", { name: "Sign In", exact: true }).click();
+    await expect(page).toHaveURL(/\/login/);
+    await expect(page.getByRole("heading", { name: /sign in to your workspace/i })).toBeVisible();
+  });
+
+  test("offers a sign-in link from the footer", async ({ page }) => {
+    await page.goto("/terms");
+    await page.getByRole("link", { name: "Staff Sign In" }).click();
+    await expect(page).toHaveURL(/\/login/);
+  });
+
+  test("offers a sign-in link inside the mobile menu", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/");
+    await page.getByRole("button", { name: "Toggle navigation menu" }).click();
+    await page.getByRole("link", { name: /sign in to the staff portal/i }).click();
+    await expect(page).toHaveURL(/\/login/);
+  });
+});
+
 test.describe("authentication", () => {
   test("sends an anonymous visitor from a portal page to the login page and back again", async ({ page }) => {
     await page.goto("/dashboard");

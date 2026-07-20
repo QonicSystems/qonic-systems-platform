@@ -32,6 +32,9 @@ export function SiteHeader() {
           {navigation.map(([label, href]) => <a key={href} href={href} className="nav-link">{label}</a>)}
         </div>
         <div className="flex items-center gap-3">
+          {/* Staff entry point. Deliberately a quiet text link, not a second
+              button — it must not compete with the visitor-facing CTA. */}
+          <a href="/login" className="staff-link">Sign In</a>
           <a href="/contact" className="button button-primary header-cta">Let&apos;s Talk</a>
           <button type="button" className={`menu-toggle lg:hidden ${open ? "is-open" : ""}`} aria-expanded={open} aria-controls="mobile-menu" aria-label="Toggle navigation menu" onClick={() => setOpen((current) => !current)}>
             <span /><span /><span />
@@ -41,6 +44,7 @@ export function SiteHeader() {
       <div id="mobile-menu" className={`mobile-menu lg:hidden ${open ? "is-open" : ""}`}>
         <div className="site-container space-y-1 py-4">
           {navigation.map(([label, href]) => <a key={href} href={href} className="mobile-link" onClick={() => setOpen(false)}>{label}</a>)}
+          <a href="/login" className="mobile-link mobile-link--staff" onClick={() => setOpen(false)}>Sign In to the staff portal</a>
           <a href="/contact" className="button button-primary mt-3 w-full" onClick={() => setOpen(false)}>Let&apos;s Talk</a>
         </div>
       </div>

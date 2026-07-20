@@ -48,6 +48,11 @@ model User {
   manager   User?   @relation("ReportsTo", fields: [managerId], references: [id], onDelete: SetNull)
   reports   User[]  @relation("ReportsTo")
 
+  clientsOwned       Client[]            @relation("ClientOwner")
+  projectsManaged    Project[]           @relation("ProjectManager")
+  projectAssignments ProjectAssignment[]
+  timesheets         Timesheet[]         @relation("TimesheetOwner")
+  timesheetDecisions Timesheet[]         @relation("TimesheetApprover")
   leaveRequests  LeaveRequest[] @relation("LeaveRequester")
   leaveDecisions LeaveRequest[] @relation("LeaveDecider")
   leaveBalances  LeaveBalance[]
@@ -338,4 +343,189 @@ model LeaveRequest {
   @@index([userId, status])
   @@index([status])
   @@index([startDate])
+}
+
+// ------------------------------------------------------------- Delivery ----
+
+enum ClientStatus {
+  PROSPECT
+  ACTIVE
+  DORMANT
+  ARCHIVED
+}
+
+model Client {
+  id       String       @id @default(cuid())
+  name     String       @unique
+  code     String       @unique
+  status   ClientStatus @default(ACTIVE)
+  industry String?
+  website  String?
+  notes    String?
+
+  /// The person who owns the commercial relationship.
+  ownerId String?
+  owner   User?   @relation("ClientOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+
+  contacts ClientContact[]
+  projects Project[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([ownerId])
+}
+
+model ClientContact {
+  id       String  @id @default(cuid())
+  clientId String
+  client   Client  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  name     String
+  email    String?
+  phone    String?
+  title    String?
+  isPrimary Boolean @default(false)
+
+  @@index([clientId])
+}
+
+enum ProjectStatus {
+  PLANNED
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+  CANCELLED
+}
+
+enum BillingModel {
+  TIME_AND_MATERIALS
+  FIXED_PRICE
+  RETAINER
+  NON_BILLABLE
+}
+
+model Project {
+  id       String        @id @default(cuid())
+  code     String        @unique
+  name     String
+  clientId String
+  client   Client        @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  status   ProjectStatus @default(PLANNED)
+  billing  BillingModel  @default(TIME_AND_MATERIALS)
+
+  /// Minor units (paise/cents) to avoid floating-point money.
+  budgetAmount   Int?
+  budgetCurrency String  @default("INR")
+  /// Charge-out rate in minor units per hour.
+  defaultRate    Int?
+
+  startDate DateTime? @db.Date
+  endDate   DateTime? @db.Date
+  notes     String?
+
+  managerId String?
+  manager   User?   @relation("ProjectManager", fields: [managerId], references: [id], onDelete: SetNull)
+
+  assignments ProjectAssignment[]
+  tasks       ProjectTask[]
+  timeEntries TimeEntry[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clientId, status])
+  @@index([status])
+  @@index([managerId])
+}
+
+/// Who may book time to a project, and at what rate.
+model ProjectAssignment {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Overrides Project.defaultRate for this person.
+  rate      Int?
+  /// Planned share of a working week, for capacity reporting.
+  allocationPercent Int @default(100)
+
+  createdAt DateTime @default(now())
+
+  @@unique([projectId, userId])
+  @@index([userId])
+}
+
+model ProjectTask {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name      String
+  /// Non-billable tasks never contribute to invoiceable hours.
+  billable  Boolean @default(true)
+  isActive  Boolean @default(true)
+  sortOrder Int     @default(0)
+
+  timeEntries TimeEntry[]
+
+  @@index([projectId])
+}
+
+enum TimesheetStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+}
+
+/// A week of time for one person, and the unit that gets approved and locked.
+model Timesheet {
+  id       String          @id @default(cuid())
+  userId   String
+  user     User            @relation("TimesheetOwner", fields: [userId], references: [id], onDelete: Cascade)
+  /// Monday of the week, in UTC.
+  weekStart DateTime       @db.Date
+  status   TimesheetStatus @default(DRAFT)
+
+  submittedAt  DateTime?
+  decidedById  String?
+  decidedBy    User?     @relation("TimesheetApprover", fields: [decidedById], references: [id], onDelete: SetNull)
+  decidedAt    DateTime?
+  decisionNote String?
+
+  entries TimeEntry[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, weekStart])
+  @@index([status])
+  @@index([weekStart])
+}
+
+model TimeEntry {
+  id          String    @id @default(cuid())
+  timesheetId String
+  timesheet   Timesheet @relation(fields: [timesheetId], references: [id], onDelete: Cascade)
+  projectId   String
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  taskId      String?
+  task        ProjectTask? @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  workDate DateTime @db.Date
+  /// Stored as MINUTES. Hours as a float would accumulate rounding error across
+  /// a month of entries and make invoices disagree with timesheets.
+  minutes  Int
+  /// Snapshot of the task's billable flag at entry time, so later changes to the
+  /// task cannot silently re-bill approved work.
+  billable Boolean  @default(true)
+  note     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([timesheetId])
+  @@index([projectId, workDate])
+  @@index([workDate])
 }

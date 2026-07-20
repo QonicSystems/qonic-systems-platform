@@ -1,0 +1,118 @@
+import type { AuthContext } from "@/lib/auth/guard";
+import type { TimesheetStatus } from "@/lib/generated/prisma/enums";
+
+/** A standard working week, used as the denominator for utilisation. */
+export const STANDARD_WEEK_MINUTES = 40 * 60;
+/** Nobody books more than this in one day; a larger figure is a typo. */
+export const MAX_DAY_MINUTES = 16 * 60;
+
+/** Monday 00:00 UTC of the week containing `date`. */
+export function weekStartOf(date: Date): Date {
+  const copy = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  // getUTCDay: 0 = Sunday, so Sunday belongs to the week that began six days earlier.
+  const offset = (copy.getUTCDay() + 6) % 7;
+  copy.setUTCDate(copy.getUTCDate() - offset);
+  return copy;
+}
+
+export function weekDays(weekStart: Date): Date[] {
+  return Array.from({ length: 7 }, (_, index) => {
+    const day = new Date(weekStart.getTime());
+    day.setUTCDate(day.getUTCDate() + index);
+    return day;
+  });
+}
+
+/**
+ * Parses "7.5", "7:30", or "450m" into minutes.
+ *
+ * Time is stored as integer minutes throughout: hours as a float accumulate
+ * rounding error across a month and make invoices disagree with timesheets.
+ */
+export function parseDuration(value: string): number | null {
+  const text = value.trim();
+  if (!text) return 0;
+
+  const colon = /^(\d{1,2}):([0-5]\d)$/.exec(text);
+  if (colon) return Number(colon[1]) * 60 + Number(colon[2]);
+
+  const minutes = /^(\d{1,4})m$/i.exec(text);
+  if (minutes) return Number(minutes[1]);
+
+  const hours = /^(\d{1,2})(?:[.,](\d{1,2}))?h?$/.exec(text);
+  if (!hours) return null;
+  const whole = Number(hours[1]);
+  const fraction = hours[2] ? Number(`0.${hours[2]}`) : 0;
+  return Math.round((whole + fraction) * 60);
+}
+
+export function formatDuration(minutes: number): string {
+  if (minutes <= 0) return "—";
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest === 0 ? `${hours}h` : `${hours}h ${rest}m`;
+}
+
+export function formatHours(minutes: number): string {
+  return (minutes / 60).toFixed(2);
+}
+
+/** Only a draft or a rejected week may be edited — approved time is immutable. */
+export const EDITABLE_STATUSES: ReadonlyArray<TimesheetStatus> = ["DRAFT", "REJECTED"];
+
+export function canEditTimesheet(actor: AuthContext, sheet: { userId: string; status: TimesheetStatus }): boolean {
+  if (sheet.userId !== actor.user.id) return false;
+  if (!actor.permissions.has("timesheet.submit")) return false;
+  return EDITABLE_STATUSES.includes(sheet.status);
+}
+
+export type TimesheetFacts = { userId: string; status: TimesheetStatus };
+
+/**
+ * Who may approve or reject a submitted week.
+ *
+ * Nobody approves their own timesheet, whatever they hold — the same
+ * segregation-of-duties rule used for contract letters and leave. Time drives
+ * invoicing, so self-approval would let one person bill unchecked.
+ */
+export function canDecideTimesheet(
+  actor: AuthContext,
+  sheet: TimesheetFacts,
+): { ok: true } | { ok: false; reason: string; status: 403 | 409 } {
+  if (sheet.status !== "SUBMITTED") return { ok: false, reason: "Only a submitted timesheet can be decided.", status: 409 };
+  if (sheet.userId === actor.user.id) return { ok: false, reason: "You cannot approve your own timesheet.", status: 403 };
+  if (!actor.permissions.has("timesheet.approve")) return { ok: false, reason: "You do not have permission to approve timesheets.", status: 403 };
+  return { ok: true };
+}
+
+export function canSubmitTimesheet(
+  actor: AuthContext,
+  sheet: TimesheetFacts,
+  totalMinutes: number,
+): { ok: true } | { ok: false; reason: string; status: 403 | 409 } {
+  if (sheet.userId !== actor.user.id) return { ok: false, reason: "You can only submit your own timesheet.", status: 403 };
+  if (!EDITABLE_STATUSES.includes(sheet.status)) return { ok: false, reason: "That week has already been submitted.", status: 409 };
+  if (totalMinutes <= 0) return { ok: false, reason: "Add some time before submitting the week.", status: 409 };
+  return { ok: true };
+}
+
+export type UtilisationInput = { billableMinutes: number; nonBillableMinutes: number; capacityMinutes?: number };
+
+/**
+ * Billable share of recorded time, and of contracted capacity.
+ *
+ * `billableRatio` answers "of the time booked, how much is chargeable" and
+ * `utilisation` answers "of a standard week, how much was chargeable" — they
+ * differ whenever someone books more or less than a full week, which is exactly
+ * when the distinction matters.
+ */
+export function utilisation({ billableMinutes, nonBillableMinutes, capacityMinutes = STANDARD_WEEK_MINUTES }: UtilisationInput) {
+  const total = billableMinutes + nonBillableMinutes;
+  return {
+    totalMinutes: total,
+    billableMinutes,
+    nonBillableMinutes,
+    billableRatio: total === 0 ? 0 : billableMinutes / total,
+    utilisation: capacityMinutes === 0 ? 0 : billableMinutes / capacityMinutes,
+  };
+}

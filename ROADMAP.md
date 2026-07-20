@@ -3,7 +3,7 @@
 Turning the marketing site into the internal operating system for a freelance
 consulting and recruitment firm.
 
-**Phases 1, 2 and 3 are built and verified.** Phases 4–8 are the planned rollout.
+**Phases 1–4 are built and verified.** Phases 5–8 are the planned rollout.
 
 ---
 
@@ -123,13 +123,40 @@ names. The only legitimate role checks are `isSuperAdmin` (the CEO bypass) and
 - Onboarding / offboarding checklists
 - Bank details (deliberately not added: needs encryption-at-rest design first)
 
-## Phase 4 — Delivery: clients, projects, timesheets
+## Phase 4 — Delivery: clients, projects, timesheets ✅ COMPLETE
 
-- `Client` and `ClientContact`, account ownership
-- `Project`: status, budget, billing model (T&M / fixed / retainer), team allocation
-- Tasks, milestones, project health flags
-- **Timesheets**: weekly entry, billable split, submit → approve → lock
-- Utilization and bench reporting, capacity planning
+- **Clients** with a short code, status, industry, and an account owner
+- **Projects** namespaced by client code (`NWT-WH-01`), with status, billing model
+  (T&M / fixed price / retainer / non-billable), budget, and a default charge-out rate.
+  Creating one auto-adds a "General" task and assigns the manager, so time can be booked immediately
+- **Timesheets**: a weekly grid, one row per project+task, seven day columns
+  - `DRAFT → SUBMITTED → APPROVED`, with `REJECTED` sending the week back for changes
+  - **Submitting locks the week; approving locks it permanently**
+  - **Nobody approves their own timesheet**, whatever they hold — time drives invoicing, so self-approval would let one person bill unchecked
+  - Rejections require a written reason
+  - Time is only accepted against projects you are **assigned** to
+  - Guards: entries must fall inside their own week, no more than 16h on one day, and durations must parse
+- **Utilisation report** over a rolling 4 weeks, per person and per project
+
+### Two decisions worth knowing
+
+**Time is stored as integer minutes, never fractional hours.** Hours as a float
+accumulate rounding error across a month and make invoices disagree with
+timesheets. The UI accepts `7.5`, `7:30`, or `450m` — all three parse to the same
+450 minutes.
+
+**Money is stored in minor units** (paise/cents) for the same reason.
+
+**`billableRatio` and `utilisation` are deliberately different numbers.** The
+first asks "of the time booked, how much is chargeable"; the second asks "of a
+standard 40-hour week, how much was chargeable". They diverge whenever someone
+books more or less than a full week — which is exactly when the distinction matters.
+
+### Deferred from Phase 4
+
+- Milestones and project health flags
+- Capacity planning / forward staffing forecast (the `allocationPercent` field exists but nothing reads it yet)
+- Editing clients and projects after creation — currently create-and-view only
 
 ## Phase 5 — Recruitment / ATS *(core to a recruitment firm)*
 
@@ -180,12 +207,20 @@ npm run db:seed:demo    # optional: one demo account per role (dev/test only)
 npm run dev             # http://localhost:3000  → sign in at /login
 
 npm run db:setup:test   # prepare the disposable e2e database (once)
+
+# Locked out? Set any account's password from the command line:
+npm run db:set-password -- founder@avenstrixconsulting.com
 npm test                # unit + component
 npm run test:e2e        # end-to-end
 ```
 
 The bootstrap CEO comes from `BOOTSTRAP_CEO_*` in `.env` and is created **only
 when the user table is empty**. It must change its password at first login.
+
+> **Important:** once any user exists, changing `BOOTSTRAP_CEO_PASSWORD` in `.env`
+> has no effect — the seed skips bootstrap entirely. To change a password after
+> that, use the account's own security page, the emailed reset, or
+> `npm run db:set-password` for lockout recovery.
 
 ## Adding a capability later
 

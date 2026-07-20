@@ -21,6 +21,15 @@ export const PERMISSIONS = [
   { key: "contract.release", group: "Contract letters", label: "Release contract letters", description: "Approve and issue a contract letter to the employee.", sortOrder: 70 },
   { key: "contract.revoke", group: "Contract letters", label: "Revoke contract letters", description: "Withdraw a letter that was already released.", sortOrder: 80 },
 
+  // Delivery
+  { key: "client.view", group: "Delivery", label: "View clients", description: "See the client list and their projects.", sortOrder: 40 },
+  { key: "client.manage", group: "Delivery", label: "Manage clients", description: "Create and edit clients and their contacts.", sortOrder: 42 },
+  { key: "project.view", group: "Delivery", label: "View projects", description: "See every project, not only the ones you are on.", sortOrder: 44 },
+  { key: "project.manage", group: "Delivery", label: "Manage projects", description: "Create projects, set budgets, and assign people.", sortOrder: 46 },
+  { key: "timesheet.submit", group: "Delivery", label: "Record time", description: "Fill in and submit your own weekly timesheet.", sortOrder: 48 },
+  { key: "timesheet.approve", group: "Delivery", label: "Approve timesheets", description: "Approve or reject submitted timesheets.", sortOrder: 50 },
+  { key: "report.utilization", group: "Delivery", label: "View utilisation reports", description: "See billable ratios and capacity across the team.", sortOrder: 52 },
+
   // Leave
   { key: "leave.request", group: "Leave", label: "Request leave", description: "Submit leave requests and see your own balances.", sortOrder: 82 },
   { key: "leave.approve", group: "Leave", label: "Approve leave", description: "Approve or reject leave for the people who report to you.", sortOrder: 84 },
@@ -55,18 +64,21 @@ export const DEFAULT_ROLE_PERMISSIONS: Readonly<Record<Exclude<RoleKey, "ceo">, 
   [ROLE.CO_FOUNDER]: [
     "portal.access", "directory.view",
     "contract.view_own", "contract.view_all", "contract.release",
+    "client.view", "client.manage", "project.view", "project.manage",
+    "timesheet.submit", "timesheet.approve", "report.utilization",
     "leave.request", "leave.approve", "leave.manage",
     "admin.access", "user.view", "audit.view",
   ],
   [ROLE.HR]: [
     "portal.access", "directory.view",
     "contract.view_own", "contract.view_all", "contract.generate", "contract.submit",
+    "client.view", "project.view", "timesheet.submit", "report.utilization",
     "leave.request", "leave.approve", "leave.manage",
     "admin.access", "user.view", "user.manage",
   ],
-  [ROLE.ACCOUNTS]: ["portal.access", "directory.view", "contract.view_own", "leave.request"],
-  [ROLE.PROJECTS]: ["portal.access", "directory.view", "contract.view_own", "leave.request", "leave.approve"],
-  [ROLE.EMPLOYEE]: ["portal.access", "directory.view", "contract.view_own", "leave.request"],
+  [ROLE.ACCOUNTS]: ["portal.access", "directory.view", "contract.view_own", "leave.request", "client.view", "project.view", "timesheet.submit", "report.utilization"],
+  [ROLE.PROJECTS]: ["portal.access", "directory.view", "contract.view_own", "leave.request", "leave.approve", "client.view", "client.manage", "project.view", "project.manage", "timesheet.submit", "timesheet.approve", "report.utilization"],
+  [ROLE.EMPLOYEE]: ["portal.access", "directory.view", "contract.view_own", "leave.request", "timesheet.submit"],
 };
 
 /** Granting this is equivalent to granting everything, so it stays CEO-only. */

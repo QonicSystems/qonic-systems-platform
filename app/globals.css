@@ -390,3 +390,31 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 .status-chip--approved { background: var(--accent-tint); color: var(--accent-dark); }
 .status-chip--rejected { background: #fef2f2; color: #b91c1c; }
 .status-chip--cancelled { background: var(--canvas-sub); color: var(--faint); }
+
+/* --- Delivery: timesheets, projects, utilisation --- */
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.timesheet th[scope="row"] { min-width: 15rem; }
+.timesheet th[scope="row"] select { width: 100%; font-size: .82rem; padding: .4rem .5rem; }
+.timesheet td { text-align: center; padding: .5rem .4rem; }
+.timesheet .is-weekend { background: rgb(15 20 25 / .025); }
+.timesheet tfoot tr { border-top: 2px solid var(--line); font-weight: 700; }
+.timesheet tfoot td { color: var(--ink); }
+.duration-input { width: 4.2rem; text-align: center; padding: .45rem .3rem !important; font-variant-numeric: tabular-nums; }
+.timesheet-total { color: var(--ink); font-weight: 700; font-variant-numeric: tabular-nums; }
+
+.meter { display: inline-block; width: 6rem; height: .45rem; margin-right: .5rem; border-radius: 999px; background: var(--line); overflow: hidden; vertical-align: middle; }
+.meter span { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--accent), var(--accent-dark)); }
+
+.status-chip--prospect { background: #ede9fe; color: #5b21b6; }
+.status-chip--dormant { background: var(--canvas-sub); color: var(--faint); }
+.status-chip--planned { background: #dbeafe; color: #1e40af; }
+.status-chip--on-hold { background: #fef3c7; color: #92400e; }
+.status-chip--completed { background: var(--accent-tint); color: var(--accent-dark); }
+.status-chip--submitted { background: #fef3c7; color: #92400e; }
+
+/* Staff sign-in entry point in the marketing header. Quiet by design so it does
+   not compete with the visitor CTA, but always reachable. */
+.staff-link { display: none; border-radius: .5rem; padding: .5rem .75rem; color: var(--body); font-size: .88rem; font-weight: 600; text-decoration: none; transition: color .2s var(--ease), background .2s var(--ease); }
+.staff-link:hover { background: var(--accent-tint); color: var(--accent-dark); }
+@media (min-width: 640px) { .staff-link { display: inline-flex; } }
+.mobile-link--staff { border-top: 1px solid var(--line); margin-top: .4rem; padding-top: .9rem; color: var(--accent-deep); }
