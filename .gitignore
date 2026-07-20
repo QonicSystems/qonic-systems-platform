@@ -1,6 +1,16 @@
 node_modules/
 .next/
 coverage/
-.env.local
-.env*.local
+test-results/
+playwright-report/
+
+# Environment — Prisma (migrate/seed/studio) reads a plain `.env` by default,
+# so it must be ignored or DATABASE_URL gets committed.
+.env
+.env*
 !.env.example
+
+# Prisma generated client
+lib/generated/
+
+/lib/generated/prisma

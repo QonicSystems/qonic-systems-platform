@@ -11,12 +11,15 @@ function Counter({ target }: { target: number }) {
   useEffect(() => {
     const element = reference.current;
     if (!element) return;
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) { setValue(target); return; }
+    // The reduced-motion check lives inside the observer callback rather than the effect
+    // body: setting state synchronously on mount triggers a cascading render.
     const observer = new IntersectionObserver(([entry]) => {
       if (!entry.isIntersecting) return;
+      observer.disconnect();
+      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) { setValue(target); return; }
       const start = performance.now();
       const tick = (now: number) => { const progress = Math.min((now - start) / 1200, 1); setValue(Math.floor(target * (1 - (1 - progress) ** 3))); if (progress < 1) requestAnimationFrame(tick); };
-      requestAnimationFrame(tick); observer.disconnect();
+      requestAnimationFrame(tick);
     }, { threshold: 0.5 });
     observer.observe(element); return () => observer.disconnect();
   }, [target]);

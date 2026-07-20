@@ -14,7 +14,12 @@ export function Reveal({ children, delay = 0, className = "", as: Tag = "div" }:
   useEffect(() => {
     const element = reference.current;
     if (!element) return;
-    if (typeof IntersectionObserver === "undefined") { setVisible(true); return; }
+    // Deferred a frame rather than set synchronously here: a sync setState in an effect
+    // body causes a cascading render. Only reached on browsers without IntersectionObserver.
+    if (typeof IntersectionObserver === "undefined") {
+      const frame = requestAnimationFrame(() => setVisible(true));
+      return () => cancelAnimationFrame(frame);
+    }
     const observer = new IntersectionObserver(([entry]) => {
       if (!entry.isIntersecting) return;
       setVisible(true);

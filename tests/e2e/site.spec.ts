@@ -5,7 +5,7 @@ for (const path of ["/", "/about", "/industries", "/services", "/contact", "/pri
     const response = await page.goto(path);
     expect(response?.status()).toBe(200);
     await expect(page.locator("main")).toBeVisible();
-    await expect(page).toHaveTitle(/Apex Resource Partners/);
+    await expect(page).toHaveTitle(/Avenstrix Consulting/);
   });
 }
 

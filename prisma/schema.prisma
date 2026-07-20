@@ -1,0 +1,234 @@
+// Avenstrix Consulting — internal platform schema.
+//
+// Design note: roles are ROWS, not an enum, so new roles ("Legal", "Marketing")
+// are created through the admin UI with no migration and no deploy. Application
+// code branches on PERMISSIONS, never on role keys — see lib/auth/permissions.ts.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------- Identity --
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  ARCHIVED
+}
+
+model User {
+  id                 String     @id @default(cuid())
+  email              String     @unique
+  passwordHash       String
+  name               String
+  phone              String?
+  jobTitle           String?
+  employeeCode       String?    @unique
+  /// Object-storage key, never a URL — URLs are presigned per request.
+  photoKey           String?
+  status             UserStatus @default(ACTIVE)
+  mustChangePassword Boolean    @default(false)
+  lastLoginAt        DateTime?
+  failedLoginCount   Int        @default(0)
+  lockedUntil        DateTime?
+
+  roleId String
+  role   Role   @relation(fields: [roleId], references: [id])
+
+  sessions  Session[]
+  overrides UserPermissionOverride[]
+  auditLogs AuditLog[]               @relation("AuditActor")
+
+  contractsAuthored ContractLetter[] @relation("ContractAuthor")
+  contractsSubject  ContractLetter[] @relation("ContractSubject")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([roleId])
+  @@index([status])
+}
+
+model Session {
+  id String @id @default(cuid())
+  /// sha256 of the cookie value. The raw token is never stored, so a database
+  /// leak yields no usable sessions.
+  tokenHash String @unique
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  ipAddress String?
+  userAgent String?
+  /// Idle expiry, rolled forward on use.
+  expiresAt DateTime
+  /// Hard cap. Never extended, so a stolen session cannot live forever.
+  absoluteExpiresAt DateTime
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// -------------------------------------------------------------------- RBAC --
+
+model Role {
+  id          String  @id @default(cuid())
+  /// Stable identifier referenced from code (lib/auth/roles.ts). Never renamed.
+  key         String  @unique
+  label       String
+  description String?
+  /// True for the CEO row only. Grants an unconditional allow-all bypass, so the
+  /// CEO can never lock themselves out by mis-toggling their own permissions.
+  isSuperAdmin Boolean @default(false)
+  /// System roles cannot be deleted or have their key changed.
+  isSystem     Boolean @default(false)
+  /// Lower = more senior. Drives the privilege-escalation guard: you may only
+  /// administer users whose rank is strictly greater than your own.
+  rank         Int     @default(100)
+
+  users       User[]
+  permissions RolePermission[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Permission {
+  id String @id @default(cuid())
+  /// Dotted key, e.g. "contract.release". Seeded from the code-owned catalog.
+  key         String  @unique
+  /// Groups the admin console's toggle matrix into sections.
+  group       String
+  label       String
+  description String?
+  sortOrder   Int     @default(0)
+
+  roles     RolePermission[]
+  overrides UserPermissionOverride[]
+}
+
+/// The CEO's toggle. `enabled` is what the admin console flips per role.
+model RolePermission {
+  roleId       String
+  permissionId String
+  enabled      Boolean @default(false)
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  updatedAt   DateTime @updatedAt
+  updatedById String?
+
+  @@id([roleId, permissionId])
+}
+
+enum OverrideEffect {
+  ALLOW
+  DENY
+}
+
+/// Per-user exception to the role default. DENY beats ALLOW; both are ignored
+/// once `expiresAt` has passed, which makes temporary elevation self-cleaning.
+model UserPermissionOverride {
+  userId       String
+  permissionId String
+  effect       OverrideEffect
+  reason       String?
+  expiresAt    DateTime?
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime @default(now())
+  createdById String?
+
+  @@id([userId, permissionId])
+}
+
+// -------------------------------------------------------- Contract letters --
+
+enum ContractStatus {
+  DRAFT
+  PENDING_RELEASE
+  CHANGES_REQUESTED
+  RELEASED
+  ACKNOWLEDGED
+  REVOKED
+}
+
+model ContractLetter {
+  id        String @id @default(cuid())
+  reference String @unique
+
+  subjectUserId String
+  subject       User   @relation("ContractSubject", fields: [subjectUserId], references: [id])
+  authorUserId  String
+  author        User   @relation("ContractAuthor", fields: [authorUserId], references: [id])
+
+  status      ContractStatus @default(DRAFT)
+  templateKey String         @default("standard-employment-v1")
+  /// Template variables: salary, title, start date, terms.
+  payload     Json
+  version     Int            @default(1)
+
+  /// Set once, at the RELEASED transition. A released letter is a legal artifact
+  /// and must stay byte-stable, so the PDF is never regenerated on read.
+  pdfKey    String?
+  pdfSha256 String?
+
+  releasedAt   DateTime?
+  releasedById String?
+  revokedAt    DateTime?
+  revokedById  String?
+
+  events ContractLetterEvent[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([subjectUserId, status])
+  @@index([status])
+}
+
+/// Append-only. Written in the same transaction as the status change, so the
+/// approval trail can never drift from the letter's actual state.
+model ContractLetterEvent {
+  id         String          @id @default(cuid())
+  letterId   String
+  letter     ContractLetter  @relation(fields: [letterId], references: [id], onDelete: Cascade)
+  fromStatus ContractStatus?
+  toStatus   ContractStatus
+  actorId    String
+  note       String?
+  createdAt  DateTime        @default(now())
+
+  @@index([letterId, createdAt])
+}
+
+// ------------------------------------------------------------------ Audit ---
+
+model AuditLog {
+  id      String  @id @default(cuid())
+  actorId String?
+  actor   User?   @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  action     String
+  entityType String
+  entityId   String?
+  before     Json?
+  after      Json?
+  ipAddress  String?
+
+  createdAt DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([actorId, createdAt])
+  @@index([createdAt])
+}

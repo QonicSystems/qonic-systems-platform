@@ -1,0 +1,101 @@
+import { ROLE, type RoleKey } from "@/lib/auth/roles";
+
+/**
+ * The permission catalog lives in code because permissions are born with the
+ * features that need them. The seed upserts these into the database so the
+ * admin console can render its toggle matrix from real rows.
+ *
+ * Adding a permission: add it here, re-run the seed, then toggle it on for
+ * whichever roles should have it.
+ */
+export const PERMISSIONS = [
+  // Portal
+  { key: "portal.access", group: "Portal", label: "Access the staff portal", description: "Sign in and see the dashboard.", sortOrder: 10 },
+  { key: "directory.view", group: "Portal", label: "View the team directory", description: "See colleagues' names, roles, and work contact details.", sortOrder: 20 },
+
+  // Contract letters
+  { key: "contract.view_own", group: "Contract letters", label: "View own contract letters", description: "See contract letters issued to you.", sortOrder: 30 },
+  { key: "contract.view_all", group: "Contract letters", label: "View all contract letters", description: "See contract letters for every employee.", sortOrder: 40 },
+  { key: "contract.generate", group: "Contract letters", label: "Generate contract letters", description: "Draft and edit contract letters.", sortOrder: 50 },
+  { key: "contract.submit", group: "Contract letters", label: "Submit for release", description: "Send a draft to leadership for approval.", sortOrder: 60 },
+  { key: "contract.release", group: "Contract letters", label: "Release contract letters", description: "Approve and issue a contract letter to the employee.", sortOrder: 70 },
+  { key: "contract.revoke", group: "Contract letters", label: "Revoke contract letters", description: "Withdraw a letter that was already released.", sortOrder: 80 },
+
+  // People administration
+  { key: "admin.access", group: "Administration", label: "Access the admin console", description: "Open the administration area.", sortOrder: 90 },
+  { key: "user.view", group: "Administration", label: "View staff accounts", description: "List and inspect user accounts.", sortOrder: 100 },
+  { key: "user.manage", group: "Administration", label: "Manage staff accounts", description: "Create, edit, suspend, and archive accounts.", sortOrder: 110 },
+  { key: "rbac.manage", group: "Administration", label: "Manage roles and permissions", description: "Create roles and toggle what each role can do. Equivalent to full control.", sortOrder: 120 },
+  { key: "audit.view", group: "Administration", label: "View the audit log", description: "Read the record of privileged actions.", sortOrder: 130 },
+] as const satisfies ReadonlyArray<{
+  key: string;
+  group: string;
+  label: string;
+  description: string;
+  sortOrder: number;
+}>;
+
+export type PermissionKey = (typeof PERMISSIONS)[number]["key"];
+
+/**
+ * Permissions switched ON for each role at seed time. The CEO is intentionally
+ * absent — `isSuperAdmin` grants everything, so seeding rows for them would be
+ * misleading and would imply their access could be toggled off.
+ *
+ * These are only DEFAULTS. Once seeded, the CEO owns these switches at runtime.
+ */
+export const DEFAULT_ROLE_PERMISSIONS: Readonly<Record<Exclude<RoleKey, "ceo">, ReadonlyArray<PermissionKey>>> = {
+  [ROLE.CO_FOUNDER]: [
+    "portal.access", "directory.view",
+    "contract.view_own", "contract.view_all", "contract.release",
+    "admin.access", "user.view", "audit.view",
+  ],
+  [ROLE.HR]: [
+    "portal.access", "directory.view",
+    "contract.view_own", "contract.view_all", "contract.generate", "contract.submit",
+    "admin.access", "user.view", "user.manage",
+  ],
+  [ROLE.ACCOUNTS]: ["portal.access", "directory.view", "contract.view_own"],
+  [ROLE.PROJECTS]: ["portal.access", "directory.view", "contract.view_own"],
+  [ROLE.EMPLOYEE]: ["portal.access", "directory.view", "contract.view_own"],
+};
+
+/** Granting this is equivalent to granting everything, so it stays CEO-only. */
+export const SUPER_ADMIN_ONLY_PERMISSIONS: ReadonlySet<string> = new Set(["rbac.manage"]);
+
+// --------------------------------------------------------------- resolution --
+
+export type ResolverRole = { isSuperAdmin: boolean };
+export type ResolverOverride = { permissionKey: string; effect: "ALLOW" | "DENY"; expiresAt: Date | null };
+
+/**
+ * Resolves a user's effective permissions. Pure on purpose: no database, no
+ * clock beyond the injected `now`, so every precedence rule is directly testable.
+ *
+ * Precedence, highest first:
+ *   1. super admin        → allow everything
+ *   2. override DENY      → deny (beats a role grant)
+ *   3. override ALLOW     → allow
+ *   4. role toggle on     → allow
+ *   5. otherwise          → deny by default
+ *
+ * Expired overrides are ignored entirely, which makes temporary elevation
+ * self-cleaning without a scheduled job.
+ */
+export function resolvePermissions(
+  role: ResolverRole,
+  enabledRolePermissions: ReadonlyArray<string>,
+  overrides: ReadonlyArray<ResolverOverride>,
+  now: Date = new Date(),
+): ReadonlySet<string> {
+  if (role.isSuperAdmin) return new Set(PERMISSIONS.map((permission) => permission.key));
+
+  const effective = new Set<string>(enabledRolePermissions);
+  const live = overrides.filter((override) => !override.expiresAt || override.expiresAt > now);
+
+  for (const override of live) if (override.effect === "ALLOW") effective.add(override.permissionKey);
+  // DENY applied last so it always wins, whatever the role or an ALLOW said.
+  for (const override of live) if (override.effect === "DENY") effective.delete(override.permissionKey);
+
+  return effective;
+}
