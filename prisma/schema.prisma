@@ -49,6 +49,13 @@ model User {
   reports   User[]  @relation("ReportsTo")
 
   clientsOwned       Client[]            @relation("ClientOwner")
+  jobsOwned          Job[]               @relation("JobOwner")
+  applicationsOwned  Application[]       @relation("ApplicationOwner")
+  interviews         Interview[]         @relation("Interviewer")
+  placements         Placement[]         @relation("PlacementRecruiter")
+  paymentsRecorded   Payment[]           @relation("PaymentRecorder")
+  expenses           Expense[]           @relation("ExpenseOwner")
+  expenseDecisions   Expense[]           @relation("ExpenseApprover")
   projectsManaged    Project[]           @relation("ProjectManager")
   projectAssignments ProjectAssignment[]
   timesheets         Timesheet[]         @relation("TimesheetOwner")
@@ -369,6 +376,8 @@ model Client {
 
   contacts ClientContact[]
   projects Project[]
+  jobs     Job[]
+  invoices Invoice[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -412,6 +421,7 @@ model Project {
   clientId String
   client   Client        @relation(fields: [clientId], references: [id], onDelete: Restrict)
   status   ProjectStatus @default(PLANNED)
+  health   ProjectHealth @default(ON_TRACK)
   billing  BillingModel  @default(TIME_AND_MATERIALS)
 
   /// Minor units (paise/cents) to avoid floating-point money.
@@ -430,6 +440,9 @@ model Project {
   assignments ProjectAssignment[]
   tasks       ProjectTask[]
   timeEntries TimeEntry[]
+  milestones  ProjectMilestone[]
+  invoices    Invoice[]
+  expenses    Expense[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -522,10 +535,368 @@ model TimeEntry {
   billable Boolean  @default(true)
   note     String?
 
+  /// Stamped when the hours are pulled onto an invoice. This is what stops the
+  /// same time being billed twice.
+  invoicedAt DateTime?
+  invoiceId  String?
+  invoice    Invoice?  @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([timesheetId])
   @@index([projectId, workDate])
   @@index([workDate])
+  @@index([invoiceId])
+}
+
+// -------------------------------------------- Phase 4 completion: delivery --
+
+enum ProjectHealth {
+  ON_TRACK
+  AT_RISK
+  OFF_TRACK
+}
+
+enum MilestoneStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  MISSED
+}
+
+model ProjectMilestone {
+  id        String          @id @default(cuid())
+  projectId String
+  project   Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name      String
+  dueDate   DateTime        @db.Date
+  status    MilestoneStatus @default(PENDING)
+  /// Fixed-price projects bill on milestones; minor units.
+  amount    Int?
+  completedAt DateTime?
+  notes     String?
+  sortOrder Int             @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId, status])
+}
+
+// ------------------------------------------------- Phase 5: recruitment ----
+
+enum JobStatus {
+  DRAFT
+  OPEN
+  ON_HOLD
+  FILLED
+  CLOSED
+}
+
+model Job {
+  id        String    @id @default(cuid())
+  reference String    @unique
+  title     String
+  clientId  String
+  client    Client    @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  status    JobStatus @default(DRAFT)
+
+  description  String?
+  location     String?
+  employmentType String  @default("Full-time")
+  openings     Int      @default(1)
+  /// Minor units. The salary band advertised to candidates.
+  salaryMin    Int?
+  salaryMax    Int?
+  currency     String   @default("INR")
+  /// Placement fee as a percentage of first-year salary.
+  feePercent   Float?
+  /// Target days to fill, used to flag ageing requisitions.
+  slaDays      Int?
+  /// Shown on the public careers page.
+  isPublished  Boolean  @default(false)
+
+  ownerId String?
+  owner   User?   @relation("JobOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+
+  applications Application[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, isPublished])
+  @@index([clientId])
+}
+
+model Candidate {
+  id     String  @id @default(cuid())
+  name   String
+  email  String  @unique
+  phone  String?
+  /// A LINK to an externally hosted CV. Nothing is uploaded or stored here.
+  resumeUrl String?
+  linkedinUrl String?
+  location  String?
+  headline  String?
+  /// Comma-separated for now; a tag table is a later refinement.
+  skills    String?
+  source    String  @default("Direct")
+  /// Minor units.
+  currentSalary  Int?
+  expectedSalary Int?
+  noticePeriod   String?
+  notes          String?
+
+  /// Recorded when the candidate agreed to us holding their data.
+  consentAt DateTime?
+
+  applications Application[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([name])
+}
+
+/// The pipeline stages an application moves through.
+enum ApplicationStage {
+  SOURCED
+  SCREENED
+  SUBMITTED
+  INTERVIEW
+  OFFER
+  PLACED
+  REJECTED
+  WITHDRAWN
+}
+
+model Application {
+  id          String           @id @default(cuid())
+  jobId       String
+  job         Job              @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  candidateId String
+  candidate   Candidate        @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  stage       ApplicationStage @default(SOURCED)
+
+  ownerId String?
+  owner   User?   @relation("ApplicationOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+
+  /// Free-text reason captured when an application is rejected or withdrawn.
+  outcomeReason String?
+  /// Came in through the public careers form rather than being sourced.
+  isInbound Boolean @default(false)
+
+  events     ApplicationEvent[]
+  interviews Interview[]
+  placement  Placement?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// One application per candidate per job — re-applying reuses the row.
+  @@unique([jobId, candidateId])
+  @@index([stage])
+  @@index([jobId, stage])
+}
+
+/// Append-only stage history, written with the transition itself.
+model ApplicationEvent {
+  id            String            @id @default(cuid())
+  applicationId String
+  application   Application       @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  fromStage     ApplicationStage?
+  toStage       ApplicationStage
+  actorId       String?
+  note          String?
+  createdAt     DateTime          @default(now())
+
+  @@index([applicationId, createdAt])
+}
+
+enum InterviewOutcome {
+  PENDING
+  ADVANCE
+  REJECT
+  NO_SHOW
+}
+
+model Interview {
+  id            String      @id @default(cuid())
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  scheduledAt   DateTime
+  durationMins  Int         @default(60)
+  /// "Phone screen", "Technical", "Client panel"…
+  kind          String      @default("Screening")
+  location      String?
+
+  interviewerId String?
+  interviewer   User?   @relation("Interviewer", fields: [interviewerId], references: [id], onDelete: SetNull)
+
+  /// 1–5. Null until feedback is recorded.
+  score    Int?
+  outcome  InterviewOutcome @default(PENDING)
+  feedback String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([applicationId])
+  @@index([scheduledAt])
+}
+
+model Placement {
+  id            String      @id @default(cuid())
+  applicationId String      @unique
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  startDate DateTime @db.Date
+  /// Minor units.
+  salary    Int
+  currency  String   @default("INR")
+  /// Percentage of salary charged to the client.
+  feePercent Float
+  /// Denormalised at placement time so a later fee-policy change cannot
+  /// retroactively alter historic revenue.
+  feeAmount  Int
+
+  /// The recruiter credited with the placement.
+  recruiterId String?
+  recruiter   User?   @relation("PlacementRecruiter", fields: [recruiterId], references: [id], onDelete: SetNull)
+
+  /// Guarantee period; a fall-out inside it usually voids the fee.
+  guaranteeDays Int?
+  fellOutAt     DateTime?
+
+  invoiceId String?
+  invoice   Invoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([recruiterId])
+}
+
+// ------------------------------------------------------ Phase 6: finance ---
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PART_PAID
+  PAID
+  OVERDUE
+  VOID
+}
+
+model Invoice {
+  id       String        @id @default(cuid())
+  number   String        @unique
+  clientId String
+  client   Client        @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  projectId String?
+  project   Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  status   InvoiceStatus @default(DRAFT)
+
+  issueDate DateTime @db.Date
+  dueDate   DateTime @db.Date
+  currency  String   @default("INR")
+
+  /// All minor units, computed from the lines and frozen when the invoice is sent.
+  subtotal  Int   @default(0)
+  taxPercent Float @default(0)
+  taxAmount Int   @default(0)
+  total     Int   @default(0)
+  paidAmount Int  @default(0)
+
+  notes String?
+  /// Set when issued, so the document can be re-rendered exactly as sent.
+  sentAt DateTime?
+  voidedAt DateTime?
+
+  lines      InvoiceLine[]
+  payments   Payment[]
+  placements Placement[]
+  timeEntries TimeEntry[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clientId, status])
+  @@index([status])
+  @@index([dueDate])
+}
+
+model InvoiceLine {
+  id        String  @id @default(cuid())
+  invoiceId String
+  invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  description String
+  /// Hundredths of a unit (hours × 100) so 7.5h is exact.
+  quantity  Int
+  /// Minor units per unit.
+  unitRate  Int
+  amount    Int
+  sortOrder Int     @default(0)
+
+  @@index([invoiceId])
+}
+
+model Payment {
+  id        String   @id @default(cuid())
+  invoiceId String
+  invoice   Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  amount    Int
+  paidOn    DateTime @db.Date
+  method    String   @default("Bank transfer")
+  reference String?
+  note      String?
+
+  recordedById String?
+  recordedBy   User?   @relation("PaymentRecorder", fields: [recordedById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@index([invoiceId])
+}
+
+enum ExpenseStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+  REIMBURSED
+}
+
+model Expense {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation("ExpenseOwner", fields: [userId], references: [id], onDelete: Cascade)
+
+  spentOn  DateTime @db.Date
+  category String   @default("Other")
+  /// Minor units.
+  amount   Int
+  currency String   @default("INR")
+  description String
+  /// A LINK to a receipt hosted elsewhere; nothing is stored here.
+  receiptUrl String?
+
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  /// Whether it should be passed on to the client.
+  billable  Boolean  @default(false)
+
+  status ExpenseStatus @default(DRAFT)
+  decidedById String?
+  decidedBy   User?   @relation("ExpenseApprover", fields: [decidedById], references: [id], onDelete: SetNull)
+  decidedAt   DateTime?
+  decisionNote String?
+  reimbursedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, status])
+  @@index([status])
 }

@@ -2,7 +2,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { PortalShell } from "@/components/portal/portal-shell";
 import { can, requireAuth } from "@/lib/auth/guard";
-import { portalNavigation } from "@/lib/portal-nav";
+import { isGroup, portalNavigation, type NavGroup, type NavItem } from "@/lib/portal-nav";
 
 const SECURITY_PATH = "/profile/security";
 
@@ -20,9 +20,16 @@ export default async function PortalLayout({ children }: Readonly<{ children: Re
   // Links are filtered server-side. The shell is a dumb renderer, so a gated
   // link never reaches the browser — but every page still re-checks its own
   // permission, because hidden navigation is not access control.
-  const links = portalNavigation
-    .filter((link) => !link.permission || can(context, link.permission))
-    .map(({ label, href }) => ({ label, href }));
+  const links: Array<NavItem | NavGroup> = [];
+  for (const entry of portalNavigation) {
+    if (!isGroup(entry)) {
+      if (!entry.permission || can(context, entry.permission)) links.push(entry);
+      continue;
+    }
+    const items = entry.items.filter((item) => !item.permission || can(context, item.permission));
+    // A group with nothing under it is noise, so drop it entirely.
+    if (items.length > 0) links.push({ label: entry.label, items });
+  }
 
   return <PortalShell
     user={{ name: context.user.name, email: context.user.email, roleLabel: context.role.label, photoUrl: context.user.photoUrl }}

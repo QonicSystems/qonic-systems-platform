@@ -3,7 +3,7 @@
 Turning the marketing site into the internal operating system for a freelance
 consulting and recruitment firm.
 
-**Phases 1–4 are built and verified.** Phases 5–8 are the planned rollout.
+**Phases 1–6 are built and verified.** Phases 7–8 are the planned rollout.
 
 ---
 
@@ -152,30 +152,58 @@ first asks "of the time booked, how much is chargeable"; the second asks "of a
 standard 40-hour week, how much was chargeable". They diverge whenever someone
 books more or less than a full week — which is exactly when the distinction matters.
 
-### Deferred from Phase 4
+### Phase 4 completion (all previously deferred items now shipped)
 
-- Milestones and project health flags
-- Capacity planning / forward staffing forecast (the `allocationPercent` field exists but nothing reads it yet)
-- Editing clients and projects after creation — currently create-and-view only
+- **Editing clients and projects** after creation, including re-coding a project
+- **Deleting a client** is refused once it has projects, jobs, or invoices — archive instead
+- **Team assignment**: add or remove people at a stated allocation. Removal is blocked once someone has booked time, so history stays intact
+- **Milestones** with due dates, amounts, and status
+- **Project health** flag (on track / at risk / off track)
+- **Capacity report** reading `allocationPercent`, flagging the bench and anyone over-allocated
 
-## Phase 5 — Recruitment / ATS *(core to a recruitment firm)*
+## Phase 5 — Recruitment / ATS ✅ COMPLETE
 
-- `Job` requisitions tied to a client, with intake brief and SLA
-- `Candidate`: parsed skills, source, GDPR consent flags. **Note:** resumes are inbound files, so this is the first phase that would need a real file store — revisit the no-storage decision then
-- Configurable pipeline: Sourced → Screened → Submitted → Interview → Offer → Placed → Rejected
-- Interview scheduling, scorecards, panel assignment
-- Candidate–job matching, dedupe, talent-pool search
-- Placement records feeding revenue and recruiter commission
-- **Public careers page + application intake** — the first place marketing and portal join
+- **Jobs** with a reference, client, salary band, openings, placement fee %, and a time-to-fill SLA that flags ageing requisitions
+- **Candidates** with CV and LinkedIn **links** (nothing uploaded), skills, source, and a recorded consent timestamp
+- **Pipeline**: Sourced → Screened → Submitted → Interview → Offer → Placed, plus Rejected and Withdrawn
+  - Expressed as a **data table** (`lib/ats/pipeline.ts`), like the contract workflow
+  - **One step at a time forward** — skipping stages would hide the screening that supposedly happened. Moving *back* is allowed, because candidates genuinely go for another round
+  - **PLACED is unreachable by a stage move** — it goes through the placement flow, which captures salary and fee
+  - Rejections and withdrawals require a written reason
+- **Interviews** with panel, kind, duration, and a 1–5 scorecard. Scheduling one advances the stage automatically
+- **Placements** compute the fee and **store it**, so a later change to the client's fee policy cannot rewrite booked revenue. Filling every opening auto-closes the requisition
+- **Public careers page** with an application form — the one unauthenticated write in the system, deliberately narrow: it can only create a candidate and one application against an already-published job
+  - Consent is required
+  - A re-application never overwrites a recruiter's existing notes
+  - Draft and unpublished roles are **404 to the public**
 
-## Phase 6 — Finance
+## Phase 6 — Finance ✅ COMPLETE
 
-- Invoicing generated from timesheets and placements, tax lines, PDF rendered on demand via the Phase 2 pipeline
-- Payment tracking, AR aging, dunning reminders
-- Expense submission with receipts and approval chain
-- Payroll: salary structures, monthly runs, payslip PDFs, statutory deductions
-- Recruiter commission and incentives; POs and subcontractors
+- **Invoices** raised manually or **generated from approved timesheets** — one line per person at their assigned rate
+  - Only `APPROVED` billable time is pulled; a draft timesheet is not a claim anyone has stood behind
+  - Billed hours are **stamped**, so the same time can never be invoiced twice. Voiding an invoice releases them again
+  - Draft → Sent → Part paid → Paid, with voiding blocked once a payment exists
+- **Payments** recorded against an invoice; over-payment is refused and the status moves in the same transaction as the payment, so an invoice can never disagree with its own payments
+- **Invoice PDF** rendered on demand, never stored (same approach as contract letters)
+- **Expenses** with category, receipt **link**, optional project and rebillable flag; Draft → Submitted → Approved → Reimbursed
+  - **Nobody approves their own claim** — the classic expenses fraud
+  - Rejections require a reason; future-dated claims are refused
+- **Revenue report**: billed, collected, outstanding, receivables ageing (current / 1-30 / 31-60 / 61-90 / 90+), placements, and fees by recruiter
+
+### Money and time are integers, always
+
+Money is stored in **minor units** (paise) and time in **whole minutes**. Floats
+accumulate error across a month of lines and make invoices disagree with their
+own components. Invoice quantities are hundredths of an hour, so 7.5h is exactly
+750 and a line rounds **once**, at the end.
+
+### Deferred from Phases 5–6
+
+- Interview scheduling UI (the API and model are complete; the portal exposes the pipeline, not a calendar)
+- Payroll, salary structures, and payslips
+- Purchase orders and subcontractor management
 - Accounting export (CSV / Tally / QuickBooks / Xero)
+- Credit notes — voiding is blocked once a payment exists, and a credit note is the correct instrument
 
 ## Phase 7 — Intelligence & reach
 

@@ -5,13 +5,14 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { LogoMark } from "@/components/icons";
 import { Avatar } from "@/components/portal/avatar";
+import { isGroup, type NavGroup, type NavItem } from "@/lib/portal-nav";
 
 export type PortalUser = { name: string; email: string; roleLabel: string; photoUrl: string | null };
 
 export function PortalShell({ user, links, children }: {
   user: PortalUser;
   /** Already filtered by permission on the server — this component never decides access. */
-  links: ReadonlyArray<{ label: string; href: string }>;
+  links: ReadonlyArray<NavItem | NavGroup>;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -32,10 +33,9 @@ export function PortalShell({ user, links, children }: {
         <Link href="/dashboard" className="brand"><span className="brand-mark"><LogoMark /></span><span>Avenstrix<span>Consulting</span></span></Link>
 
         <nav className="portal-nav" aria-label="Portal navigation">
-          {links.map((link) => {
-            const active = pathname === link.href || pathname.startsWith(`${link.href}/`);
-            return <Link key={link.href} href={link.href} className={`portal-link ${active ? "is-active" : ""}`} aria-current={active ? "page" : undefined}>{link.label}</Link>;
-          })}
+          {links.map((entry) => isGroup(entry)
+            ? <NavDropdown key={entry.label} group={entry} pathname={pathname} />
+            : <NavLink key={entry.href} item={entry} pathname={pathname} />)}
         </nav>
 
         <div className="portal-account">
@@ -59,5 +59,45 @@ export function PortalShell({ user, links, children }: {
     </header>
 
     <main id="main-content" className="portal-main">{children}</main>
+  </div>;
+}
+
+function isActive(href: string, pathname: string): boolean {
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
+  const active = isActive(item.href, pathname);
+  return <Link href={item.href} className={`portal-link ${active ? "is-active" : ""}`} aria-current={active ? "page" : undefined}>{item.label}</Link>;
+}
+
+/**
+ * Opens on hover for pointer users and on click for everyone else, so the group
+ * is reachable by keyboard and on touch — hover alone would strand both.
+ */
+function NavDropdown({ group, pathname }: { group: NavGroup; pathname: string }) {
+  const [open, setOpen] = useState(false);
+  const active = group.items.some((item) => isActive(item.href, pathname));
+
+  return <div className="portal-group" onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
+    <button
+      type="button"
+      className={`portal-link portal-group-trigger ${active ? "is-active" : ""}`}
+      aria-expanded={open}
+      aria-haspopup="true"
+      onClick={() => setOpen((value) => !value)}
+    >
+      {group.label}
+      <span className="portal-caret" aria-hidden="true" />
+    </button>
+    {open && <div className="portal-dropdown" role="menu">
+      {group.items.map((item) => <Link
+        key={item.href}
+        href={item.href}
+        role="menuitem"
+        className={`portal-dropdown-item ${isActive(item.href, pathname) ? "is-active" : ""}`}
+        onClick={() => setOpen(false)}
+      >{item.label}</Link>)}
+    </div>}
   </div>;
 }

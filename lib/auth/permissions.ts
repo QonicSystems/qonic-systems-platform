@@ -30,6 +30,21 @@ export const PERMISSIONS = [
   { key: "timesheet.approve", group: "Delivery", label: "Approve timesheets", description: "Approve or reject submitted timesheets.", sortOrder: 50 },
   { key: "report.utilization", group: "Delivery", label: "View utilisation reports", description: "See billable ratios and capacity across the team.", sortOrder: 52 },
 
+  // Recruitment
+  { key: "job.view", group: "Recruitment", label: "View jobs", description: "See open requisitions and their pipelines.", sortOrder: 54 },
+  { key: "job.manage", group: "Recruitment", label: "Manage jobs", description: "Create requisitions and publish them to the careers page.", sortOrder: 56 },
+  { key: "candidate.view", group: "Recruitment", label: "View candidates", description: "See candidate records and CVs.", sortOrder: 58 },
+  { key: "candidate.manage", group: "Recruitment", label: "Manage candidates", description: "Add candidates and move applications through the pipeline.", sortOrder: 60 },
+  { key: "placement.manage", group: "Recruitment", label: "Record placements", description: "Mark a candidate placed and set the fee.", sortOrder: 62 },
+
+  // Finance
+  { key: "invoice.view", group: "Finance", label: "View invoices", description: "See invoices and what is outstanding.", sortOrder: 64 },
+  { key: "invoice.manage", group: "Finance", label: "Manage invoices", description: "Raise invoices, issue them, and void them.", sortOrder: 66 },
+  { key: "payment.record", group: "Finance", label: "Record payments", description: "Log payments received against an invoice.", sortOrder: 68 },
+  { key: "expense.submit", group: "Finance", label: "Claim expenses", description: "Submit your own expense claims.", sortOrder: 70 },
+  { key: "expense.approve", group: "Finance", label: "Approve expenses", description: "Approve, reject, and mark expenses reimbursed.", sortOrder: 72 },
+  { key: "report.finance", group: "Finance", label: "View finance reports", description: "Revenue, receivables ageing, and placement fees.", sortOrder: 74 },
+
   // Leave
   { key: "leave.request", group: "Leave", label: "Request leave", description: "Submit leave requests and see your own balances.", sortOrder: 82 },
   { key: "leave.approve", group: "Leave", label: "Approve leave", description: "Approve or reject leave for the people who report to you.", sortOrder: 84 },
@@ -66,6 +81,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Readonly<Record<Exclude<RoleKey, "ceo">, 
     "contract.view_own", "contract.view_all", "contract.release",
     "client.view", "client.manage", "project.view", "project.manage",
     "timesheet.submit", "timesheet.approve", "report.utilization",
+    "job.view", "job.manage", "candidate.view", "candidate.manage", "placement.manage",
+    "invoice.view", "invoice.manage", "payment.record", "expense.submit", "expense.approve", "report.finance",
     "leave.request", "leave.approve", "leave.manage",
     "admin.access", "user.view", "audit.view",
   ],
@@ -73,12 +90,13 @@ export const DEFAULT_ROLE_PERMISSIONS: Readonly<Record<Exclude<RoleKey, "ceo">, 
     "portal.access", "directory.view",
     "contract.view_own", "contract.view_all", "contract.generate", "contract.submit",
     "client.view", "project.view", "timesheet.submit", "report.utilization",
+    "job.view", "candidate.view", "expense.submit",
     "leave.request", "leave.approve", "leave.manage",
     "admin.access", "user.view", "user.manage",
   ],
-  [ROLE.ACCOUNTS]: ["portal.access", "directory.view", "contract.view_own", "leave.request", "client.view", "project.view", "timesheet.submit", "report.utilization"],
-  [ROLE.PROJECTS]: ["portal.access", "directory.view", "contract.view_own", "leave.request", "leave.approve", "client.view", "client.manage", "project.view", "project.manage", "timesheet.submit", "timesheet.approve", "report.utilization"],
-  [ROLE.EMPLOYEE]: ["portal.access", "directory.view", "contract.view_own", "leave.request", "timesheet.submit"],
+  [ROLE.ACCOUNTS]: ["portal.access", "directory.view", "contract.view_own", "leave.request", "client.view", "project.view", "timesheet.submit", "report.utilization", "invoice.view", "invoice.manage", "payment.record", "expense.submit", "expense.approve", "report.finance"],
+  [ROLE.PROJECTS]: ["portal.access", "directory.view", "contract.view_own", "leave.request", "leave.approve", "client.view", "client.manage", "project.view", "project.manage", "timesheet.submit", "timesheet.approve", "report.utilization", "job.view", "job.manage", "candidate.view", "candidate.manage", "placement.manage", "invoice.view", "expense.submit"],
+  [ROLE.EMPLOYEE]: ["portal.access", "directory.view", "contract.view_own", "leave.request", "timesheet.submit", "expense.submit"],
 };
 
 /** Granting this is equivalent to granting everything, so it stays CEO-only. */
