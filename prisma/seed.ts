@@ -56,7 +56,29 @@ async function main() {
   }
   console.log(`✔ ${created} role→permission rows created (existing toggles left untouched)`);
 
+  await seedLeaveTypes();
   await bootstrapCeo();
+}
+
+/** Starting leave categories. More can be added later without a migration. */
+const LEAVE_TYPES = [
+  { key: "annual", label: "Annual Leave", description: "Paid time off.", annualDays: 24, tracksBalance: true, colour: "#0e9384", sortOrder: 10 },
+  { key: "sick", label: "Sick Leave", description: "Paid leave for illness.", annualDays: 12, tracksBalance: true, colour: "#c2a878", sortOrder: 20 },
+  { key: "casual", label: "Casual Leave", description: "Short-notice personal leave.", annualDays: 8, tracksBalance: true, colour: "#7c3aed", sortOrder: 30 },
+  { key: "unpaid", label: "Unpaid Leave", description: "Leave without pay. Not capped.", annualDays: 0, tracksBalance: false, colour: "#8a93a0", sortOrder: 40 },
+];
+
+async function seedLeaveTypes() {
+  for (const type of LEAVE_TYPES) {
+    await db.leaveType.upsert({
+      where: { key: type.key },
+      // `annualDays` is deliberately NOT synced on update: once HR has adjusted an
+      // allowance, a redeploy must not silently reset it.
+      update: { label: type.label, description: type.description, colour: type.colour, sortOrder: type.sortOrder },
+      create: type,
+    });
+  }
+  console.log(`✔ ${LEAVE_TYPES.length} leave types`);
 }
 
 /**

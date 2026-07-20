@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { LoginErrors, LoginPayload } from "@/lib/auth/login";
 
@@ -72,5 +73,7 @@ export function LoginForm() {
     </button>
 
     {status === "error" && message && <p className="form-status form-status--error" role="alert">{message}</p>}
+
+    <p className="auth-alt"><Link href="/forgot-password">Forgotten your password?</Link></p>
   </form>;
 }

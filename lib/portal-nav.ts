@@ -8,8 +8,7 @@
 export const portalNavigation: ReadonlyArray<{ label: string; href: string; permission: string | null }> = [
   { label: "Dashboard", href: "/dashboard", permission: null },
   { label: "Directory", href: "/directory", permission: "directory.view" },
-  // Contract letters land in Phase 2. Their PERMISSIONS are already seeded and
-  // toggleable by the CEO, so the workflow can be dropped in behind them —
-  // but the link stays out until /contracts exists, rather than 404ing.
+  { label: "Leave", href: "/leave", permission: "leave.request" },
+  { label: "Contract Letters", href: "/contracts", permission: "contract.view_own" },
   { label: "Administration", href: "/admin", permission: "admin.access" },
 ];

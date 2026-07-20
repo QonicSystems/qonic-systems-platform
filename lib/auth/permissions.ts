@@ -21,10 +21,17 @@ export const PERMISSIONS = [
   { key: "contract.release", group: "Contract letters", label: "Release contract letters", description: "Approve and issue a contract letter to the employee.", sortOrder: 70 },
   { key: "contract.revoke", group: "Contract letters", label: "Revoke contract letters", description: "Withdraw a letter that was already released.", sortOrder: 80 },
 
+  // Leave
+  { key: "leave.request", group: "Leave", label: "Request leave", description: "Submit leave requests and see your own balances.", sortOrder: 82 },
+  { key: "leave.approve", group: "Leave", label: "Approve leave", description: "Approve or reject leave for the people who report to you.", sortOrder: 84 },
+  { key: "leave.manage", group: "Leave", label: "Manage leave for everyone", description: "See and decide any request, and adjust entitlements.", sortOrder: 86 },
+
   // People administration
   { key: "admin.access", group: "Administration", label: "Access the admin console", description: "Open the administration area.", sortOrder: 90 },
   { key: "user.view", group: "Administration", label: "View staff accounts", description: "List and inspect user accounts.", sortOrder: 100 },
-  { key: "user.manage", group: "Administration", label: "Manage staff accounts", description: "Create, edit, suspend, and archive accounts.", sortOrder: 110 },
+  { key: "user.manage", group: "Administration", label: "Edit staff profiles", description: "Create accounts and edit their details. Limited to roles junior to your own.", sortOrder: 110 },
+  { key: "user.deactivate", group: "Administration", label: "Deactivate staff accounts", description: "Suspend or restore an account. Suspending signs the person out everywhere.", sortOrder: 112 },
+  { key: "user.delete", group: "Administration", label: "Remove staff accounts", description: "Permanently delete an account. Blocked when the person has contract letters on record.", sortOrder: 114 },
   { key: "rbac.manage", group: "Administration", label: "Manage roles and permissions", description: "Create roles and toggle what each role can do. Equivalent to full control.", sortOrder: 120 },
   { key: "audit.view", group: "Administration", label: "View the audit log", description: "Read the record of privileged actions.", sortOrder: 130 },
 ] as const satisfies ReadonlyArray<{
@@ -48,16 +55,18 @@ export const DEFAULT_ROLE_PERMISSIONS: Readonly<Record<Exclude<RoleKey, "ceo">, 
   [ROLE.CO_FOUNDER]: [
     "portal.access", "directory.view",
     "contract.view_own", "contract.view_all", "contract.release",
+    "leave.request", "leave.approve", "leave.manage",
     "admin.access", "user.view", "audit.view",
   ],
   [ROLE.HR]: [
     "portal.access", "directory.view",
     "contract.view_own", "contract.view_all", "contract.generate", "contract.submit",
+    "leave.request", "leave.approve", "leave.manage",
     "admin.access", "user.view", "user.manage",
   ],
-  [ROLE.ACCOUNTS]: ["portal.access", "directory.view", "contract.view_own"],
-  [ROLE.PROJECTS]: ["portal.access", "directory.view", "contract.view_own"],
-  [ROLE.EMPLOYEE]: ["portal.access", "directory.view", "contract.view_own"],
+  [ROLE.ACCOUNTS]: ["portal.access", "directory.view", "contract.view_own", "leave.request"],
+  [ROLE.PROJECTS]: ["portal.access", "directory.view", "contract.view_own", "leave.request", "leave.approve"],
+  [ROLE.EMPLOYEE]: ["portal.access", "directory.view", "contract.view_own", "leave.request"],
 };
 
 /** Granting this is equivalent to granting everything, so it stays CEO-only. */

@@ -3,7 +3,7 @@
 Turning the marketing site into the internal operating system for a freelance
 consulting and recruitment firm.
 
-**Phase 1 is built and verified.** Phases 2–8 are the planned rollout.
+**Phases 1, 2 and 3 are built and verified.** Phases 4–8 are the planned rollout.
 
 ---
 
@@ -16,7 +16,7 @@ consulting and recruitment firm.
 | Auth | Hand-rolled session cookie + DB `Session` table | See below — this is the load-bearing decision. |
 | Passwords | argon2id (`@node-rs/argon2`) | OWASP first choice; prebuilt binaries, no node-gyp. |
 | Permissions | Catalog → per-role toggles + per-user overrides | The CEO controls role toggles at runtime; overrides handle individual exceptions. |
-| Files | Private object storage, presigned URLs | Deliberately *not* base64-in-a-column. |
+| Files | **None. Nothing is stored.** | Documents are rendered on demand from database content; profile photos are links to externally hosted images. There is no object storage, no upload endpoint, and no `.storage` folder. See *Documents on the fly* below. |
 
 ### Why database sessions, not JWT
 
@@ -25,6 +25,27 @@ this. With a JWT, a permission revoked at 10:00 stays live in every already-issu
 token until it expires. Permissions are therefore resolved from the database on
 every request, so a toggle takes effect on the target's **very next page load** —
 verified in the test suite.
+
+### Documents on the fly
+
+Every document — contract letters, offer letters, experience letters — is
+rendered **at the moment it is requested** from the frozen `payload` and the
+versioned `templateKey`. Nothing is written to disk or to an object store.
+
+What makes an issued letter stable is that its *inputs* are immutable: editing is
+blocked once a letter leaves `DRAFT`/`CHANGES_REQUESTED`. Verified: two renders
+of the same released letter are byte-identical apart from the PDF's embedded
+creation timestamp and document ID.
+
+**The one rule this depends on:** never edit a template's wording in place once
+letters have been issued against it. Ship a revision as a new key (`…-v2`) and
+leave the old entry in `lib/contracts/templates.ts`, or previously issued
+paperwork will silently re-render with new wording.
+
+*Trade-off accepted:* because no file is kept, there is no stored hash to prove a
+downloaded PDF matches what was approved. If a regulator or client ever needs
+that guarantee, the fix is to persist the bytes at release — not to add a hash of
+a document that is regenerated each time.
 
 ### Why roles are rows, not an enum
 
@@ -53,29 +74,54 @@ names. The only legitimate role checks are `isSuperAdmin` (the CEO bypass) and
 
 ---
 
-## Phase 2 — Contract letters & account hygiene
+## Phase 2 — Contract letters & people management ✅ COMPLETE
 
-The HR-drafts → leadership-releases workflow. Permissions for this are **already
-seeded and toggleable**; only the workflow and UI remain.
+**Contract letters** — the HR-drafts → leadership-releases workflow:
 
-- `ContractLetter` model with `DRAFT → PENDING_RELEASE → RELEASED` (plus `CHANGES_REQUESTED`, `ACKNOWLEDGED`, `REVOKED`)
+- `DRAFT → PENDING_RELEASE → RELEASED → ACKNOWLEDGED`, plus `CHANGES_REQUESTED` and `REVOKED`
 - HR drafts and submits; **CEO and Co-Founder release**; CEO alone revokes
-- Hard invariant: nobody releases their own letter, including the CEO
-- PDF generated **only at release** (a legal artifact must stay byte-stable), stored privately, served via 60-second presigned URL
-- Employee acknowledgement; immutable `ContractLetterEvent` trail
-- Profile photo upload (presigned PUT, ≤5 MB, type allowlist)
-- Forgot/reset password by emailed token — reuses the existing nodemailer setup
-- Login rate limiting is in place; add active-session list and "sign out everywhere"
-- Company document vault with permission-scoped folders
+- The lifecycle is a **data table** (`lib/contracts/workflow.ts`), not branching logic — every rule is directly testable
+- **Segregation of duties: nobody releases, rejects, or revokes their own letter — including the CEO**
+- PDF **rendered on demand**, never stored (see *Documents on the fly*); permission-checked on every download
+- Immutable `ContractLetterEvent` history with reviewer notes
+- **Six letter templates**: employment contract, offer, increment, experience, relieving, confidentiality undertaking — all sharing one workflow engine
 
-## Phase 3 — HR operations
+**People management** — who may act on whom:
 
-- Full employee records: emergency contacts, bank details (encrypted at rest), tenure
-- Leave management: types, balances, accrual, approval chain, team calendar
-- Attendance, working hours, holiday calendar
-- Onboarding and offboarding checklists with task assignment
-- Org chart via a `managerId` self-relation
-- More letter templates — offer, relieving, experience, increment, NDA — reusing the Phase 2 workflow engine
+- **CEO: edit, deactivate, and remove any account.** Deactivating revokes every session immediately and blocks sign-in
+- **HR: edit only, and only roles junior to HR** — with the seeded ranks that means Employees, not Accounts or Projects
+- Enforced by one helper (`lib/auth/authority.ts`) used by both the API and the UI, so the table never offers an action the server would refuse
+- Guards: nobody administers themselves; nobody assigns a role at or above their own; only a super admin grants super-admin
+- Changing someone's role signs them out so the new access takes effect cleanly
+- Removal is refused for anyone with contract letters on record — the paperwork is a legal record; deactivate instead
+
+**Account hygiene** (the remaining Phase 2 items, all now shipped):
+
+- **Profile photo by URL** — a link to an externally hosted image, with graceful fallback to initials when the link breaks. Only `https` is accepted, so a `javascript:` or `data:` URL can never reach an `<img src>`
+- **Forgot / reset password** by emailed single-use token (1-hour expiry) — reuses the existing nodemailer setup. Answers identically for unknown addresses so it cannot be used to discover accounts; completing a reset destroys every existing session
+- **Active-session list** showing device, IP, and expiry, with "sign out of N other devices" that keeps the current one alive
+- ~~Company document vault~~ — **dropped by decision.** Nothing is stored; documents are produced on demand from database content
+
+---
+
+## Phase 3 — HR operations ✅ COMPLETE
+
+- **Employee records**: date of birth, joining/leaving dates, home address, and emergency contact (name, phone, relationship)
+- **Org chart** via a `managerId` self-relation, surfaced as a reporting line in the directory
+- **Leave management**:
+  - Configurable `LeaveType` rows (Annual 24, Sick 12, Casual 8, Unpaid uncapped) — new categories need no migration
+  - Per-employee, per-year balances; **the balance moves in the same transaction as the approval**, so the two can never disagree
+  - Working days computed excluding weekends; overlapping requests, weekend-only ranges, and over-allowance requests are all refused
+  - Approval chain: `leave.approve` covers your direct reports, `leave.manage` covers everyone — and **nobody approves their own leave**
+  - Requesters can withdraw a pending request; a decided request cannot be re-decided
+- **Six letter templates** reusing the Phase 2 workflow engine, selectable when drafting
+
+### Deferred from Phase 3
+
+- **Public holiday calendar** — leave currently excludes weekends only, so a holiday inside a range still counts as leave. The UI says so explicitly
+- Attendance and working-hours tracking
+- Onboarding / offboarding checklists
+- Bank details (deliberately not added: needs encryption-at-rest design first)
 
 ## Phase 4 — Delivery: clients, projects, timesheets
 
@@ -88,7 +134,7 @@ seeded and toggleable**; only the workflow and UI remain.
 ## Phase 5 — Recruitment / ATS *(core to a recruitment firm)*
 
 - `Job` requisitions tied to a client, with intake brief and SLA
-- `Candidate`: resume in object storage, parsed skills, source, GDPR consent flags
+- `Candidate`: parsed skills, source, GDPR consent flags. **Note:** resumes are inbound files, so this is the first phase that would need a real file store — revisit the no-storage decision then
 - Configurable pipeline: Sourced → Screened → Submitted → Interview → Offer → Placed → Rejected
 - Interview scheduling, scorecards, panel assignment
 - Candidate–job matching, dedupe, talent-pool search
@@ -97,7 +143,7 @@ seeded and toggleable**; only the workflow and UI remain.
 
 ## Phase 6 — Finance
 
-- Invoicing generated from timesheets and placements, tax lines, PDF via the Phase 2 pipeline
+- Invoicing generated from timesheets and placements, tax lines, PDF rendered on demand via the Phase 2 pipeline
 - Payment tracking, AR aging, dunning reminders
 - Expense submission with receipts and approval chain
 - Payroll: salary structures, monthly runs, payslip PDFs, statutory deductions

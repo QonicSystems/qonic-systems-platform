@@ -4,8 +4,9 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { LogoMark } from "@/components/icons";
+import { Avatar } from "@/components/portal/avatar";
 
-export type PortalUser = { name: string; email: string; roleLabel: string; initials: string };
+export type PortalUser = { name: string; email: string; roleLabel: string; photoUrl: string | null };
 
 export function PortalShell({ user, links, children }: {
   user: PortalUser;
@@ -38,8 +39,8 @@ export function PortalShell({ user, links, children }: {
         </nav>
 
         <div className="portal-account">
-          <button type="button" className="portal-avatar" onClick={() => setOpen((value) => !value)} aria-expanded={open} aria-haspopup="menu" aria-label="Account menu">
-            {user.initials}
+          <button type="button" className="portal-avatar-button" onClick={() => setOpen((value) => !value)} aria-expanded={open} aria-haspopup="menu" aria-label="Account menu">
+            <Avatar name={user.name} photoUrl={user.photoUrl} size={40} />
           </button>
           {open && <div className="portal-menu" role="menu">
             <div className="portal-menu-head">

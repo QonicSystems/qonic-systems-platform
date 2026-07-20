@@ -8,10 +8,6 @@ const SECURITY_PATH = "/profile/security";
 
 export const metadata = { robots: { index: false, follow: false } };
 
-function initialsOf(name: string): string {
-  return name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]!.toUpperCase()).join("") || "?";
-}
-
 export default async function PortalLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const context = await requireAuth();
 
@@ -29,7 +25,7 @@ export default async function PortalLayout({ children }: Readonly<{ children: Re
     .map(({ label, href }) => ({ label, href }));
 
   return <PortalShell
-    user={{ name: context.user.name, email: context.user.email, roleLabel: context.role.label, initials: initialsOf(context.user.name) }}
+    user={{ name: context.user.name, email: context.user.email, roleLabel: context.role.label, photoUrl: context.user.photoUrl }}
     links={links}
   >{children}</PortalShell>;
 }

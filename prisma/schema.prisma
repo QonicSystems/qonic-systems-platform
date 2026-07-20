@@ -29,9 +29,29 @@ model User {
   phone              String?
   jobTitle           String?
   employeeCode       String?    @unique
-  /// Object-storage key, never a URL — URLs are presigned per request.
-  photoKey           String?
+  /// Link to an externally hosted avatar. Nothing is uploaded or stored by this
+  /// application — see ROADMAP for the "everything on the fly" decision.
+  photoUrl           String?
   status             UserStatus @default(ACTIVE)
+
+  // --- HR record (Phase 3) ---
+  dateOfBirth      DateTime?
+  joinedOn         DateTime?
+  leftOn           DateTime?
+  address          String?
+  emergencyName    String?
+  emergencyPhone   String?
+  emergencyRelation String?
+
+  /// Self-relation driving the org chart and the leave approval chain.
+  managerId String?
+  manager   User?   @relation("ReportsTo", fields: [managerId], references: [id], onDelete: SetNull)
+  reports   User[]  @relation("ReportsTo")
+
+  leaveRequests  LeaveRequest[] @relation("LeaveRequester")
+  leaveDecisions LeaveRequest[] @relation("LeaveDecider")
+  leaveBalances  LeaveBalance[]
+  resetTokens    PasswordResetToken[]
   mustChangePassword Boolean    @default(false)
   lastLoginAt        DateTime?
   failedLoginCount   Int        @default(0)
@@ -46,12 +66,28 @@ model User {
 
   contractsAuthored ContractLetter[] @relation("ContractAuthor")
   contractsSubject  ContractLetter[] @relation("ContractSubject")
+  contractsReleased ContractLetter[] @relation("ContractReleaser")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([roleId])
   @@index([status])
+  @@index([managerId])
+}
+
+/// Single-use, short-lived. Only the hash is stored, exactly as with sessions.
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model Session {
@@ -173,18 +209,18 @@ model ContractLetter {
   author        User   @relation("ContractAuthor", fields: [authorUserId], references: [id])
 
   status      ContractStatus @default(DRAFT)
+  /// Versioned template id. A change to an issued letter's wording must ship as
+  /// a NEW key (…-v2), never as an edit to an existing one — documents are
+  /// rendered on demand, so editing v1 would retroactively alter issued letters.
   templateKey String         @default("standard-employment-v1")
-  /// Template variables: salary, title, start date, terms.
+  /// The frozen source of truth. Editing is blocked once the letter leaves
+  /// DRAFT/CHANGES_REQUESTED, so this snapshot is what every future render uses.
   payload     Json
   version     Int            @default(1)
 
-  /// Set once, at the RELEASED transition. A released letter is a legal artifact
-  /// and must stay byte-stable, so the PDF is never regenerated on read.
-  pdfKey    String?
-  pdfSha256 String?
-
   releasedAt   DateTime?
   releasedById String?
+  releasedBy   User?     @relation("ContractReleaser", fields: [releasedById], references: [id], onDelete: SetNull)
   revokedAt    DateTime?
   revokedById  String?
 
@@ -231,4 +267,75 @@ model AuditLog {
   @@index([entityType, entityId])
   @@index([actorId, createdAt])
   @@index([createdAt])
+}
+
+// ------------------------------------------------------------------- Leave --
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+/// Configurable leave types, so a new category needs no migration.
+model LeaveType {
+  id           String  @id @default(cuid())
+  key          String  @unique
+  label        String
+  description  String?
+  /// Days granted per employee per year. 0 means unlimited/unaccrued (e.g. unpaid).
+  annualDays   Int     @default(0)
+  /// Whether a balance is tracked and decremented on approval.
+  tracksBalance Boolean @default(true)
+  colour       String  @default("#0e9384")
+  isActive     Boolean @default(true)
+  sortOrder    Int     @default(0)
+
+  requests LeaveRequest[]
+  balances LeaveBalance[]
+}
+
+/// One row per employee, leave type, and year.
+model LeaveBalance {
+  id          String @id @default(cuid())
+  userId      String
+  user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  leaveTypeId String
+  leaveType   LeaveType @relation(fields: [leaveTypeId], references: [id], onDelete: Cascade)
+  year        Int
+  /// Days granted for the year, which may be adjusted per person.
+  entitledDays Float @default(0)
+  /// Days consumed by APPROVED requests. Maintained transactionally with the
+  /// request itself so the two can never disagree.
+  usedDays     Float @default(0)
+
+  @@unique([userId, leaveTypeId, year])
+  @@index([userId, year])
+}
+
+model LeaveRequest {
+  id          String      @id @default(cuid())
+  userId      String
+  user        User        @relation("LeaveRequester", fields: [userId], references: [id], onDelete: Cascade)
+  leaveTypeId String
+  leaveType   LeaveType   @relation(fields: [leaveTypeId], references: [id])
+  startDate   DateTime    @db.Date
+  endDate     DateTime    @db.Date
+  /// Working days requested, computed at submission and frozen thereafter.
+  days        Float
+  reason      String?
+  status      LeaveStatus @default(PENDING)
+
+  decidedById String?
+  decidedBy   User?     @relation("LeaveDecider", fields: [decidedById], references: [id], onDelete: SetNull)
+  decidedAt   DateTime?
+  decisionNote String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, status])
+  @@index([status])
+  @@index([startDate])
 }

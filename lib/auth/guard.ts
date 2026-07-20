@@ -7,7 +7,7 @@ import { resolvePermissions } from "@/lib/auth/permissions";
 import { ABSOLUTE_TTL_MS, IDLE_TTL_MS, REFRESH_AFTER_MS, SESSION_COOKIE, hashSessionToken, sessionCookieOptions } from "@/lib/auth/session";
 
 export type AuthContext = {
-  user: { id: string; name: string; email: string; phone: string | null; jobTitle: string | null; photoKey: string | null; mustChangePassword: boolean };
+  user: { id: string; name: string; email: string; phone: string | null; jobTitle: string | null; photoUrl: string | null; mustChangePassword: boolean };
   role: { id: string; key: string; label: string; isSuperAdmin: boolean; rank: number };
   permissions: ReadonlySet<string>;
   sessionId: string;
@@ -54,7 +54,7 @@ export const getAuthContext = cache(async (): Promise<AuthContext | null> => {
   const overrides = user.overrides.map((entry) => ({ permissionKey: entry.permission.key, effect: entry.effect, expiresAt: entry.expiresAt }));
 
   return {
-    user: { id: user.id, name: user.name, email: user.email, phone: user.phone, jobTitle: user.jobTitle, photoKey: user.photoKey, mustChangePassword: user.mustChangePassword },
+    user: { id: user.id, name: user.name, email: user.email, phone: user.phone, jobTitle: user.jobTitle, photoUrl: user.photoUrl, mustChangePassword: user.mustChangePassword },
     role: { id: user.role.id, key: user.role.key, label: user.role.label, isSuperAdmin: user.role.isSuperAdmin, rank: user.role.rank },
     permissions: resolvePermissions(user.role, enabled, overrides, now),
     sessionId: session.id,
