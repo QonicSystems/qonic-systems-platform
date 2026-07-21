@@ -84,7 +84,7 @@ Fill in — these are the only ones that matter for the app to run:
 ```bash
 echo "POSTGRES_PASSWORD=$(openssl rand -hex 16)" >> .env
 ```
-(`docker-compose.yml` reads `POSTGRES_PASSWORD` for both the database and the
+(`docker/docker-compose.yml` reads `POSTGRES_PASSWORD` for both the database and the
 app's connection string.)
 
 ### 5. Point DNS at the server *before* starting
@@ -103,9 +103,15 @@ If your domain isn't `qonicsystems.com`, do a find-and-replace across three file
 `deploy/sites/landing/index.html` and `deploy/sites/shutterpact/index.html`.
 
 ### 6. Start everything
+The compose files live in `docker/`. So you don't repeat the path, set it once
+per shell — **run everything from the repo root**:
 ```bash
-docker compose up -d --build
+export COMPOSE_FILE=docker/docker-compose.yml
+docker compose --env-file .env up -d --build
 ```
+(`--env-file .env` makes `${POSTGRES_PASSWORD}` resolve from your repo-root `.env`;
+`COMPOSE_FILE` saves adding `-f docker/docker-compose.yml` to every command below.)
+
 This brings up three containers: **caddy** (HTTPS + routing), **app** (Qonic
 Consulting), and **db** (Postgres). On first boot the app runs migrations, seeds
 roles and permissions, and creates the bootstrap CEO. Watch it:
@@ -135,14 +141,19 @@ container), exactly like the consulting block.
 
 ## Everyday operations
 
+With `COMPOSE_FILE=docker/docker-compose.yml` exported (from step 6), and run from
+the repo root:
+
 ```bash
-docker compose logs -f app          # tail logs
-docker compose up -d --build        # deploy a new version (re-runs migrations)
-docker compose down                 # stop (database volume is kept)
+docker compose logs -f app                       # tail logs
+docker compose --env-file .env up -d --build     # deploy a new version (re-runs migrations)
+docker compose down                              # stop (database volume is kept)
 
 # Reset a locked-out password from the server:
 docker compose exec app npx tsx prisma/set-password.ts founder@qonicsystems.com
 ```
+
+> Not exported `COMPOSE_FILE`? Add `-f docker/docker-compose.yml` to each command.
 
 ### Back up the database
 The whole business lives in Postgres (documents are generated on the fly, nothing

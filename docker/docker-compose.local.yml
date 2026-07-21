@@ -4,7 +4,8 @@
 # *.localhost hostnames, and fixed throwaway secrets baked in so it runs with no
 # .env setup. NEVER use these values in production.
 #
-#   docker compose -f docker-compose.local.yml up --build
+#   Run from the PROJECT ROOT:
+#   docker compose -f docker/docker-compose.local.yml up --build
 #
 # Then open in a browser:
 #   http://qonicsystems.localhost              → chooser
@@ -12,6 +13,10 @@
 #   http://shutterpact.qonicsystems.localhost  → "in development" page
 #
 # Login:  founder@qonicsystems.com  /  Local-Test-Password-2026
+
+# Fixed project name so the database volume survives regardless of which
+# directory the compose file lives in.
+name: qonic-local
 
 services:
   caddy:
@@ -22,8 +27,9 @@ services:
     ports:
       - "80:80"
     volumes:
-      - ./deploy/Caddyfile.local:/etc/caddy/Caddyfile:ro
-      - ./deploy/sites:/srv:ro
+      # Paths are relative to this compose file (docker/), so ../ reaches the repo root.
+      - ../deploy/Caddyfile.local:/etc/caddy/Caddyfile:ro
+      - ../deploy/sites:/srv:ro
 
   db:
     image: postgres:16
@@ -37,9 +43,13 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    volumes:
+      - qonic-local-db:/var/lib/postgresql/data
 
   app:
-    build: .
+    build:
+      context: ..                    # the repo root (build context)
+      dockerfile: docker/Dockerfile  # relative to the context
     restart: unless-stopped
     depends_on:
       db:
@@ -54,3 +64,6 @@ services:
       ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
     expose:
       - "3000"
+
+volumes:
+  qonic-local-db:

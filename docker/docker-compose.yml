@@ -5,10 +5,16 @@
 #
 #   1. Copy .env.example to .env and fill in the real values (see docs/DEPLOY.md).
 #   2. Set POSTGRES_PASSWORD in .env.
-#   3. Point the three DNS records at this server, then: docker compose up -d --build
+#   3. Point the three DNS records at this server, then, FROM THE PROJECT ROOT:
+#      docker compose --env-file .env -f docker/docker-compose.yml up -d --build
+#
+# --env-file .env makes ${POSTGRES_PASSWORD} resolve from the repo-root .env
+# (this compose file lives in docker/, so its own default project dir is docker/).
 #
 # Caddy fetches Let's Encrypt certificates automatically for every hostname in
 # deploy/Caddyfile, so DNS must resolve to this box before it starts.
+
+name: qonic
 
 services:
   caddy:
@@ -20,8 +26,9 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
-      - ./deploy/sites:/srv:ro
+      # Paths are relative to this compose file (docker/), so ../ reaches the repo root.
+      - ../deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ../deploy/sites:/srv:ro
       - caddy-data:/data      # certificates — must persist across restarts
       - caddy-config:/config
 
@@ -46,14 +53,16 @@ services:
       - "5432"
 
   app:
-    build: .
+    build:
+      context: ..                    # the repo root (build context)
+      dockerfile: docker/Dockerfile  # relative to the context
     restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
-    # Secrets (bootstrap CEO, ENCRYPTION_KEY, SMTP) come from .env …
+    # Secrets (bootstrap CEO, ENCRYPTION_KEY, SMTP) come from the repo-root .env …
     env_file:
-      - .env
+      - ../.env
     # … but the DB host must point at the `db` service, so it is set here and
     # overrides whatever DATABASE_URL is in .env (which is for local development).
     environment:

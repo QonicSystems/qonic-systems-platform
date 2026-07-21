@@ -40,7 +40,7 @@ Mirrors production — the app, PostgreSQL, and the Caddy router with all three
 sites, one command:
 
 ```bash
-docker compose -f docker-compose.local.yml up -d --build
+docker compose -f docker/docker-compose.local.yml up -d --build
 # → http://consulting.qonicsystems.localhost   (the app)
 # → http://qonicsystems.localhost              (the umbrella site)
 ```

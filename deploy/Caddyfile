@@ -12,6 +12,11 @@ qonicsystems.com, www.qonicsystems.com {
 	encode gzip
 	root * /srv/landing
 	file_server
+	# Unknown paths get the branded 404 page (keeps the 404 status).
+	handle_errors {
+		rewrite * /404.html
+		file_server
+	}
 }
 
 # ── Vertical 1: Qonic Consulting (this Next.js app) ──────────────────────────

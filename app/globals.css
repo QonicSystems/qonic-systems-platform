@@ -51,6 +51,10 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 @keyframes marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
 @keyframes quote-in { from { opacity: 0; transform: translate3d(0, 10px, 0); } to { opacity: 1; transform: none; } }
 @keyframes trace { to { stroke-dashoffset: 0; } }
+@keyframes net-flow { to { stroke-dashoffset: -150; } }
+@keyframes net-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
+@keyframes net-ring { 0% { opacity: .55; transform: scale(1); } 70%, 100% { opacity: 0; transform: scale(1.75); } }
+@keyframes net-breathe { 0%, 100% { opacity: .12; transform: scale(1); } 50% { opacity: .22; transform: scale(1.08); } }
 @keyframes sheen { from { transform: translateX(-120%) skewX(-18deg); } to { transform: translateX(320%) skewX(-18deg); } }
 
 /* Scroll reveal — hidden state only applies once JS confirms support (see <noscript> in layout). */
@@ -112,7 +116,17 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 .aurora--one { top: -12rem; right: -8rem; width: 38rem; height: 38rem; background: radial-gradient(circle, rgb(255 215 0 / .13), transparent 65%); animation: drift 20s ease-in-out infinite; }
 .aurora--two { bottom: -16rem; left: -10rem; width: 34rem; height: 34rem; background: radial-gradient(circle, rgb(17 17 17 / .10), transparent 65%); animation: drift 26s ease-in-out infinite reverse; }
 .hero h1 { max-width: 46rem; margin: 1.5rem 0; font-family: var(--font-display), sans-serif; font-size: clamp(2.7rem, 6vw, 4.9rem); font-weight: 800; line-height: 1.06; letter-spacing: -.055em; color: var(--ink); }
-.hero h1 span { position: relative; background: linear-gradient(100deg, var(--accent-deep), var(--accent-dark) 60%, var(--ink)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.hero h1 .hero-accent { position: relative; background: linear-gradient(100deg, var(--accent-deep), var(--accent-dark) 60%, var(--ink)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+/* Typewriter caret for the typed hero headline. The ghost reserves the full
+   height (visibility:hidden keeps its layout box); the live layer overlays it. */
+.hero-typing { position: relative; }
+.hero-typing-ghost { visibility: hidden; }
+.hero-typing-ghost .hero-accent { color: transparent; }
+.hero-typing-live { position: absolute; inset: 0; }
+.type-caret { display: inline-block; width: .06em; min-width: 3px; height: .95em; margin-left: .04em; vertical-align: -.1em; background: var(--accent-dark); animation: caret-blink 1s step-end infinite; }
+.type-caret--done { animation: caret-blink 1.1s step-end infinite; }
+@keyframes caret-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .type-caret { animation: none; } }
 .hero-copy { max-width: 36rem; margin-bottom: 2.3rem; color: var(--body); font-size: 1.13rem; line-height: 1.75; }
 .hero-pill { display: inline-flex; align-items: center; gap: .6rem; margin: 0; border: 1px solid var(--accent-soft); border-radius: 999px; background: var(--accent-tint); padding: .5rem .9rem; color: var(--accent-dark); font-size: .85rem; font-weight: 700; letter-spacing: .01em; }
 .hero-pill span { width: .5rem; height: .5rem; border-radius: 50%; background: var(--accent); animation: pulse-ring 2.4s ease-out infinite; }
@@ -125,13 +139,28 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 .marquee-track span:hover { color: var(--ink-soft); }
 
 /* Hero network diagram */
-.network-visual { position: relative; display: none; animation: float-y 7s ease-in-out infinite; }
-.network-visual svg { width: 100%; color: var(--accent); }
-.network-visual path { stroke: currentColor; stroke-width: 1.2; opacity: .35; stroke-dasharray: 1200; stroke-dashoffset: 1200; animation: trace 2.6s var(--ease) .3s forwards; }
-.network-visual circle { fill: #fff; stroke: var(--accent); stroke-width: 1.6; filter: drop-shadow(0 6px 14px rgb(17 17 17 / .08)); }
-.network-visual text { fill: var(--ink-soft); font-family: var(--font-display), sans-serif; font-size: 11px; font-weight: 700; letter-spacing: -.01em; text-anchor: middle; dominant-baseline: middle; }
-.network-visual circle:nth-of-type(4) { fill: var(--ink); stroke: var(--ink); }
-.network-visual text:nth-of-type(4) { fill: #fff; font-size: 15px; }
+.network-visual { position: relative; display: none; }
+.network-visual .net { width: 100%; overflow: visible; }
+/* Soft breathing glow behind the whole constellation. */
+.net-glow { fill: var(--accent); opacity: .14; filter: blur(30px); transform-box: fill-box; transform-origin: center; animation: net-breathe 6s ease-in-out infinite; }
+/* Clean radial spokes. */
+.net-links line { stroke: var(--accent); stroke-width: 1.4; opacity: .3; }
+/* A single spark travelling each spoke toward the hub (all spokes are equal
+   length, so one dash + a gap the length of the spoke = one moving dot). */
+.net-flows line { stroke: var(--accent-deep); stroke-width: 3; stroke-linecap: round; stroke-dasharray: 4 146; animation: net-flow 2.6s linear infinite; }
+.net-flows line:nth-child(2) { animation-delay: -.45s; } .net-flows line:nth-child(3) { animation-delay: -.9s; }
+.net-flows line:nth-child(4) { animation-delay: -1.3s; } .net-flows line:nth-child(5) { animation-delay: -1.75s; }
+.net-flows line:nth-child(6) { animation-delay: -2.2s; }
+/* Industry nodes: white disc, brand ring, gentle staggered float. */
+.net-node { animation: net-float 6.5s ease-in-out infinite; }
+.net-node circle { fill: #fff; stroke: var(--accent); stroke-width: 2; filter: drop-shadow(0 8px 16px rgb(17 17 17 / .1)); }
+.net-node text { fill: var(--ink-soft); font-family: var(--font-display), sans-serif; font-size: 15px; font-weight: 700; letter-spacing: -.02em; text-anchor: middle; dominant-baseline: middle; }
+.net-node.n2 { animation-delay: -1s; } .net-node.n3 { animation-delay: -2s; } .net-node.n4 { animation-delay: -3s; }
+.net-node.n5 { animation-delay: -4s; } .net-node.n6 { animation-delay: -5s; }
+/* The hub, with a pulsing ring. */
+.net-hub { fill: var(--ink); filter: drop-shadow(0 14px 28px rgb(17 17 17 / .35)); }
+.net-hub-label { fill: #fff; font-family: var(--font-display), sans-serif; font-size: 18px; font-weight: 800; letter-spacing: -.03em; text-anchor: middle; dominant-baseline: middle; }
+.net-hub-pulse { fill: none; stroke: var(--accent); stroke-width: 2.5; transform-box: fill-box; transform-origin: center; animation: net-ring 2.8s ease-out infinite; }
 
 /* Floating glass stat card over the diagram */
 .float-card { position: absolute; z-index: 2; display: flex; align-items: center; gap: .8rem; border: 1px solid var(--line); border-radius: 1rem; background: rgb(255 255 255 / .78); padding: .85rem 1.1rem; box-shadow: var(--shadow-md); backdrop-filter: blur(12px); animation: float-y 5.5s ease-in-out infinite; }
@@ -199,7 +228,7 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 .testimonial-stars { position: relative; color: var(--accent); letter-spacing: .2em; }
 .testimonial-card blockquote { position: relative; margin: 1.4rem 0 0; color: var(--ink); font-family: var(--font-display), sans-serif; font-size: clamp(1.2rem, 2.5vw, 1.5rem); font-weight: 600; line-height: 1.6; letter-spacing: -.02em; animation: quote-in .5s var(--ease); }
 .testimonial-card .mt-8 { justify-content: center; }
-.avatar { display: grid; width: 3rem; height: 3rem; place-items: center; border-radius: 50%; background: var(--accent); color: var(--ink); font-family: var(--font-display), sans-serif; font-weight: 800; box-shadow: none; }
+.avatar { display: grid; flex: 0 0 auto; width: 3rem; height: 3rem; place-items: center; border-radius: 50%; background: var(--accent); color: var(--ink); font-family: var(--font-display), sans-serif; font-weight: 800; box-shadow: none; }
 .testimonial-card strong { color: var(--ink); font-family: var(--font-display), sans-serif; }
 .testimonial-card p { margin: .2rem 0; color: var(--faint); font-size: .9rem; }
 .carousel-button { display: grid; width: 2.6rem; height: 2.6rem; place-items: center; border: 1px solid var(--line); border-radius: 50%; background: transparent; color: var(--ink-soft); cursor: pointer; box-shadow: none; transition: transform .3s var(--ease), background .25s, color .25s, border-color .25s; }
@@ -254,7 +283,7 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
   /* Reveals must never depend on a transition that no longer runs. */
   .reveal { opacity: 1 !important; transform: none !important; }
-  .network-visual path { stroke-dashoffset: 0; }
+  .net-flows line, .net-glow, .net-hub-pulse { display: none; }
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -313,12 +342,29 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 .portal-note { margin: 0; color: var(--body); font-size: .92rem; line-height: 1.7; }
 .portal-muted { margin: .2rem 0 0; color: var(--faint); font-size: .82rem; }
 
-.portal-grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); }
+.portal-grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr)); }
 .portal-card { border: 1px solid var(--line); border-radius: 1rem; background: #fff; padding: 1.4rem; box-shadow: none; transition: transform .3s var(--ease), border-color .3s, background .3s; }
 .portal-card:hover { transform: translateY(-2px); border-color: var(--accent-soft); background: var(--accent-tint); }
 .portal-card p { margin: .3rem 0 0; color: var(--faint); font-size: .85rem; font-weight: 600; }
-.portal-card--person { display: flex; align-items: flex-start; gap: 1rem; }
-.portal-card--person strong { color: var(--ink); font-family: var(--font-display), sans-serif; }
+/* ── Profile card: avatar on top, details centred beneath ─────────────────
+   A premium centred layout. The old flat left-aligned row is gone; a gradient
+   accent sweeps across the top edge on hover and the avatar carries a soft
+   brand ring, so nothing needs a plain coloured border. */
+.portal-card--person { position: relative; display: flex; flex-direction: column; align-items: center; overflow: hidden; padding: 1.9rem 1.3rem 1.5rem; text-align: center; }
+.portal-card--person::before { content: ""; position: absolute; inset: 0 0 auto; height: 3px; background: linear-gradient(90deg, var(--accent), var(--accent-dark)); transform: scaleX(0); transition: transform .45s var(--ease); }
+.portal-card--person:hover { transform: translateY(-4px); border-color: var(--accent-soft); background: #fff; box-shadow: 0 18px 34px -20px rgb(17 17 17 / .32); }
+.portal-card--person:hover::before { transform: scaleX(1); }
+/* Avatar sits on top, ringed in the brand tint. */
+.portal-card--person .avatar,
+.portal-card--person .avatar-photo { margin-bottom: .85rem; box-shadow: 0 0 0 4px var(--accent-tint), 0 12px 24px -12px rgb(17 17 17 / .45); transition: box-shadow .3s var(--ease), transform .3s var(--ease); }
+.portal-card--person:hover .avatar,
+.portal-card--person:hover .avatar-photo { transform: scale(1.05); box-shadow: 0 0 0 4px var(--accent-soft), 0 14px 26px -12px rgb(17 17 17 / .5); }
+/* The details column, centred. */
+.portal-card--person > div { display: flex; flex-direction: column; align-items: center; gap: .1rem; min-width: 0; width: 100%; }
+.portal-card--person strong { color: var(--ink); font-family: var(--font-display), sans-serif; font-size: 1.05rem; letter-spacing: -.01em; }
+.portal-card--person p { max-width: 100%; margin: 0; color: var(--faint); font-size: .8rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Email on one readable line; ellipsis is only a safety on very narrow screens. */
+.portal-card--person .text-link { display: block; max-width: 100%; margin-top: .45rem; font-size: .82rem; font-weight: 600; letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .portal-stat { display: block; background: linear-gradient(160deg, var(--ink), var(--accent-dark)); -webkit-background-clip: text; background-clip: text; color: transparent; font-family: var(--font-display), sans-serif; font-size: 2.2rem; font-weight: 800; letter-spacing: -.04em; }
 .portal-section { display: grid; gap: 1rem; }
 .portal-section-title { margin: 0; color: var(--ink); font-family: var(--font-display), sans-serif; font-size: 1.25rem; font-weight: 800; letter-spacing: -.02em; }
@@ -591,3 +637,27 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
   .qonic-wordmark { font-size: 1rem; }
 }
 
+
+/* ══ Error pages (yellow-on-black, funny) — see components/error-page.tsx ══ */
+.err-page { position: relative; min-height: 100vh; min-height: 100dvh; overflow: hidden;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 4rem 1.5rem; text-align: center; background: #0c0c0c; color: #fff; }
+.err-glow { position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  background: radial-gradient(circle at 50% 38%, rgb(255 215 0 / .16), transparent 46%); }
+.err-page > * { position: relative; z-index: 1; }
+.err-tag { margin: 0 0 .4rem; color: var(--accent); font-weight: 700; font-size: .78rem; letter-spacing: .28em; text-transform: uppercase; }
+.err-code { font-family: var(--font-display), sans-serif; font-weight: 800; color: var(--accent);
+  font-size: clamp(6.5rem, 26vw, 16rem); line-height: .9; letter-spacing: -.05em;
+  text-shadow: 0 8px 40px rgb(255 215 0 / .25); }
+.err-title { margin: 1.2rem 0 0; color: #fff; font-family: var(--font-display), sans-serif; font-weight: 800;
+  font-size: clamp(1.7rem, 5vw, 2.7rem); letter-spacing: -.03em; }
+.err-quip { margin: 1rem auto 0; max-width: 32rem; color: #b6b6b6; font-size: 1.08rem; line-height: 1.6; }
+.err-actions { margin-top: 2.4rem; display: flex; gap: .8rem; flex-wrap: wrap; justify-content: center; }
+.err-btn { display: inline-flex; align-items: center; border-radius: .8rem; padding: .85rem 1.6rem;
+  font-family: var(--font-display), sans-serif; font-weight: 700; font-size: .98rem; text-decoration: none; cursor: pointer;
+  border: 1px solid transparent; transition: transform .25s var(--ease), background .2s, border-color .2s, color .2s; }
+.err-btn:hover { transform: translateY(-2px); }
+.err-btn--solid { background: var(--accent); color: #111; }
+.err-btn--solid:hover { background: #ffdd2e; }
+.err-btn--ghost { border-color: rgb(255 255 255 / .25); color: #fff; }
+.err-btn--ghost:hover { border-color: var(--accent); color: var(--accent); }
