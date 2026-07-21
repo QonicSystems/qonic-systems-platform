@@ -2,7 +2,7 @@
 #
 # Caddy terminates HTTPS and fetches a Let's Encrypt certificate automatically
 # for each hostname below, so ALL THREE DNS records must already point at this
-# server before Caddy starts (see DEPLOY.md → DNS).
+# server before Caddy starts (see docs/DEPLOY.md → DNS).
 #
 # Local testing note: automatic HTTPS needs public DNS. To try this on a laptop,
 # add `{ auto_https disable_redirects }` or use `localhost` hostnames instead.

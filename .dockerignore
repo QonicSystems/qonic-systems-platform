@@ -15,7 +15,7 @@ tests
 test-results
 playwright-report
 *.md
-!ROADMAP.md
+docs
 .vscode
 .idea
 .DS_Store
@@ -24,3 +24,4 @@ playwright-report
 Dockerfile
 .dockerignore
 docker-compose.yml
+docker-compose.local.yml
