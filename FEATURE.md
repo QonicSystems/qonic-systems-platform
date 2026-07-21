@@ -6,10 +6,18 @@ verified in the suite — not the roadmap's aspirations. Where something is
 deliberately *not* built, it is listed under **Not built** at the end of its
 phase rather than dressed up as testable.
 
+> **New to the app? Start with [WALKTHROUGH.md](WALKTHROUGH.md)** — a step-by-step
+> operator's guide that walks the *whole* business end to end (onboard → hire →
+> deliver → bill), with all credentials at the top. This file is the pass/fail
+> checklist; the walkthrough is the guided tour.
+
 ---
 
 ## Setup — do this once
 
+Pick whichever way you prefer to run it:
+
+**A. Local dev (fastest for testing features)** — needs a local Postgres:
 ```bash
 npm run db:setup          # migrate + seed roles, permissions, bootstrap CEO
 npm run db:seed:demo      # one demo account per role (dev/test only)
@@ -17,22 +25,37 @@ npm run db:seed:holidays  # public holidays, so leave counting is correct
 npm run dev               # http://localhost:3000  → sign in at /login
 ```
 
+**B. Full Docker stack (mirrors production)** — no local Postgres needed; brings
+up the app, database, and the Caddy router with all three sites (see DEPLOY.md):
+```bash
+docker compose -f docker-compose.local.yml up -d --build
+# → http://consulting.qonicsystems.localhost   (the app — sign in here)
+# → http://qonicsystems.localhost              (the umbrella site)
+```
+Migrations and role/permission seeding run automatically on first boot. Note the
+Docker stack seeds **only the bootstrap CEO**, not the six demo accounts below —
+for the full role matrix, use option A (or run `db:seed:demo` inside the app
+container: `docker compose -f docker-compose.local.yml exec app npx tsx prisma/seed-demo.ts`).
+
 **Demo accounts** (all share the password `Demo-Passw0rd-2026`):
 
 | Sign in as | Email | Role | Rank |
 |---|---|---|---|
-| Founder | `founder@qonic.com` | CEO & Founder — super admin | 0 |
-| Priya Raman | `cofounder@qonic.com` | Co-Founder | 10 |
-| Neha Kulkarni | `hr@qonic.com` | HR | 20 |
-| Rahul Mehta | `accounts@qonic.com` | Accounts | 20 |
-| Sana Iqbal | `projects@qonic.com` | Projects | 20 |
-| Arjun Nair | `developer@qonic.com` | Employee | 50 |
+| Founder | `founder@qonicsystems.com` | CEO & Founder — super admin | 0 |
+| Priya Raman | `cofounder@qonicsystems.com` | Co-Founder | 10 |
+| Neha Kulkarni | `hr@qonicsystems.com` | HR | 20 |
+| Rahul Mehta | `accounts@qonicsystems.com` | Accounts | 20 |
+| Sana Iqbal | `projects@qonicsystems.com` | Projects | 20 |
+| Arjun Nair | `developer@qonicsystems.com` | Employee | 50 |
 
-> The **bootstrap CEO** (`founder@qonic.com`) is created from `BOOTSTRAP_CEO_*`
-> only when the user table is empty, and must change its password at first login.
-> The demo seed's `founder@qonic.com` skips that so you can sign straight in.
-> "Rank" is the escalation guard: **lower is more senior**, and you may only act
-> on people of a strictly higher rank number.
+> All accounts use the parent-company domain **@qonicsystems.com** (Qonic
+> Consulting is a vertical of Qonic Systems). In the Docker stack the bootstrap
+> CEO is `founder@qonicsystems.com` / `Local-Test-Password-2026`.
+>
+> The **bootstrap CEO** is created from `BOOTSTRAP_CEO_*` only when the user table
+> is empty, and must change its password at first login. The demo seed skips that
+> so you can sign straight in. "Rank" is the escalation guard: **lower is more
+> senior**, and you may only act on people of a strictly higher rank number.
 
 Legend: 🟢 covered by an automated test · ⚪ manual check only.
 
@@ -113,8 +136,10 @@ Legend: 🟢 covered by an automated test · ⚪ manual check only.
 - **Given** a letter is `PENDING_RELEASE` and I am the Founder or Co-Founder
 - **When** I release it
 - **Then** it becomes `RELEASED`, the subject employee can download the PDF, and
-  the letterhead carries the QONIC mark and the releaser's signature (the CEO's,
-  when the CEO released it).
+  the letterhead shows **both brands** — Qonic Consulting (the issuing vertical)
+  on the left, "A venture of QONIC systems" (the parent) on the right — plus the
+  releaser's signature (the CEO's, when the CEO released it). Invoice PDFs carry
+  the same two-brand letterhead.
 
 ### 2.3 Nobody releases their own letter — including the CEO 🟢
 - **Given** a letter whose author/subject is me, sitting at `PENDING_RELEASE`
