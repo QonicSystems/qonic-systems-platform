@@ -7,8 +7,8 @@ import { describePasswordProblem, hashPassword } from "../lib/auth/password";
 /**
  * Administrator recovery: set an account's password from the command line.
  *
- *   npm run db:set-password -- founder@qonic.com
- *   npm run db:set-password -- founder@qonic.com "My-Own-Passw0rd"
+ *   npm run db:set-password -- founder@qonicsystems.com
+ *   npm run db:set-password -- founder@qonicsystems.com "My-Own-Passw0rd"
  *
  * This exists because there is otherwise no way back in when the super admin
  * forgets their password: the admin console needs a login, and the emailed reset

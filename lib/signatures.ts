@@ -24,7 +24,7 @@ import { join } from "node:path";
  * permission check as the letter itself. Do not move this into public/.
  */
 const SIGNATURE_FILES: Record<string, string> = {
-  "founder@qonic.com": "founder.png",
+  "founder@qonicsystems.com": "founder.png",
 };
 
 const cache = new Map<string, Buffer | null>();

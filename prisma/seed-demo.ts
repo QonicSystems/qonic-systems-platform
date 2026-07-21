@@ -13,11 +13,11 @@ import { ROLE } from "../lib/auth/roles";
 const DEMO_PASSWORD = "Demo-Passw0rd-2026";
 
 const PEOPLE = [
-  { email: "cofounder@qonic.com", name: "Priya Raman", role: ROLE.CO_FOUNDER, jobTitle: "Co-Founder" },
-  { email: "hr@qonic.com", name: "Neha Kulkarni", role: ROLE.HR, jobTitle: "Head of People" },
-  { email: "accounts@qonic.com", name: "Rahul Mehta", role: ROLE.ACCOUNTS, jobTitle: "Finance Manager" },
-  { email: "projects@qonic.com", name: "Sana Iqbal", role: ROLE.PROJECTS, jobTitle: "Delivery Lead" },
-  { email: "developer@qonic.com", name: "Arjun Nair", role: ROLE.EMPLOYEE, jobTitle: "Senior Developer" },
+  { email: "cofounder@qonicsystems.com", name: "Priya Raman", role: ROLE.CO_FOUNDER, jobTitle: "Co-Founder" },
+  { email: "hr@qonicsystems.com", name: "Neha Kulkarni", role: ROLE.HR, jobTitle: "Head of People" },
+  { email: "accounts@qonicsystems.com", name: "Rahul Mehta", role: ROLE.ACCOUNTS, jobTitle: "Finance Manager" },
+  { email: "projects@qonicsystems.com", name: "Sana Iqbal", role: ROLE.PROJECTS, jobTitle: "Delivery Lead" },
+  { email: "developer@qonicsystems.com", name: "Arjun Nair", role: ROLE.EMPLOYEE, jobTitle: "Senior Developer" },
 ];
 
 async function main() {

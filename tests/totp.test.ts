@@ -97,7 +97,7 @@ describe("verifyCode", () => {
 
 describe("enrolment helpers", () => {
   it("builds a scannable otpauth URI", () => {
-    const uri = provisioningUri("JBSWY3DPEHPK3PXP", "hr@qonic.com");
+    const uri = provisioningUri("JBSWY3DPEHPK3PXP", "hr@qonicsystems.com");
     expect(uri).toMatch(/^otpauth:\/\/totp\//);
     expect(uri).toContain("secret=JBSWY3DPEHPK3PXP");
     expect(uri).toContain("issuer=QONIC+Consulting");

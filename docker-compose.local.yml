@@ -1,0 +1,56 @@
+# LOCAL TESTING ONLY — a self-contained simulation of the production stack.
+#
+# Differences from docker-compose.yml: plain HTTP on port 80 (no Let's Encrypt),
+# *.localhost hostnames, and fixed throwaway secrets baked in so it runs with no
+# .env setup. NEVER use these values in production.
+#
+#   docker compose -f docker-compose.local.yml up --build
+#
+# Then open in a browser:
+#   http://qonicsystems.localhost              → chooser
+#   http://consulting.qonicsystems.localhost   → the app (sign in below)
+#   http://shutterpact.qonicsystems.localhost  → "in development" page
+#
+# Login:  founder@qonicsystems.com  /  Local-Test-Password-2026
+
+services:
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+    volumes:
+      - ./deploy/Caddyfile.local:/etc/caddy/Caddyfile:ro
+      - ./deploy/sites:/srv:ro
+
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: qonic
+      POSTGRES_PASSWORD: localtest
+      POSTGRES_DB: qonic
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U qonic -d qonic"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://qonic:localtest@db:5432/qonic
+      NODE_ENV: production
+      BOOTSTRAP_CEO_EMAIL: founder@qonicsystems.com
+      BOOTSTRAP_CEO_NAME: Local Founder
+      BOOTSTRAP_CEO_PASSWORD: Local-Test-Password-2026
+      # 64 hex chars = 32 bytes. Throwaway — for local testing only.
+      ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+    expose:
+      - "3000"

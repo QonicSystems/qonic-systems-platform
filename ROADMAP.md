@@ -247,7 +247,7 @@ npm run db:seed:holidays # public holidays, so leave counting is right
 npm run db:setup:test   # prepare the disposable e2e database (once)
 
 # Locked out? Set any account's password from the command line:
-npm run db:set-password -- founder@qonic.com
+npm run db:set-password -- founder@qonicsystems.com
 npm test                # unit + component
 npm run test:e2e        # end-to-end
 ```

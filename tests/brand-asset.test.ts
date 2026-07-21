@@ -60,13 +60,13 @@ describe("brand artwork", () => {
   });
 
   it("has a signature on file for the CEO and nobody else by default", () => {
-    const ceo = signatureFor("founder@qonic.com");
+    const ceo = signatureFor("founder@qonicsystems.com");
     expect(ceo).not.toBeNull();
     expect(ceo!.byteLength).toBeGreaterThan(1000);
     // Case must not matter — emails are compared case-insensitively elsewhere.
-    expect(signatureFor("Founder@QONIC.com")).not.toBeNull();
+    expect(signatureFor("Founder@QONICSYSTEMS.com")).not.toBeNull();
     // Nobody else gets one, so no document can show a borrowed signature.
-    expect(signatureFor("hr@qonic.com")).toBeNull();
+    expect(signatureFor("hr@qonicsystems.com")).toBeNull();
     expect(signatureFor(null)).toBeNull();
   });
 

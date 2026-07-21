@@ -1,9 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
 
 const PASSWORD = "Demo-Passw0rd-2026";
-const HR = "hr@qonic.com";
-const EMPLOYEE = "developer@qonic.com";
-const COFOUNDER = "cofounder@qonic.com";
+const HR = "hr@qonicsystems.com";
+const EMPLOYEE = "developer@qonicsystems.com";
+const COFOUNDER = "cofounder@qonicsystems.com";
 
 async function signIn(page: Page, email: string) {
   await page.goto("/login");

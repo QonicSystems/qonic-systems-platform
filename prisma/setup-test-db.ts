@@ -18,7 +18,7 @@ const env = {
   ...process.env,
   DATABASE_URL: url,
   // The bootstrap CEO is never used by the e2e suite, but the seed requires it.
-  BOOTSTRAP_CEO_EMAIL: process.env.BOOTSTRAP_CEO_EMAIL ?? "founder@qonic.com",
+  BOOTSTRAP_CEO_EMAIL: process.env.BOOTSTRAP_CEO_EMAIL ?? "founder@qonicsystems.com",
   BOOTSTRAP_CEO_NAME: process.env.BOOTSTRAP_CEO_NAME ?? "Test Founder",
   BOOTSTRAP_CEO_PASSWORD: process.env.BOOTSTRAP_CEO_PASSWORD ?? "Test-Bootstrap-Pw-2026",
 };

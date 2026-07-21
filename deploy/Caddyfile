@@ -1,0 +1,44 @@
+# Umbrella routing for Qonic Systems and its two verticals.
+#
+# Caddy terminates HTTPS and fetches a Let's Encrypt certificate automatically
+# for each hostname below, so ALL THREE DNS records must already point at this
+# server before Caddy starts (see DEPLOY.md → DNS).
+#
+# Local testing note: automatic HTTPS needs public DNS. To try this on a laptop,
+# add `{ auto_https disable_redirects }` or use `localhost` hostnames instead.
+
+# ── Parent brand: the chooser ────────────────────────────────────────────────
+qonicsystems.com, www.qonicsystems.com {
+	encode gzip
+	root * /srv/landing
+	file_server
+}
+
+# ── Vertical 1: Qonic Consulting (this Next.js app) ──────────────────────────
+consulting.qonicsystems.com {
+	encode gzip
+	# `app` is the service name in docker-compose; Caddy reaches it over the
+	# internal network. The app never needs a public port of its own.
+	reverse_proxy app:3000
+}
+
+# ── Vertical 2: Shutterpact — still in development ───────────────────────────
+# Served as a styled placeholder. Every request is turned into a 503 (Service
+# Unavailable) — the honest status for "not launched yet" — and handle_errors
+# serves the friendly page as the body. This is Caddy's standard custom-error
+# idiom, so the status and the page stay together.
+#
+# If your Caddy version serves this at 200 instead of 503, it is only a cosmetic
+# status difference — the page still shows and reads "Error 503". To serve a
+# plain 200 placeholder instead, delete the `error` line and move the two lines
+# from handle_errors up to the top level.
+shutterpact.qonicsystems.com {
+	encode gzip
+	root * /srv/shutterpact
+	header Retry-After 3600
+	error * 503
+	handle_errors {
+		rewrite * /index.html
+		file_server
+	}
+}

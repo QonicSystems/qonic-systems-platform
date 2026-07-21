@@ -4,8 +4,8 @@ export const site = {
   legalName: "QONIC Consulting",
   tagline: "Consulting, Clarified",
   description: "Connecting Talent. Creating Tomorrow.",
-  domain: "qonic.com",
-  email: "hello@qonic.com",
+  domain: "consulting.qonicsystems.com",
+  email: "hello@qonicsystems.com",
   phone: "+1 (555) 123-4567",
   address: ["Global Plaza, Innovation District,", "Suite 400"],
   /** Taken directly from the supplied logo artwork. */

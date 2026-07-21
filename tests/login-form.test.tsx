@@ -19,14 +19,14 @@ describe("LoginForm", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     render(<LoginForm />);
-    await userEvent.type(screen.getByLabelText(/work email/i), "hr@qonic.com");
+    await userEvent.type(screen.getByLabelText(/work email/i), "hr@qonicsystems.com");
     await userEvent.type(screen.getByLabelText(/password/i), "Demo-Passw0rd");
     await userEvent.click(screen.getByRole("button", { name: /sign in/i }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
     const [url, options] = fetchMock.mock.calls[0];
     expect(url).toBe("/api/auth/login");
-    expect(JSON.parse(options.body)).toMatchObject({ email: "hr@qonic.com", password: "Demo-Passw0rd" });
+    expect(JSON.parse(options.body)).toMatchObject({ email: "hr@qonicsystems.com", password: "Demo-Passw0rd" });
     await waitFor(() => expect(replace).toHaveBeenCalledWith("/dashboard"));
   });
 
@@ -34,7 +34,7 @@ describe("LoginForm", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, json: async () => ({ message: "Email or password is incorrect." }) }));
 
     render(<LoginForm />);
-    await userEvent.type(screen.getByLabelText(/work email/i), "hr@qonic.com");
+    await userEvent.type(screen.getByLabelText(/work email/i), "hr@qonicsystems.com");
     await userEvent.type(screen.getByLabelText(/password/i), "wrong");
     await userEvent.click(screen.getByRole("button", { name: /sign in/i }));
 
@@ -62,7 +62,7 @@ describe("LoginForm", () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
 
     render(<LoginForm />);
-    await userEvent.type(screen.getByLabelText(/work email/i), "hr@qonic.com");
+    await userEvent.type(screen.getByLabelText(/work email/i), "hr@qonicsystems.com");
     await userEvent.type(screen.getByLabelText(/password/i), "Demo-Passw0rd");
     await userEvent.click(screen.getByRole("button", { name: /sign in/i }));
 

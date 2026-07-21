@@ -5,9 +5,9 @@ import { hashSessionToken, createSessionToken } from "@/lib/auth/session";
 
 describe("validateLoginPayload", () => {
   it("accepts a valid pair and lowercases the email", () => {
-    const { data, errors } = validateLoginPayload({ email: "  Founder@QONIC.com ", password: "secret" });
+    const { data, errors } = validateLoginPayload({ email: "  Founder@QONICSYSTEMS.com ", password: "secret" });
     expect(errors).toEqual({});
-    expect(data).toEqual({ email: "founder@qonic.com", password: "secret" });
+    expect(data).toEqual({ email: "founder@qonicsystems.com", password: "secret" });
   });
 
   it("rejects a malformed email", () => {
