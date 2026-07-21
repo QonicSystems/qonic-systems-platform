@@ -374,9 +374,9 @@ rank-based escalation guard.*
 
 To wipe and start the local stack fresh (new database, re-seeded):
 ```bash
-docker compose -f docker-compose.local.yml down -v
-docker compose -f docker-compose.local.yml up -d --build
+docker compose -f docker/docker-compose.local.yml down -v
+docker compose -f docker/docker-compose.local.yml up -d --build
 # then re-seed the six demo accounts (dev override needed in the prod image):
-docker compose -f docker-compose.local.yml exec -e NODE_ENV=development app npx tsx prisma/seed-demo.ts
-docker compose -f docker-compose.local.yml exec app npx tsx prisma/set-password.ts founder@qonicsystems.com "Demo-Passw0rd-2026"
+docker compose -f docker/docker-compose.local.yml exec -e NODE_ENV=development app npx tsx prisma/seed-demo.ts
+docker compose -f docker/docker-compose.local.yml exec app npx tsx prisma/set-password.ts founder@qonicsystems.com "Demo-Passw0rd-2026"
 ```

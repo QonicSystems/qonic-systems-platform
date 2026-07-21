@@ -28,14 +28,14 @@ npm run dev               # http://localhost:3000  → sign in at /login
 **B. Full Docker stack (mirrors production)** — no local Postgres needed; brings
 up the app, database, and the Caddy router with all three sites (see DEPLOY.md):
 ```bash
-docker compose -f docker-compose.local.yml up -d --build
+docker compose -f docker/docker-compose.local.yml up -d --build
 # → http://consulting.qonicsystems.localhost   (the app — sign in here)
 # → http://qonicsystems.localhost              (the umbrella site)
 ```
 Migrations and role/permission seeding run automatically on first boot. Note the
 Docker stack seeds **only the bootstrap CEO**, not the six demo accounts below —
 for the full role matrix, use option A (or run `db:seed:demo` inside the app
-container: `docker compose -f docker-compose.local.yml exec app npx tsx prisma/seed-demo.ts`).
+container: `docker compose -f docker/docker-compose.local.yml exec app npx tsx prisma/seed-demo.ts`).
 
 **Demo accounts** (all share the password `Demo-Passw0rd-2026`):
 

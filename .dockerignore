@@ -20,8 +20,10 @@ docs
 .idea
 .DS_Store
 
-# The Docker files themselves.
-Dockerfile
+# The Docker build/config files themselves (but NOT docker/docker-entrypoint.sh,
+# which the image copies and runs). .dockerignore stays at the repo root because
+# it must sit at the build-context root.
 .dockerignore
-docker-compose.yml
-docker-compose.local.yml
+docker/Dockerfile
+docker/docker-compose.yml
+docker/docker-compose.local.yml
