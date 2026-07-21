@@ -43,6 +43,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    volumes:
+      - qonic-local-db:/var/lib/postgresql/data
 
   app:
     build:
@@ -62,3 +64,6 @@ services:
       ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
     expose:
       - "3000"
+
+volumes:
+  qonic-local-db:
