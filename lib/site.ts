@@ -1,9 +1,21 @@
 export const site = {
-  name: "Avenstrix Consulting",
+  name: "QONIC consulting",
+  /** Used wherever a plain, unstyled name is needed (PDF letterheads, emails). */
+  legalName: "QONIC Consulting",
+  tagline: "Consulting, Clarified",
   description: "Connecting Talent. Creating Tomorrow.",
-  email: "hello@avenstrixconsulting.com",
+  domain: "consulting.qonicsystems.com",
+  email: "hello@qonicsystems.com",
   phone: "+1 (555) 123-4567",
   address: ["Global Plaza, Innovation District,", "Suite 400"],
+  /** Taken directly from the supplied logo artwork. */
+  brand: {
+    /** The cube — the site's single highlight colour. */
+    mark: "#FFD700",
+    /** The wordmark, and the site's ink. */
+    ink: "#111111",
+    accent: "#FFD700",
+  },
 };
 
 export const navigation = [
@@ -11,6 +23,7 @@ export const navigation = [
   ["About Us", "/about"],
   ["Industries", "/industries"],
   ["Services", "/services"],
+  ["Careers", "/careers"],
   ["Testimonials", "/#testimonials"],
   ["Contact Us", "/contact"],
 ] as const;
@@ -52,7 +65,7 @@ export const processSteps = [
 export const testimonials = [
   {
     quote:
-      "Avenstrix understood the specialized talent we needed from day one. They delivered a senior clinical operations leader who transformed our trial timelines.",
+      "QONIC understood the specialized talent we needed from day one. They delivered a senior clinical operations leader who transformed our trial timelines.",
     name: "Dr. Sarah Mitchell",
     role: "VP Clinical Operations, NovaBio Therapeutics",
     initials: "SM",

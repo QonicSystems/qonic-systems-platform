@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git mv *)",
+      "Bash(sed -i '' 's|\\(see DEPLOY.md\\)|\\(see docs/DEPLOY.md\\)|' docker-compose.yml)",
+      "Bash(sed -i '' 's|see DEPLOY.md → DNS|see docs/DEPLOY.md → DNS|' deploy/Caddyfile)"
+    ]
+  }
+}

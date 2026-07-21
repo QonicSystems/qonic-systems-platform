@@ -1,19 +1,5 @@
 import type { ReactNode } from "react";
 
-export function LogoMark() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <circle cx="6" cy="12" r="2" />
-      <circle cx="18" cy="12" r="2" />
-      <circle cx="12" cy="6" r="2" />
-      <circle cx="12" cy="18" r="2" />
-      <path d="M8 12h8" />
-      <path d="M10.5 8.5 12 6l1.5 2.5" />
-      <path d="M10.5 15.5 12 18l1.5-2.5" />
-    </svg>
-  );
-}
-
 export function ArrowRight() {
   return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="m17 8 4 4m0 0-4 4m4-4H3" /></svg>;
 }

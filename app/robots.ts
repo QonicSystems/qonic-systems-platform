@@ -1,3 +1,4 @@
 import type { MetadataRoute } from "next";
+import { site } from "@/lib/site";
 
-export default function robots(): MetadataRoute.Robots { return { rules: { userAgent: "*", allow: "/", disallow: "/api/" }, sitemap: "https://avenstrixconsulting.com/sitemap.xml" }; }
+export default function robots(): MetadataRoute.Robots { return { rules: { userAgent: "*", allow: "/", disallow: "/api/" }, sitemap: `https://${site.domain}/sitemap.xml` }; }

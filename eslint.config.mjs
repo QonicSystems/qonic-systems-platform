@@ -1,16 +1,16 @@
 import { defineConfig, globalIgnores } from "eslint/config";
-import { FlatCompat } from "@eslint/eslintrc";
-import nextVitals from "eslint-config-next/core-web-vitals.js";
-
-const compat = new FlatCompat({ baseDirectory: import.meta.dirname });
+// eslint-config-next v16 ships native flat config, so it spreads directly —
+// the FlatCompat wrapper the v15 eslintrc format needed is no longer required.
+import nextVitals from "eslint-config-next/core-web-vitals";
 
 export default defineConfig([
-  ...compat.config(nextVitals),
+  ...nextVitals,
   {
     rules: {
       "@next/next/no-html-link-for-pages": "off",
       "import/no-anonymous-default-export": "off",
     },
   },
-  globalIgnores([".next/**", "node_modules/**", "coverage/**"]),
+  // lib/generated is Prisma's output — not ours to lint.
+  globalIgnores([".next/**", "node_modules/**", "coverage/**", "lib/generated/**"]),
 ]);

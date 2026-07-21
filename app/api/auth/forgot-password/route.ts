@@ -1,0 +1,70 @@
+import { NextResponse } from "next/server";
+import nodemailer from "nodemailer";
+import { clientIp, recordAudit } from "@/lib/audit";
+import { RESET_TTL_MS, createResetToken, hashResetToken, resetEmail, resetUrl } from "@/lib/auth/reset";
+import { emailPattern } from "@/lib/contact";
+import { db } from "@/lib/db";
+
+export const runtime = "nodejs";
+
+/**
+ * Always answers the same way, whether or not the address is registered —
+ * otherwise this endpoint becomes an account-enumeration oracle.
+ */
+const NEUTRAL = "If that email address has an account, a reset link is on its way.";
+
+function smtp() {
+  const required = ["SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASSWORD", "CONTACT_FROM_EMAIL"] as const;
+  if (required.some((name) => !process.env[name])) return null;
+  return {
+    host: process.env.SMTP_HOST!, port: Number(process.env.SMTP_PORT), secure: process.env.SMTP_SECURE === "true",
+    auth: { user: process.env.SMTP_USER!, pass: process.env.SMTP_PASSWORD! }, from: process.env.CONTACT_FROM_EMAIL!,
+  };
+}
+
+export async function POST(request: Request) {
+  let body: unknown;
+  try { body = await request.json(); } catch { return NextResponse.json({ message: "Please submit a valid request." }, { status: 400 }); }
+  const input = typeof body === "object" && body !== null ? body as Record<string, unknown> : {};
+  const email = String(input.email ?? "").trim().toLowerCase();
+
+  if (!emailPattern.test(email)) {
+    return NextResponse.json({ message: "Please correct the highlighted fields.", errors: { email: "Please enter a valid email address." } }, { status: 422 });
+  }
+
+  const user = await db.user.findUnique({ where: { email } });
+
+  // Silently succeed for unknown or inactive accounts.
+  if (!user || user.status !== "ACTIVE") return NextResponse.json({ message: NEUTRAL });
+
+  const token = createResetToken();
+  await db.$transaction(async (tx) => {
+    // Any earlier link becomes useless the moment a new one is issued.
+    await tx.passwordResetToken.deleteMany({ where: { userId: user.id, usedAt: null } });
+    await tx.passwordResetToken.create({
+      data: { tokenHash: hashResetToken(token), userId: user.id, expiresAt: new Date(Date.now() + RESET_TTL_MS) },
+    });
+    await recordAudit({ actorId: user.id, action: "auth.password_reset.request", entityType: "User", entityId: user.id, ipAddress: clientIp(request) }, tx);
+  });
+
+  const config = smtp();
+  const url = resetUrl(new URL(request.url).origin, token);
+
+  if (!config) {
+    // Without SMTP the link cannot be delivered. Log it so local development
+    // still works, and keep the response neutral.
+    console.warn(`[password-reset] SMTP not configured. Reset link for ${email}: ${url}`);
+    return NextResponse.json({ message: NEUTRAL });
+  }
+
+  try {
+    const { subject, text } = resetEmail(user.name, url);
+    const transporter = nodemailer.createTransport({ host: config.host, port: config.port, secure: config.secure, auth: config.auth });
+    await transporter.sendMail({ from: config.from, to: user.email, subject, text });
+  } catch (error) {
+    // Still neutral: a delivery failure must not reveal that the account exists.
+    console.error("Password reset email failed", error);
+  }
+
+  return NextResponse.json({ message: NEUTRAL });
+}

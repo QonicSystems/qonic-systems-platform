@@ -1,0 +1,27 @@
+# Build artifacts and deps — reinstalled/rebuilt inside the image.
+node_modules
+.next
+lib/generated
+
+# Secrets and local env — never bake these into an image.
+.env
+.env.*
+!.env.example
+
+# Local tooling, tests, and docs not needed at runtime.
+.git
+.gitignore
+tests
+test-results
+playwright-report
+*.md
+docs
+.vscode
+.idea
+.DS_Store
+
+# The Docker files themselves.
+Dockerfile
+.dockerignore
+docker-compose.yml
+docker-compose.local.yml

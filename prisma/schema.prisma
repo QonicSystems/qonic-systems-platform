@@ -1,0 +1,994 @@
+// Qonic Consulting — internal platform schema.
+//
+// Design note: roles are ROWS, not an enum, so new roles ("Legal", "Marketing")
+// are created through the admin UI with no migration and no deploy. Application
+// code branches on PERMISSIONS, never on role keys — see lib/auth/permissions.ts.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------- Identity --
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  ARCHIVED
+}
+
+model User {
+  id                 String     @id @default(cuid())
+  email              String     @unique
+  passwordHash       String
+  name               String
+  phone              String?
+  jobTitle           String?
+  employeeCode       String?    @unique
+  /// Link to an externally hosted avatar. Nothing is uploaded or stored by this
+  /// application — see ROADMAP for the "everything on the fly" decision.
+  photoUrl           String?
+  status             UserStatus @default(ACTIVE)
+
+  // --- HR record (Phase 3) ---
+  dateOfBirth      DateTime?
+  joinedOn         DateTime?
+  leftOn           DateTime?
+  address          String?
+  emergencyName    String?
+  emergencyPhone   String?
+  emergencyRelation String?
+
+  /// Self-relation driving the org chart and the leave approval chain.
+  managerId String?
+  manager   User?   @relation("ReportsTo", fields: [managerId], references: [id], onDelete: SetNull)
+  reports   User[]  @relation("ReportsTo")
+
+  clientsOwned       Client[]            @relation("ClientOwner")
+  jobsOwned          Job[]               @relation("JobOwner")
+  applicationsOwned  Application[]       @relation("ApplicationOwner")
+  interviews         Interview[]         @relation("Interviewer")
+  placements         Placement[]         @relation("PlacementRecruiter")
+  paymentsRecorded   Payment[]           @relation("PaymentRecorder")
+  expenses           Expense[]           @relation("ExpenseOwner")
+  expenseDecisions   Expense[]           @relation("ExpenseApprover")
+  notifications      Notification[]      @relation("NotificationRecipient")
+  bankDetail         BankDetail?
+  projectsManaged    Project[]           @relation("ProjectManager")
+  projectAssignments ProjectAssignment[]
+  timesheets         Timesheet[]         @relation("TimesheetOwner")
+  timesheetDecisions Timesheet[]         @relation("TimesheetApprover")
+  leaveRequests  LeaveRequest[] @relation("LeaveRequester")
+  leaveDecisions LeaveRequest[] @relation("LeaveDecider")
+  leaveBalances  LeaveBalance[]
+  resetTokens    PasswordResetToken[]
+  mustChangePassword Boolean    @default(false)
+  lastLoginAt        DateTime?
+  failedLoginCount   Int        @default(0)
+  lockedUntil        DateTime?
+
+  // --- Two-factor authentication (Phase 8) ---
+  /// Base32 TOTP secret, encrypted at rest. Null until enrolment starts.
+  totpSecretEnc  String?
+  /// Only true once a code has been verified — a half-finished enrolment
+  /// must never lock someone out.
+  totpEnabled    Boolean  @default(false)
+  /// Hashed single-use recovery codes, newline separated.
+  totpBackupHashes String?
+
+  roleId String
+  role   Role   @relation(fields: [roleId], references: [id])
+
+  sessions  Session[]
+  overrides UserPermissionOverride[]
+  auditLogs AuditLog[]               @relation("AuditActor")
+
+  contractsAuthored ContractLetter[] @relation("ContractAuthor")
+  contractsSubject  ContractLetter[] @relation("ContractSubject")
+  contractsReleased ContractLetter[] @relation("ContractReleaser")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([roleId])
+  @@index([status])
+  @@index([managerId])
+}
+
+/// Single-use, short-lived. Only the hash is stored, exactly as with sessions.
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model Session {
+  id String @id @default(cuid())
+  /// sha256 of the cookie value. The raw token is never stored, so a database
+  /// leak yields no usable sessions.
+  tokenHash String @unique
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  ipAddress String?
+  userAgent String?
+  /// Idle expiry, rolled forward on use.
+  expiresAt DateTime
+  /// Hard cap. Never extended, so a stolen session cannot live forever.
+  absoluteExpiresAt DateTime
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// -------------------------------------------------------------------- RBAC --
+
+model Role {
+  id          String  @id @default(cuid())
+  /// Stable identifier referenced from code (lib/auth/roles.ts). Never renamed.
+  key         String  @unique
+  label       String
+  description String?
+  /// True for the CEO row only. Grants an unconditional allow-all bypass, so the
+  /// CEO can never lock themselves out by mis-toggling their own permissions.
+  isSuperAdmin Boolean @default(false)
+  /// System roles cannot be deleted or have their key changed.
+  isSystem     Boolean @default(false)
+  /// Lower = more senior. Drives the privilege-escalation guard: you may only
+  /// administer users whose rank is strictly greater than your own.
+  rank         Int     @default(100)
+
+  users       User[]
+  permissions RolePermission[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Permission {
+  id String @id @default(cuid())
+  /// Dotted key, e.g. "contract.release". Seeded from the code-owned catalog.
+  key         String  @unique
+  /// Groups the admin console's toggle matrix into sections.
+  group       String
+  label       String
+  description String?
+  sortOrder   Int     @default(0)
+
+  roles     RolePermission[]
+  overrides UserPermissionOverride[]
+}
+
+/// The CEO's toggle. `enabled` is what the admin console flips per role.
+model RolePermission {
+  roleId       String
+  permissionId String
+  enabled      Boolean @default(false)
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  updatedAt   DateTime @updatedAt
+  updatedById String?
+
+  @@id([roleId, permissionId])
+}
+
+enum OverrideEffect {
+  ALLOW
+  DENY
+}
+
+/// Per-user exception to the role default. DENY beats ALLOW; both are ignored
+/// once `expiresAt` has passed, which makes temporary elevation self-cleaning.
+model UserPermissionOverride {
+  userId       String
+  permissionId String
+  effect       OverrideEffect
+  reason       String?
+  expiresAt    DateTime?
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime @default(now())
+  createdById String?
+
+  @@id([userId, permissionId])
+}
+
+// -------------------------------------------------------- Contract letters --
+
+enum ContractStatus {
+  DRAFT
+  PENDING_RELEASE
+  CHANGES_REQUESTED
+  RELEASED
+  ACKNOWLEDGED
+  REVOKED
+}
+
+model ContractLetter {
+  id        String @id @default(cuid())
+  reference String @unique
+
+  subjectUserId String
+  subject       User   @relation("ContractSubject", fields: [subjectUserId], references: [id])
+  authorUserId  String
+  author        User   @relation("ContractAuthor", fields: [authorUserId], references: [id])
+
+  status      ContractStatus @default(DRAFT)
+  /// Versioned template id. A change to an issued letter's wording must ship as
+  /// a NEW key (…-v2), never as an edit to an existing one — documents are
+  /// rendered on demand, so editing v1 would retroactively alter issued letters.
+  templateKey String         @default("standard-employment-v1")
+  /// The frozen source of truth. Editing is blocked once the letter leaves
+  /// DRAFT/CHANGES_REQUESTED, so this snapshot is what every future render uses.
+  payload     Json
+  version     Int            @default(1)
+
+  releasedAt   DateTime?
+  releasedById String?
+  releasedBy   User?     @relation("ContractReleaser", fields: [releasedById], references: [id], onDelete: SetNull)
+  revokedAt    DateTime?
+  revokedById  String?
+
+  events ContractLetterEvent[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([subjectUserId, status])
+  @@index([status])
+}
+
+/// Append-only. Written in the same transaction as the status change, so the
+/// approval trail can never drift from the letter's actual state.
+model ContractLetterEvent {
+  id         String          @id @default(cuid())
+  letterId   String
+  letter     ContractLetter  @relation(fields: [letterId], references: [id], onDelete: Cascade)
+  fromStatus ContractStatus?
+  toStatus   ContractStatus
+  actorId    String
+  note       String?
+  createdAt  DateTime        @default(now())
+
+  @@index([letterId, createdAt])
+}
+
+// ------------------------------------------------------------------ Audit ---
+
+model AuditLog {
+  id      String  @id @default(cuid())
+  actorId String?
+  actor   User?   @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  action     String
+  entityType String
+  entityId   String?
+  before     Json?
+  after      Json?
+  ipAddress  String?
+
+  createdAt DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([actorId, createdAt])
+  @@index([createdAt])
+}
+
+// ------------------------------------------------------------------- Leave --
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+/// Configurable leave types, so a new category needs no migration.
+model LeaveType {
+  id           String  @id @default(cuid())
+  key          String  @unique
+  label        String
+  description  String?
+  /// Days granted per employee per year. 0 means unlimited/unaccrued (e.g. unpaid).
+  annualDays   Int     @default(0)
+  /// Whether a balance is tracked and decremented on approval.
+  tracksBalance Boolean @default(true)
+  colour       String  @default("#0e9384")
+  isActive     Boolean @default(true)
+  sortOrder    Int     @default(0)
+
+  requests LeaveRequest[]
+  balances LeaveBalance[]
+}
+
+/// One row per employee, leave type, and year.
+model LeaveBalance {
+  id          String @id @default(cuid())
+  userId      String
+  user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  leaveTypeId String
+  leaveType   LeaveType @relation(fields: [leaveTypeId], references: [id], onDelete: Cascade)
+  year        Int
+  /// Days granted for the year, which may be adjusted per person.
+  entitledDays Float @default(0)
+  /// Days consumed by APPROVED requests. Maintained transactionally with the
+  /// request itself so the two can never disagree.
+  usedDays     Float @default(0)
+
+  @@unique([userId, leaveTypeId, year])
+  @@index([userId, year])
+}
+
+model LeaveRequest {
+  id          String      @id @default(cuid())
+  userId      String
+  user        User        @relation("LeaveRequester", fields: [userId], references: [id], onDelete: Cascade)
+  leaveTypeId String
+  leaveType   LeaveType   @relation(fields: [leaveTypeId], references: [id])
+  startDate   DateTime    @db.Date
+  endDate     DateTime    @db.Date
+  /// Working days requested, computed at submission and frozen thereafter.
+  days        Float
+  reason      String?
+  status      LeaveStatus @default(PENDING)
+
+  decidedById String?
+  decidedBy   User?     @relation("LeaveDecider", fields: [decidedById], references: [id], onDelete: SetNull)
+  decidedAt   DateTime?
+  decisionNote String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, status])
+  @@index([status])
+  @@index([startDate])
+}
+
+// ------------------------------------------------------------- Delivery ----
+
+enum ClientStatus {
+  PROSPECT
+  ACTIVE
+  DORMANT
+  ARCHIVED
+}
+
+model Client {
+  id       String       @id @default(cuid())
+  name     String       @unique
+  code     String       @unique
+  status   ClientStatus @default(ACTIVE)
+  industry String?
+  website  String?
+  notes    String?
+
+  /// The person who owns the commercial relationship.
+  ownerId String?
+  owner   User?   @relation("ClientOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+
+  contacts ClientContact[]
+  projects Project[]
+  jobs     Job[]
+  invoices Invoice[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([ownerId])
+}
+
+model ClientContact {
+  id       String  @id @default(cuid())
+  clientId String
+  client   Client  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  name     String
+  email    String?
+  phone    String?
+  title    String?
+  isPrimary Boolean @default(false)
+
+  @@index([clientId])
+}
+
+enum ProjectStatus {
+  PLANNED
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+  CANCELLED
+}
+
+enum BillingModel {
+  TIME_AND_MATERIALS
+  FIXED_PRICE
+  RETAINER
+  NON_BILLABLE
+}
+
+model Project {
+  id       String        @id @default(cuid())
+  code     String        @unique
+  name     String
+  clientId String
+  client   Client        @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  status   ProjectStatus @default(PLANNED)
+  health   ProjectHealth @default(ON_TRACK)
+  billing  BillingModel  @default(TIME_AND_MATERIALS)
+
+  /// Minor units (paise/cents) to avoid floating-point money.
+  budgetAmount   Int?
+  budgetCurrency String  @default("INR")
+  /// Charge-out rate in minor units per hour.
+  defaultRate    Int?
+
+  startDate DateTime? @db.Date
+  endDate   DateTime? @db.Date
+  notes     String?
+
+  managerId String?
+  manager   User?   @relation("ProjectManager", fields: [managerId], references: [id], onDelete: SetNull)
+
+  assignments ProjectAssignment[]
+  tasks       ProjectTask[]
+  timeEntries TimeEntry[]
+  milestones  ProjectMilestone[]
+  invoices    Invoice[]
+  expenses    Expense[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clientId, status])
+  @@index([status])
+  @@index([managerId])
+}
+
+/// Who may book time to a project, and at what rate.
+model ProjectAssignment {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Overrides Project.defaultRate for this person.
+  rate      Int?
+  /// Planned share of a working week, for capacity reporting.
+  allocationPercent Int @default(100)
+
+  createdAt DateTime @default(now())
+
+  @@unique([projectId, userId])
+  @@index([userId])
+}
+
+model ProjectTask {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name      String
+  /// Non-billable tasks never contribute to invoiceable hours.
+  billable  Boolean @default(true)
+  isActive  Boolean @default(true)
+  sortOrder Int     @default(0)
+
+  timeEntries TimeEntry[]
+
+  @@index([projectId])
+}
+
+enum TimesheetStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+}
+
+/// A week of time for one person, and the unit that gets approved and locked.
+model Timesheet {
+  id       String          @id @default(cuid())
+  userId   String
+  user     User            @relation("TimesheetOwner", fields: [userId], references: [id], onDelete: Cascade)
+  /// Monday of the week, in UTC.
+  weekStart DateTime       @db.Date
+  status   TimesheetStatus @default(DRAFT)
+
+  submittedAt  DateTime?
+  decidedById  String?
+  decidedBy    User?     @relation("TimesheetApprover", fields: [decidedById], references: [id], onDelete: SetNull)
+  decidedAt    DateTime?
+  decisionNote String?
+
+  entries TimeEntry[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, weekStart])
+  @@index([status])
+  @@index([weekStart])
+}
+
+model TimeEntry {
+  id          String    @id @default(cuid())
+  timesheetId String
+  timesheet   Timesheet @relation(fields: [timesheetId], references: [id], onDelete: Cascade)
+  projectId   String
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  taskId      String?
+  task        ProjectTask? @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  workDate DateTime @db.Date
+  /// Stored as MINUTES. Hours as a float would accumulate rounding error across
+  /// a month of entries and make invoices disagree with timesheets.
+  minutes  Int
+  /// Snapshot of the task's billable flag at entry time, so later changes to the
+  /// task cannot silently re-bill approved work.
+  billable Boolean  @default(true)
+  note     String?
+
+  /// Stamped when the hours are pulled onto an invoice. This is what stops the
+  /// same time being billed twice.
+  invoicedAt DateTime?
+  invoiceId  String?
+  invoice    Invoice?  @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([timesheetId])
+  @@index([projectId, workDate])
+  @@index([workDate])
+  @@index([invoiceId])
+}
+
+// -------------------------------------------- Phase 4 completion: delivery --
+
+enum ProjectHealth {
+  ON_TRACK
+  AT_RISK
+  OFF_TRACK
+}
+
+enum MilestoneStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  MISSED
+}
+
+model ProjectMilestone {
+  id        String          @id @default(cuid())
+  projectId String
+  project   Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name      String
+  dueDate   DateTime        @db.Date
+  status    MilestoneStatus @default(PENDING)
+  /// Fixed-price projects bill on milestones; minor units.
+  amount    Int?
+  completedAt DateTime?
+  notes     String?
+  sortOrder Int             @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId, status])
+}
+
+// ------------------------------------------------- Phase 5: recruitment ----
+
+enum JobStatus {
+  DRAFT
+  OPEN
+  ON_HOLD
+  FILLED
+  CLOSED
+}
+
+model Job {
+  id        String    @id @default(cuid())
+  reference String    @unique
+  title     String
+  clientId  String
+  client    Client    @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  status    JobStatus @default(DRAFT)
+
+  description  String?
+  location     String?
+  employmentType String  @default("Full-time")
+  openings     Int      @default(1)
+  /// Minor units. The salary band advertised to candidates.
+  salaryMin    Int?
+  salaryMax    Int?
+  currency     String   @default("INR")
+  /// Placement fee as a percentage of first-year salary.
+  feePercent   Float?
+  /// Target days to fill, used to flag ageing requisitions.
+  slaDays      Int?
+  /// Shown on the public careers page.
+  isPublished  Boolean  @default(false)
+
+  ownerId String?
+  owner   User?   @relation("JobOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+
+  applications Application[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, isPublished])
+  @@index([clientId])
+}
+
+model Candidate {
+  id     String  @id @default(cuid())
+  name   String
+  email  String  @unique
+  phone  String?
+  /// A LINK to an externally hosted CV. Nothing is uploaded or stored here.
+  resumeUrl String?
+  linkedinUrl String?
+  location  String?
+  headline  String?
+  /// Comma-separated for now; a tag table is a later refinement.
+  skills    String?
+  source    String  @default("Direct")
+  /// Minor units.
+  currentSalary  Int?
+  expectedSalary Int?
+  noticePeriod   String?
+  notes          String?
+
+  /// Recorded when the candidate agreed to us holding their data.
+  consentAt DateTime?
+
+  applications Application[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([name])
+}
+
+/// The pipeline stages an application moves through.
+enum ApplicationStage {
+  SOURCED
+  SCREENED
+  SUBMITTED
+  INTERVIEW
+  OFFER
+  PLACED
+  REJECTED
+  WITHDRAWN
+}
+
+model Application {
+  id          String           @id @default(cuid())
+  jobId       String
+  job         Job              @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  candidateId String
+  candidate   Candidate        @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  stage       ApplicationStage @default(SOURCED)
+
+  ownerId String?
+  owner   User?   @relation("ApplicationOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+
+  /// Free-text reason captured when an application is rejected or withdrawn.
+  outcomeReason String?
+  /// Came in through the public careers form rather than being sourced.
+  isInbound Boolean @default(false)
+
+  events     ApplicationEvent[]
+  interviews Interview[]
+  placement  Placement?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// One application per candidate per job — re-applying reuses the row.
+  @@unique([jobId, candidateId])
+  @@index([stage])
+  @@index([jobId, stage])
+}
+
+/// Append-only stage history, written with the transition itself.
+model ApplicationEvent {
+  id            String            @id @default(cuid())
+  applicationId String
+  application   Application       @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  fromStage     ApplicationStage?
+  toStage       ApplicationStage
+  actorId       String?
+  note          String?
+  createdAt     DateTime          @default(now())
+
+  @@index([applicationId, createdAt])
+}
+
+enum InterviewOutcome {
+  PENDING
+  ADVANCE
+  REJECT
+  NO_SHOW
+}
+
+model Interview {
+  id            String      @id @default(cuid())
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  scheduledAt   DateTime
+  durationMins  Int         @default(60)
+  /// "Phone screen", "Technical", "Client panel"…
+  kind          String      @default("Screening")
+  location      String?
+
+  interviewerId String?
+  interviewer   User?   @relation("Interviewer", fields: [interviewerId], references: [id], onDelete: SetNull)
+
+  /// 1–5. Null until feedback is recorded.
+  score    Int?
+  outcome  InterviewOutcome @default(PENDING)
+  feedback String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([applicationId])
+  @@index([scheduledAt])
+}
+
+model Placement {
+  id            String      @id @default(cuid())
+  applicationId String      @unique
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  startDate DateTime @db.Date
+  /// Minor units.
+  salary    Int
+  currency  String   @default("INR")
+  /// Percentage of salary charged to the client.
+  feePercent Float
+  /// Denormalised at placement time so a later fee-policy change cannot
+  /// retroactively alter historic revenue.
+  feeAmount  Int
+
+  /// The recruiter credited with the placement.
+  recruiterId String?
+  recruiter   User?   @relation("PlacementRecruiter", fields: [recruiterId], references: [id], onDelete: SetNull)
+
+  /// Guarantee period; a fall-out inside it usually voids the fee.
+  guaranteeDays Int?
+  fellOutAt     DateTime?
+
+  invoiceId String?
+  invoice   Invoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([recruiterId])
+}
+
+// ------------------------------------------------------ Phase 6: finance ---
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PART_PAID
+  PAID
+  OVERDUE
+  VOID
+}
+
+model Invoice {
+  id       String        @id @default(cuid())
+  number   String        @unique
+  clientId String
+  client   Client        @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  projectId String?
+  project   Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  status   InvoiceStatus @default(DRAFT)
+
+  issueDate DateTime @db.Date
+  dueDate   DateTime @db.Date
+  currency  String   @default("INR")
+
+  /// All minor units, computed from the lines and frozen when the invoice is sent.
+  subtotal  Int   @default(0)
+  taxPercent Float @default(0)
+  taxAmount Int   @default(0)
+  total     Int   @default(0)
+  paidAmount Int  @default(0)
+
+  notes String?
+  /// Set when issued, so the document can be re-rendered exactly as sent.
+  sentAt DateTime?
+  voidedAt DateTime?
+
+  lines      InvoiceLine[]
+  payments   Payment[]
+  creditNotes CreditNote[]
+  placements Placement[]
+  timeEntries TimeEntry[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clientId, status])
+  @@index([status])
+  @@index([dueDate])
+}
+
+model InvoiceLine {
+  id        String  @id @default(cuid())
+  invoiceId String
+  invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  description String
+  /// Hundredths of a unit (hours × 100) so 7.5h is exact.
+  quantity  Int
+  /// Minor units per unit.
+  unitRate  Int
+  amount    Int
+  sortOrder Int     @default(0)
+
+  @@index([invoiceId])
+}
+
+model Payment {
+  id        String   @id @default(cuid())
+  invoiceId String
+  invoice   Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  amount    Int
+  paidOn    DateTime @db.Date
+  method    String   @default("Bank transfer")
+  reference String?
+  note      String?
+
+  recordedById String?
+  recordedBy   User?   @relation("PaymentRecorder", fields: [recordedById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@index([invoiceId])
+}
+
+enum ExpenseStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+  REIMBURSED
+}
+
+model Expense {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation("ExpenseOwner", fields: [userId], references: [id], onDelete: Cascade)
+
+  spentOn  DateTime @db.Date
+  category String   @default("Other")
+  /// Minor units.
+  amount   Int
+  currency String   @default("INR")
+  description String
+  /// A LINK to a receipt hosted elsewhere; nothing is stored here.
+  receiptUrl String?
+
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  /// Whether it should be passed on to the client.
+  billable  Boolean  @default(false)
+
+  status ExpenseStatus @default(DRAFT)
+  decidedById String?
+  decidedBy   User?   @relation("ExpenseApprover", fields: [decidedById], references: [id], onDelete: SetNull)
+  decidedAt   DateTime?
+  decisionNote String?
+  reimbursedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, status])
+  @@index([status])
+}
+
+// ------------------------------------ Deferred items + Phases 7 and 8 ------
+
+/// Public holidays. Leave day-counting consults these so a holiday inside a
+/// requested range is not deducted from someone's allowance.
+model Holiday {
+  id     String   @id @default(cuid())
+  date   DateTime @unique @db.Date
+  name   String
+  /// Optional region so a multi-country team can diverge later.
+  region String   @default("IN")
+
+  createdAt DateTime @default(now())
+
+  @@index([date])
+}
+
+enum NotificationKind {
+  LEAVE
+  TIMESHEET
+  CONTRACT
+  EXPENSE
+  INVOICE
+  RECRUITMENT
+  SYSTEM
+}
+
+/// In-app inbox. Written by the same transaction as the event it describes, so
+/// a notification can never reference something that did not happen.
+model Notification {
+  id     String           @id @default(cuid())
+  userId String
+  user   User             @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
+  kind   NotificationKind @default(SYSTEM)
+  title  String
+  body   String?
+  /// Where clicking it should take the person.
+  link   String?
+  readAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, readAt])
+  @@index([createdAt])
+}
+
+/// Payment details, encrypted at rest with AES-256-GCM (see lib/crypto.ts).
+/// Split from User so the ciphertext is not loaded on every session lookup.
+model BankDetail {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// All three hold `iv:authTag:ciphertext`, never plaintext.
+  accountNameEnc   String
+  accountNumberEnc String
+  sortCodeEnc      String
+  /// Safe to show in a list without decrypting anything.
+  lastFour         String
+  bankName         String?
+
+  updatedAt   DateTime @updatedAt
+  updatedById String?
+}
+
+/// A credit note against an invoice — the correct instrument once a payment
+/// exists and voiding is no longer allowed.
+model CreditNote {
+  id        String  @id @default(cuid())
+  number    String  @unique
+  invoiceId String
+  invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  /// Minor units. Never exceeds the invoice total.
+  amount    Int
+  reason    String
+  issuedAt  DateTime @default(now())
+  issuedById String?
+
+  @@index([invoiceId])
+}

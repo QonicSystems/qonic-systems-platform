@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Qonic Systems — one studio, two ventures</title>
+  <meta name="description" content="Qonic Systems is a studio that builds and operates two ventures: Qonic Consulting, a specialist talent and consulting practice, and Shutterpact, a platform for photographers." />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="apple-touch-icon" href="/favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;900&display=swap" rel="stylesheet" />
+  <noscript><style>.reveal{opacity:1!important;transform:none!important}</style></noscript>
+  <style>
+    :root {
+      --ink: #111111; --ink-soft: #2b2b2b; --body: #4f4f4f; --faint: #8a8a8a;
+      --canvas: #ffffff; --sub: #faf9f6; --line: #ececE6;
+      --accent: #ffd700; --accent-deep: #8a6a08;
+      --ease: cubic-bezier(.22, 1, .36, 1);
+      --header-h: 4.75rem;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; scroll-padding-top: calc(var(--header-h) + 1rem); }
+    body {
+      margin: 0; background: var(--canvas); color: var(--body);
+      font-family: 'Poppins', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      -webkit-font-smoothing: antialiased; line-height: 1.6; overflow-x: hidden;
+    }
+    a { color: inherit; text-decoration: none; }
+    .wrap { width: min(100% - 2.5rem, 72rem); margin-inline: auto; }
+    h1, h2, h3 { color: var(--ink); letter-spacing: -.025em; line-height: 1.1; margin: 0; }
+    .eyebrow {
+      display: inline-flex; align-items: center; gap: .55rem; color: var(--accent-deep);
+      font-weight: 700; font-size: .74rem; letter-spacing: .16em; text-transform: uppercase; margin-bottom: 1.1rem;
+    }
+    .eyebrow::before { content: ""; width: 1.6rem; height: 2px; background: var(--accent); border-radius: 2px; }
+
+    /* ── Logo ─────────────────────────────────────────────────────────────*/
+    .lockup { display: inline-flex; align-items: center; gap: .5rem; color: var(--ink); }
+    .lockup svg { width: 1.7rem; height: 1.85rem; }
+    .lockup .name { font-weight: 900; font-size: 1.25rem; letter-spacing: -.01em; }
+    .lockup .name span { font-weight: 500; }
+
+    /* ── Header ───────────────────────────────────────────────────────────*/
+    .site-header {
+      position: sticky; top: 0; z-index: 50; height: var(--header-h);
+      display: flex; align-items: center; border-bottom: 1px solid transparent;
+      transition: background .4s var(--ease), border-color .4s var(--ease), box-shadow .4s var(--ease);
+    }
+    .site-header.scrolled {
+      background: rgba(255,255,255,.8); backdrop-filter: blur(16px) saturate(1.5);
+      border-bottom-color: var(--line); box-shadow: 0 1px 24px -12px rgba(17,17,17,.35);
+    }
+    .site-header .wrap { display: flex; align-items: center; justify-content: space-between; }
+    .nav { display: flex; align-items: center; gap: .2rem; }
+    .nav a { position: relative; padding: .5rem .85rem; color: var(--body); font-weight: 600; font-size: .92rem; border-radius: .5rem; transition: color .2s; }
+    .nav a:not(.btn-sm)::after { content: ""; position: absolute; left: .85rem; right: .85rem; bottom: .35rem; height: 1.5px; background: var(--accent); border-radius: 2px; transform: scaleX(0); transform-origin: left; transition: transform .3s var(--ease); }
+    .nav a:not(.btn-sm):hover { color: var(--ink); }
+    .nav a:not(.btn-sm):hover::after { transform: scaleX(1); }
+    .nav .btn-sm { margin-left: .5rem; background: var(--ink); color: #fff; padding: .6rem 1.15rem; border-radius: .6rem; transition: transform .25s var(--ease), background .25s; }
+    .nav .btn-sm:hover { background: #000; transform: translateY(-1px); }
+    @media (max-width: 760px) { .nav a:not(.btn-sm) { display: none; } }
+
+    /* ── Buttons ──────────────────────────────────────────────────────────*/
+    .btn {
+      position: relative; display: inline-flex; align-items: center; gap: .5rem; overflow: hidden;
+      padding: .9rem 1.6rem; border-radius: .75rem; font-weight: 700; font-size: .98rem;
+      transition: transform .3s var(--ease), background .25s, border-color .25s, color .25s, box-shadow .3s;
+    }
+    .btn .arrow { transition: transform .3s var(--ease); }
+    .btn:hover { transform: translateY(-2px); }
+    .btn:hover .arrow { transform: translateX(4px); }
+    .btn--primary { background: var(--accent); color: var(--ink); box-shadow: 0 12px 30px -12px rgba(255,215,0,.9); }
+    .btn--primary:hover { background: #ffdc26; box-shadow: 0 18px 40px -14px rgba(255,215,0,.95); }
+    .btn--dark { background: var(--ink); color: #fff; }
+    .btn--dark:hover { background: #000; color: #fff; }
+    .btn--ghost { border: 1px solid var(--line); color: var(--ink); }
+    .btn--ghost:hover { border-color: var(--ink); }
+    /* sheen sweep */
+    .btn--primary::after { content: ""; position: absolute; inset: 0; width: 40%; background: linear-gradient(90deg, transparent, rgba(255,255,255,.55), transparent); transform: translateX(-160%) skewX(-18deg); }
+    .btn--primary:hover::after { animation: sheen .9s var(--ease); }
+
+    /* ── Hero ─────────────────────────────────────────────────────────────*/
+    .hero { position: relative; padding: clamp(3.5rem, 10vw, 7.5rem) 0 clamp(3rem, 8vw, 6rem); }
+    .blob { position: absolute; z-index: 0; border-radius: 50%; filter: blur(10px); pointer-events: none; }
+    .blob--1 { top: -18%; right: -6%; width: 40rem; height: 40rem; background: radial-gradient(circle, rgba(255,215,0,.22), transparent 60%); animation: drift 22s ease-in-out infinite; }
+    .blob--2 { bottom: -30%; left: -12%; width: 34rem; height: 34rem; background: radial-gradient(circle, rgba(255,215,0,.10), transparent 62%); animation: drift 28s ease-in-out infinite reverse; }
+    .hero .wrap { position: relative; z-index: 1; }
+    .hero h1 { font-weight: 900; font-size: clamp(2.6rem, 7.2vw, 4.8rem); max-width: 16ch; }
+    .hero h1 em { font-style: normal; position: relative; white-space: nowrap; }
+    .hero h1 em .mark { position: absolute; left: -.02em; right: -.02em; bottom: .07em; height: .3em; background: var(--accent); z-index: -1; border-radius: 3px; transform: scaleX(0); transform-origin: left; }
+    .loaded .hero h1 em .mark { animation: swipe .7s var(--ease) .7s forwards; }
+    .hero p { margin: 1.6rem 0 0; max-width: 47ch; font-size: clamp(1.05rem, 2.2vw, 1.28rem); }
+    .hero .actions { margin-top: 2.4rem; display: flex; gap: .8rem; flex-wrap: wrap; }
+
+    /* On-load stagger for the hero */
+    .rise { opacity: 0; transform: translateY(22px); }
+    .loaded .rise { animation: fadeUp .9s var(--ease) forwards; }
+    .loaded .rise.d1 { animation-delay: .08s; }
+    .loaded .rise.d2 { animation-delay: .18s; }
+    .loaded .rise.d3 { animation-delay: .30s; }
+
+    /* ── Sections ─────────────────────────────────────────────────────────*/
+    section { position: relative; padding: clamp(4rem, 9vw, 7rem) 0; }
+    .section-head { max-width: 44rem; margin-bottom: clamp(2.5rem, 5vw, 4rem); }
+    .section-head h2 { font-size: clamp(2rem, 4.8vw, 3.1rem); font-weight: 900; }
+    .section-head p { margin: 1rem 0 0; font-size: 1.1rem; }
+
+    /* ── Ventures — IMMERSED, no cards ────────────────────────────────────*/
+    .ventures { background: linear-gradient(180deg, #fff 0%, var(--sub) 30%, var(--sub) 70%, #fff 100%); }
+    .venture { display: grid; gap: clamp(2rem, 5vw, 4rem); align-items: center; }
+    .venture + .venture { margin-top: clamp(4rem, 9vw, 7rem); }
+    @media (min-width: 900px) {
+      .venture { grid-template-columns: 1fr 1fr; }
+      .venture--flip .v-visual { order: -1; }
+    }
+    .badge {
+      display: inline-flex; align-items: center; gap: .5rem; padding: .35rem .8rem; border-radius: 999px;
+      font-size: .72rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; margin-bottom: 1.1rem;
+    }
+    .badge .dot { width: .5rem; height: .5rem; border-radius: 999px; background: currentColor; }
+    .badge--live { background: var(--accent); color: var(--ink); }
+    .badge--live .dot { animation: blink 1.8s ease-in-out infinite; }
+    .badge--soon { background: transparent; color: var(--faint); border: 1px solid var(--line); }
+    .venture h3 { font-size: clamp(1.8rem, 4vw, 2.5rem); font-weight: 900; margin-bottom: .8rem; }
+    .venture > .v-content > p { margin: 0 0 1.2rem; font-size: 1.05rem; }
+    .venture ul { margin: 1.3rem 0 2rem; padding: 0; list-style: none; display: grid; gap: .7rem; }
+    .venture li { display: flex; gap: .7rem; align-items: flex-start; color: var(--ink-soft); font-weight: 500; }
+    .venture li svg { flex: 0 0 auto; width: 1.15rem; height: 1.15rem; margin-top: .25rem; color: var(--accent-deep); }
+
+    /* Visuals float on soft washes — no rectangles */
+    .v-visual { position: relative; display: grid; place-items: center; min-height: clamp(16rem, 34vw, 24rem); }
+    .v-visual::before { content: ""; position: absolute; z-index: 0; width: 115%; height: 115%; border-radius: 50%; }
+    .v-visual--consulting::before { background: radial-gradient(circle, rgba(255,215,0,.20), rgba(255,215,0,.05) 45%, transparent 70%); }
+
+    /* Consulting: talent network */
+    .v-net { position: relative; z-index: 1; width: min(100%, 26rem); height: auto; overflow: visible; animation: floaty 7s ease-in-out infinite; }
+    .v-net .link { stroke: rgba(138,106,8,.4); stroke-width: 1; stroke-dasharray: 70; stroke-dashoffset: 70; }
+    .in .v-net .link { animation: draw 1s var(--ease) forwards; }
+    .v-net .node { fill: var(--ink); }
+    .v-net .ring { fill: none; stroke: var(--accent); stroke-width: 1.5; }
+    .v-net .label { fill: #fff; font-size: 3.9px; font-weight: 600; text-anchor: middle; dominant-baseline: middle; font-family: 'Poppins', sans-serif; }
+    .v-net .hub { fill: var(--accent); }
+    .v-net .hub-label { fill: var(--ink); font-size: 6.4px; font-weight: 800; text-anchor: middle; dominant-baseline: middle; font-family: 'Poppins', sans-serif; }
+    .v-net .satellite { opacity: 0; transform: scale(.4); transform-box: fill-box; transform-origin: center; }
+    .in .v-net .satellite { animation: pop .55s var(--ease) forwards; }
+    .in .v-net .s1 { animation-delay: .35s; } .in .v-net .s2 { animation-delay: .45s; }
+    .in .v-net .s3 { animation-delay: .55s; } .in .v-net .s4 { animation-delay: .65s; }
+    .in .v-net .s5 { animation-delay: .75s; } .in .v-net .s6 { animation-delay: .85s; }
+    .v-net .pulse { fill: none; stroke: var(--accent); stroke-width: 1.2; transform-box: fill-box; transform-origin: center; animation: pulsering 2.6s ease-out infinite; }
+
+    /* Shutterpact: a glowing lens, not a box */
+    .lens {
+      position: relative; z-index: 1; width: clamp(11rem, 26vw, 15rem); aspect-ratio: 1; border-radius: 50%;
+      background: radial-gradient(circle at 38% 32%, #232323, #0a0a0a 78%);
+      display: grid; place-items: center;
+      box-shadow: 0 40px 90px -34px rgba(17,17,17,.6), inset 0 2px 12px rgba(255,255,255,.06);
+      animation: floaty 8s ease-in-out infinite;
+    }
+    .lens::before { content: ""; position: absolute; inset: -14%; border-radius: 50%; z-index: -1; background: radial-gradient(circle, rgba(255,215,0,.16), transparent 66%); }
+    .lens svg { width: 58%; height: 58%; }
+    .lens .iris { animation: spin 26s linear infinite; transform-origin: center; }
+
+    /* ── Approach ─────────────────────────────────────────────────────────*/
+    .grid-3 { display: grid; gap: clamp(1.5rem, 3vw, 2.5rem); grid-template-columns: 1fr; }
+    @media (min-width: 720px) { .grid-3 { grid-template-columns: repeat(3, 1fr); } }
+    .value { position: relative; padding-top: 1.5rem; border-top: 2px solid var(--line); transition: border-color .3s; }
+    .value:hover { border-top-color: var(--accent); }
+    .value .num { font-weight: 900; font-size: 2rem; color: var(--line); transition: color .3s; letter-spacing: -.02em; }
+    .value:hover .num { color: var(--accent); }
+    .value h3 { font-size: 1.25rem; font-weight: 700; margin: .6rem 0 .5rem; }
+    .value p { margin: 0; font-size: .98rem; }
+
+    /* ── CTA ──────────────────────────────────────────────────────────────*/
+    /* Fully immersed — no panel at all. The content floats on a soft warm glow
+       that dissolves into the page on every side, so nothing sits as a block. */
+    .cta { position: relative; text-align: center; padding: clamp(3.5rem, 9vw, 6.5rem) clamp(1.5rem, 5vw, 3rem); }
+    .cta::before { content: ""; position: absolute; inset: -30% -12%; z-index: 0; pointer-events: none; border-radius: 50%;
+      background: radial-gradient(ellipse at center, rgba(255,215,0,.20) 0%, rgba(255,215,0,.07) 38%, transparent 68%);
+      animation: aura 7s ease-in-out infinite; }
+    .cta > * { position: relative; z-index: 1; }
+    .cta h2 { color: var(--ink); font-size: clamp(2rem, 4.8vw, 3.1rem); font-weight: 900; }
+    .cta p { margin: 1.1rem auto 2.2rem; max-width: 40ch; color: var(--body); }
+
+    /* ── Footer ───────────────────────────────────────────────────────────*/
+    footer { border-top: 1px solid var(--line); padding: 3.5rem 0 2rem; }
+    .foot-grid { display: grid; gap: 2rem; grid-template-columns: 1fr; }
+    @media (min-width: 720px) { .foot-grid { grid-template-columns: 2fr 1fr 1fr; } }
+    .foot-grid p { margin: 1rem 0 0; max-width: 32ch; font-size: .95rem; }
+    .foot-col h4 { color: var(--faint); font-size: .74rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; margin: 0 0 1rem; }
+    .foot-col a { display: block; padding: .3rem 0; color: var(--body); font-weight: 500; transition: color .2s, padding-left .2s var(--ease); }
+    .foot-col a:hover { color: var(--ink); padding-left: .3rem; }
+    .foot-bottom { margin-top: 2.5rem; padding-top: 1.5rem; border-top: 1px solid var(--line); display: flex; justify-content: space-between; flex-wrap: wrap; gap: 1rem; color: var(--faint); font-size: .85rem; }
+
+    /* ── Reveal ───────────────────────────────────────────────────────────*/
+    .reveal { opacity: 0; transform: translateY(26px); transition: opacity .8s var(--ease), transform .8s var(--ease); }
+    .reveal.in { opacity: 1; transform: none; }
+
+    /* ── Keyframes ────────────────────────────────────────────────────────*/
+    @keyframes fadeUp { to { opacity: 1; transform: none; } }
+    @keyframes swipe { to { transform: scaleX(1); } }
+    @keyframes drift { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(2rem,-1.5rem) scale(1.08); } }
+    @keyframes floaty { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-.7rem); } }
+    @keyframes draw { to { stroke-dashoffset: 0; } }
+    @keyframes pop { to { opacity: 1; transform: scale(1); } }
+    @keyframes pulsering { 0% { opacity: .5; transform: scale(1); } 70% { opacity: 0; transform: scale(1.9); } 100% { opacity: 0; transform: scale(1.9); } }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes sheen { to { transform: translateX(280%) skewX(-18deg); } }
+    @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+    @keyframes aura { 0%,100% { opacity: .6; transform: scale(1); } 50% { opacity: 1; transform: scale(1.06); } }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition: none !important; }
+      .reveal, .rise { opacity: 1 !important; transform: none !important; }
+      .hero h1 em .mark { transform: scaleX(1) !important; }
+    }
+  </style>
+</head>
+<body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="cube" viewBox="0 0 181.17 191.19">
+      <path d="M40.36 27.65C56.27 18.57 71.69 9.76 87.13 1a7.35 7.35 0 0 1 7.73.25q42.28 24.25 84.55 48.56a4.08 4.08 0 0 1 1.69 3c.08 32.3.13 64.61-.09 96.91a8.34 8.34 0 0 1-3.35 6.13c-15.19 9-30.59 17.63-45.94 26.36-.15.09-.41 0-1.05 0v-3.73c0-31.65 0-63.3.07-94.95 0-3-.84-4.6-3.46-6.08q-42.39-24-84.67-48.33c-.61-.35-1.23-.79-2.25-1.47z" />
+      <path d="M65.48 191.19v-3.93c0-22.22-.06-44.44.07-66.66 0-2.91-1-4.39-3.42-5.78C42.5 103.75 23 92.54 3.39 81.37c-.93-.53-1.85-1.09-3.39-2 .67-.32 1.06-.47 1.43-.68C14.3 71.29 27.22 64 40 56.47c3.79-2.22 7.06-2.24 10.9 0Q79.45 73 108.18 89.2a4.53 4.53 0 0 1 2.71 4.53q-.14 33.33 0 66.66c0 3.34-1.08 5.89-4 7.57L67.3 190.47a19.1 19.1 0 0 1-1.82.72z" />
+      <path d="M45.43 128.11V180L.05 154z" />
+    </symbol>
+    <symbol id="arr" viewBox="0 0 24 24"><path d="m17 8 4 4m0 0-4 4m4-4H3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="tick" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  </svg>
+
+  <header class="site-header" id="hdr">
+    <div class="wrap">
+      <a class="lockup" href="#top" aria-label="Qonic Systems">
+        <svg fill="#ffd700" aria-hidden="true"><use href="#cube" /></svg>
+        <span class="name">QONIC <span>systems</span></span>
+      </a>
+      <nav class="nav">
+        <a href="#ventures">Ventures</a>
+        <a href="#approach">About</a>
+        <a href="#contact">Contact</a>
+        <a class="btn-sm" id="nav-consulting" href="https://consulting.qonicsystems.com">Consulting Portal</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="top">
+    <!-- Hero -->
+    <section class="hero">
+      <div class="blob blob--1"></div>
+      <div class="blob blob--2"></div>
+      <div class="wrap">
+        <span class="eyebrow rise">One studio · two ventures</span>
+        <h1 class="rise d1">We build and run companies that <em>connect people<span class="mark"></span></em>.</h1>
+        <p class="rise d2">Qonic Systems is the studio behind two ventures — one placing talent where it matters, the other reimagining how photographers work. Different worlds, same obsession with the details.</p>
+        <div class="actions rise d3">
+          <a class="btn btn--dark" href="#ventures">Explore our ventures <svg class="arrow" width="18" height="18"><use href="#arr"/></svg></a>
+          <a class="btn btn--ghost" href="#contact">Get in touch</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- Ventures -->
+    <section class="ventures" id="ventures">
+      <div class="wrap">
+        <div class="section-head reveal">
+          <span class="eyebrow">What we run</span>
+          <h2>Two ventures, built and operated in-house.</h2>
+          <p>We don't just invest — we design, build, and run each product ourselves, end to end.</p>
+        </div>
+
+        <!-- Qonic Consulting -->
+        <article class="venture">
+          <div class="v-content reveal">
+            <span class="badge badge--live"><span class="dot"></span>Live now</span>
+            <h3>Qonic Consulting</h3>
+            <p>A specialist talent and consulting practice. We connect ambitious organisations with the people who move them forward — and run every engagement on our own internal platform, from first brief to placement and beyond.</p>
+            <ul>
+              <li><svg><use href="#tick"/></svg>Recruitment across IT, pharmaceuticals, biotech, medical devices, and corporate functions</li>
+              <li><svg><use href="#tick"/></svg>A consultative, people-first process — not a CV conveyor belt</li>
+              <li><svg><use href="#tick"/></svg>Contracts, timesheets, and delivery managed on one internal system</li>
+            </ul>
+            <a class="btn btn--primary" id="cta-consulting" href="https://consulting.qonicsystems.com">Visit Qonic Consulting <svg class="arrow" width="18" height="18"><use href="#arr"/></svg></a>
+          </div>
+          <div class="v-visual v-visual--consulting reveal">
+            <svg class="v-net" viewBox="0 0 100 100" fill="none" aria-hidden="true">
+              <line class="link" x1="50" y1="50" x2="50" y2="18" /><line class="link" x1="50" y1="50" x2="80" y2="36" />
+              <line class="link" x1="50" y1="50" x2="79" y2="70" /><line class="link" x1="50" y1="50" x2="50" y2="86" />
+              <line class="link" x1="50" y1="50" x2="21" y2="70" /><line class="link" x1="50" y1="50" x2="20" y2="36" />
+              <g class="satellite s1"><circle class="node" cx="50" cy="18" r="11.5"/><circle class="ring" cx="50" cy="18" r="11.5"/><text class="label" x="50" y="18">IT</text></g>
+              <g class="satellite s2"><circle class="node" cx="80" cy="36" r="11.5"/><circle class="ring" cx="80" cy="36" r="11.5"/><text class="label" x="80" y="36">Bio</text></g>
+              <g class="satellite s3"><circle class="node" cx="79" cy="70" r="11.5"/><circle class="ring" cx="79" cy="70" r="11.5"/><text class="label" x="79" y="70">Med</text></g>
+              <g class="satellite s4"><circle class="node" cx="50" cy="86" r="11.5"/><circle class="ring" cx="50" cy="86" r="11.5"/><text class="label" x="50" y="86">Corp</text></g>
+              <g class="satellite s5"><circle class="node" cx="21" cy="70" r="11.5"/><circle class="ring" cx="21" cy="70" r="11.5"/><text class="label" x="21" y="70">Pharma</text></g>
+              <g class="satellite s6"><circle class="node" cx="20" cy="36" r="11.5"/><circle class="ring" cx="20" cy="36" r="11.5"/><text class="label" x="20" y="36">Talent</text></g>
+              <circle class="pulse" cx="50" cy="50" r="13" />
+              <circle class="hub" cx="50" cy="50" r="13" /><text class="hub-label" x="50" y="50">QONIC</text>
+            </svg>
+          </div>
+        </article>
+
+        <!-- Shutterpact -->
+        <article class="venture venture--flip">
+          <div class="v-content reveal">
+            <span class="badge badge--soon"><span class="dot"></span>In development</span>
+            <h3>Shutterpact</h3>
+            <p>A new platform for photographers and the people who hire them — bringing discovery, booking, agreements, and delivery into one place. It's still in the darkroom, but it's coming into focus.</p>
+            <ul>
+              <li><svg><use href="#tick"/></svg>One home for bookings, contracts, and final delivery</li>
+              <li><svg><use href="#tick"/></svg>Built mobile-first for photographers on the move</li>
+              <li><svg><use href="#tick"/></svg>Launching soon — register interest on the preview page</li>
+            </ul>
+            <a class="btn btn--dark" id="cta-shutterpact" href="https://shutterpact.qonicsystems.com">Preview Shutterpact <svg class="arrow" width="18" height="18"><use href="#arr"/></svg></a>
+          </div>
+          <div class="v-visual v-visual--shutterpact reveal">
+            <div class="lens">
+              <svg class="iris" viewBox="0 0 24 24" fill="none" stroke="#ffd700" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="10" />
+                <path d="m14.31 8 5.74 9.94" /><path d="M9.69 8h11.48" /><path d="m7.38 12 5.74-9.94" />
+                <path d="M9.69 16 3.95 6.06" /><path d="M14.31 16H2.83" /><path d="m16.62 12-5.74 9.94" />
+              </svg>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- Approach -->
+    <section id="approach">
+      <div class="wrap">
+        <div class="section-head reveal">
+          <span class="eyebrow">How we work</span>
+          <h2>A studio, not a holding company.</h2>
+          <p>We keep a small team close to the work. That's how the details — the ones customers actually feel — get done right.</p>
+        </div>
+        <div class="grid-3">
+          <div class="value reveal"><span class="num">01</span><h3>Build it ourselves</h3><p>Every venture is designed, built, and operated in-house — no outsourced core, no black boxes.</p></div>
+          <div class="value reveal"><span class="num">02</span><h3>People before process</h3><p>Whether it's a placement or a booking, there's a real person on the other side. We design for them first.</p></div>
+          <div class="value reveal"><span class="num">03</span><h3>Ship, then sharpen</h3><p>We get things live, listen closely, and keep refining. Qonic Consulting runs today; Shutterpact is next.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CTA -->
+    <section id="contact">
+      <div class="wrap">
+        <div class="cta reveal">
+          <h2>Let's talk.</h2>
+          <p>Hiring, partnering, or just curious what we're building? We'd love to hear from you.</p>
+          <a class="btn btn--primary" href="mailto:hello@qonicsystems.com">hello@qonicsystems.com</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <div class="foot-grid">
+        <div>
+          <a class="lockup" href="#top" aria-label="Qonic Systems">
+            <svg fill="#ffd700" aria-hidden="true"><use href="#cube" /></svg>
+            <span class="name">QONIC <span>systems</span></span>
+          </a>
+          <p>A studio building and running two ventures — Qonic Consulting and Shutterpact.</p>
+        </div>
+        <div class="foot-col">
+          <h4>Ventures</h4>
+          <a id="foot-consulting" href="https://consulting.qonicsystems.com">Qonic Consulting</a>
+          <a id="foot-shutterpact" href="https://shutterpact.qonicsystems.com">Shutterpact</a>
+        </div>
+        <div class="foot-col">
+          <h4>Company</h4>
+          <a href="#approach">About</a>
+          <a href="#ventures">Ventures</a>
+          <a href="mailto:hello@qonicsystems.com">Contact</a>
+        </div>
+      </div>
+      <div class="foot-bottom">
+        <span>© <span id="y"></span> Qonic Systems. All rights reserved.</span>
+        <span>hello@qonicsystems.com</span>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    document.getElementById('y').textContent = new Date().getFullYear();
+    requestAnimationFrame(function () { document.body.classList.add('loaded'); });
+
+    (function () {
+      var loc = window.location, port = loc.port ? ':' + loc.port : '';
+      var apex = loc.hostname.replace(/^(www|consulting|shutterpact)\./, '');
+      var to = function (sub) { return loc.protocol + '//' + sub + '.' + apex + port + '/'; };
+      ['nav-consulting', 'cta-consulting', 'foot-consulting'].forEach(function (id) { var e = document.getElementById(id); if (e) e.href = to('consulting'); });
+      ['cta-shutterpact', 'foot-shutterpact'].forEach(function (id) { var e = document.getElementById(id); if (e) e.href = to('shutterpact'); });
+    })();
+
+    var hdr = document.getElementById('hdr');
+    var onScroll = function () { hdr.classList.toggle('scrolled', window.scrollY > 8); };
+    onScroll(); addEventListener('scroll', onScroll, { passive: true });
+
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } });
+    }, { threshold: .18 });
+    document.querySelectorAll('.reveal').forEach(function (el) { io.observe(el); });
+  </script>
+</body>
+</html>

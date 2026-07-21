@@ -1,0 +1,140 @@
+import { ROLE, type RoleKey } from "@/lib/auth/roles";
+
+/**
+ * The permission catalog lives in code because permissions are born with the
+ * features that need them. The seed upserts these into the database so the
+ * admin console can render its toggle matrix from real rows.
+ *
+ * Adding a permission: add it here, re-run the seed, then toggle it on for
+ * whichever roles should have it.
+ */
+export const PERMISSIONS = [
+  // Portal
+  { key: "portal.access", group: "Portal", label: "Access the staff portal", description: "Sign in and see the dashboard.", sortOrder: 10 },
+  { key: "directory.view", group: "Portal", label: "View the team directory", description: "See colleagues' names, roles, and work contact details.", sortOrder: 20 },
+
+  // Contract letters
+  { key: "contract.view_own", group: "Contract letters", label: "View own contract letters", description: "See contract letters issued to you.", sortOrder: 30 },
+  { key: "contract.view_all", group: "Contract letters", label: "View all contract letters", description: "See contract letters for every employee.", sortOrder: 40 },
+  { key: "contract.generate", group: "Contract letters", label: "Generate contract letters", description: "Draft and edit contract letters.", sortOrder: 50 },
+  { key: "contract.submit", group: "Contract letters", label: "Submit for release", description: "Send a draft to leadership for approval.", sortOrder: 60 },
+  { key: "contract.release", group: "Contract letters", label: "Release contract letters", description: "Approve and issue a contract letter to the employee.", sortOrder: 70 },
+  { key: "contract.revoke", group: "Contract letters", label: "Revoke contract letters", description: "Withdraw a letter that was already released.", sortOrder: 80 },
+
+  // Delivery
+  { key: "client.view", group: "Delivery", label: "View clients", description: "See the client list and their projects.", sortOrder: 40 },
+  { key: "client.manage", group: "Delivery", label: "Manage clients", description: "Create and edit clients and their contacts.", sortOrder: 42 },
+  { key: "project.view", group: "Delivery", label: "View projects", description: "See every project, not only the ones you are on.", sortOrder: 44 },
+  { key: "project.manage", group: "Delivery", label: "Manage projects", description: "Create projects, set budgets, and assign people.", sortOrder: 46 },
+  { key: "timesheet.submit", group: "Delivery", label: "Record time", description: "Fill in and submit your own weekly timesheet.", sortOrder: 48 },
+  { key: "timesheet.approve", group: "Delivery", label: "Approve timesheets", description: "Approve or reject submitted timesheets.", sortOrder: 50 },
+  { key: "report.utilization", group: "Delivery", label: "View utilisation reports", description: "See billable ratios and capacity across the team.", sortOrder: 52 },
+
+  // Recruitment
+  { key: "job.view", group: "Recruitment", label: "View jobs", description: "See open requisitions and their pipelines.", sortOrder: 54 },
+  { key: "job.manage", group: "Recruitment", label: "Manage jobs", description: "Create requisitions and publish them to the careers page.", sortOrder: 56 },
+  { key: "candidate.view", group: "Recruitment", label: "View candidates", description: "See candidate records and CVs.", sortOrder: 58 },
+  { key: "candidate.manage", group: "Recruitment", label: "Manage candidates", description: "Add candidates and move applications through the pipeline.", sortOrder: 60 },
+  { key: "placement.manage", group: "Recruitment", label: "Record placements", description: "Mark a candidate placed and set the fee.", sortOrder: 62 },
+
+  // Finance
+  { key: "invoice.view", group: "Finance", label: "View invoices", description: "See invoices and what is outstanding.", sortOrder: 64 },
+  { key: "invoice.manage", group: "Finance", label: "Manage invoices", description: "Raise invoices, issue them, and void them.", sortOrder: 66 },
+  { key: "payment.record", group: "Finance", label: "Record payments", description: "Log payments received against an invoice.", sortOrder: 68 },
+  { key: "expense.submit", group: "Finance", label: "Claim expenses", description: "Submit your own expense claims.", sortOrder: 70 },
+  { key: "expense.approve", group: "Finance", label: "Approve expenses", description: "Approve, reject, and mark expenses reimbursed.", sortOrder: 72 },
+  { key: "report.finance", group: "Finance", label: "View finance reports", description: "Revenue, receivables ageing, and placement fees.", sortOrder: 74 },
+
+  // Leave
+  { key: "leave.request", group: "Leave", label: "Request leave", description: "Submit leave requests and see your own balances.", sortOrder: 82 },
+  { key: "leave.approve", group: "Leave", label: "Approve leave", description: "Approve or reject leave for the people who report to you.", sortOrder: 84 },
+  { key: "leave.manage", group: "Leave", label: "Manage leave for everyone", description: "See and decide any request, and adjust entitlements.", sortOrder: 86 },
+
+  // People administration
+  { key: "admin.access", group: "Administration", label: "Access the admin console", description: "Open the administration area.", sortOrder: 90 },
+  { key: "user.view", group: "Administration", label: "View staff accounts", description: "List and inspect user accounts.", sortOrder: 100 },
+  { key: "user.manage", group: "Administration", label: "Edit staff profiles", description: "Create accounts and edit their details. Limited to roles junior to your own.", sortOrder: 110 },
+  { key: "user.deactivate", group: "Administration", label: "Deactivate staff accounts", description: "Suspend or restore an account. Suspending signs the person out everywhere.", sortOrder: 112 },
+  { key: "user.delete", group: "Administration", label: "Remove staff accounts", description: "Permanently delete an account. Blocked when the person has contract letters on record.", sortOrder: 114 },
+  { key: "rbac.manage", group: "Administration", label: "Manage roles and permissions", description: "Create roles and toggle what each role can do. Equivalent to full control.", sortOrder: 120 },
+  { key: "audit.view", group: "Administration", label: "View the audit log", description: "Read the record of privileged actions.", sortOrder: 130 },
+] as const satisfies ReadonlyArray<{
+  key: string;
+  group: string;
+  label: string;
+  description: string;
+  sortOrder: number;
+}>;
+
+export type PermissionKey = (typeof PERMISSIONS)[number]["key"];
+
+/**
+ * Permissions switched ON for each role at seed time. The CEO is intentionally
+ * absent — `isSuperAdmin` grants everything, so seeding rows for them would be
+ * misleading and would imply their access could be toggled off.
+ *
+ * These are only DEFAULTS. Once seeded, the CEO owns these switches at runtime.
+ */
+export const DEFAULT_ROLE_PERMISSIONS: Readonly<Record<Exclude<RoleKey, "ceo">, ReadonlyArray<PermissionKey>>> = {
+  [ROLE.CO_FOUNDER]: [
+    "portal.access", "directory.view",
+    "contract.view_own", "contract.view_all", "contract.release",
+    "client.view", "client.manage", "project.view", "project.manage",
+    "timesheet.submit", "timesheet.approve", "report.utilization",
+    "job.view", "job.manage", "candidate.view", "candidate.manage", "placement.manage",
+    "invoice.view", "invoice.manage", "payment.record", "expense.submit", "expense.approve", "report.finance",
+    "leave.request", "leave.approve", "leave.manage",
+    "admin.access", "user.view", "audit.view",
+  ],
+  [ROLE.HR]: [
+    "portal.access", "directory.view",
+    "contract.view_own", "contract.view_all", "contract.generate", "contract.submit",
+    "client.view", "project.view", "timesheet.submit", "report.utilization",
+    "job.view", "candidate.view", "expense.submit",
+    "leave.request", "leave.approve", "leave.manage",
+    "admin.access", "user.view", "user.manage",
+  ],
+  [ROLE.ACCOUNTS]: ["portal.access", "directory.view", "contract.view_own", "leave.request", "client.view", "project.view", "timesheet.submit", "report.utilization", "invoice.view", "invoice.manage", "payment.record", "expense.submit", "expense.approve", "report.finance"],
+  [ROLE.PROJECTS]: ["portal.access", "directory.view", "contract.view_own", "leave.request", "leave.approve", "client.view", "client.manage", "project.view", "project.manage", "timesheet.submit", "timesheet.approve", "report.utilization", "job.view", "job.manage", "candidate.view", "candidate.manage", "placement.manage", "invoice.view", "expense.submit"],
+  [ROLE.EMPLOYEE]: ["portal.access", "directory.view", "contract.view_own", "leave.request", "timesheet.submit", "expense.submit"],
+};
+
+/** Granting this is equivalent to granting everything, so it stays CEO-only. */
+export const SUPER_ADMIN_ONLY_PERMISSIONS: ReadonlySet<string> = new Set(["rbac.manage"]);
+
+// --------------------------------------------------------------- resolution --
+
+export type ResolverRole = { isSuperAdmin: boolean };
+export type ResolverOverride = { permissionKey: string; effect: "ALLOW" | "DENY"; expiresAt: Date | null };
+
+/**
+ * Resolves a user's effective permissions. Pure on purpose: no database, no
+ * clock beyond the injected `now`, so every precedence rule is directly testable.
+ *
+ * Precedence, highest first:
+ *   1. super admin        → allow everything
+ *   2. override DENY      → deny (beats a role grant)
+ *   3. override ALLOW     → allow
+ *   4. role toggle on     → allow
+ *   5. otherwise          → deny by default
+ *
+ * Expired overrides are ignored entirely, which makes temporary elevation
+ * self-cleaning without a scheduled job.
+ */
+export function resolvePermissions(
+  role: ResolverRole,
+  enabledRolePermissions: ReadonlyArray<string>,
+  overrides: ReadonlyArray<ResolverOverride>,
+  now: Date = new Date(),
+): ReadonlySet<string> {
+  if (role.isSuperAdmin) return new Set(PERMISSIONS.map((permission) => permission.key));
+
+  const effective = new Set<string>(enabledRolePermissions);
+  const live = overrides.filter((override) => !override.expiresAt || override.expiresAt > now);
+
+  for (const override of live) if (override.effect === "ALLOW") effective.add(override.permissionKey);
+  // DENY applied last so it always wins, whatever the role or an ALLOW said.
+  for (const override of live) if (override.effect === "DENY") effective.delete(override.permissionKey);
+
+  return effective;
+}

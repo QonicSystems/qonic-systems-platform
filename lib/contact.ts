@@ -8,7 +8,8 @@ export type ContactPayload = {
 
 export type ContactErrors = Partial<Record<keyof ContactPayload, string>>;
 
-const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+/** Shared with lib/auth/login.ts so "valid email" has one definition app-wide. */
+export const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function validateContactPayload(value: unknown): {
   data?: ContactPayload;

@@ -1,0 +1,37 @@
+# LOCAL TESTING ONLY — plain HTTP, no Let's Encrypt.
+#
+# Uses *.localhost hostnames, which every browser and Chromium resolves to
+# 127.0.0.1 automatically (no /etc/hosts editing needed). The production routing
+# lives in ./Caddyfile — this file exists purely to simulate the stack on a laptop.
+#
+#   docker compose -f docker-compose.local.yml up --build
+#   → http://qonicsystems.localhost
+#   → http://consulting.qonicsystems.localhost
+#   → http://shutterpact.qonicsystems.localhost
+
+{
+	auto_https off
+	admin off
+}
+
+http://qonicsystems.localhost {
+	encode gzip
+	root * /srv/landing
+	file_server
+}
+
+http://consulting.qonicsystems.localhost {
+	encode gzip
+	reverse_proxy app:3000
+}
+
+http://shutterpact.qonicsystems.localhost {
+	encode gzip
+	root * /srv/shutterpact
+	header Retry-After 3600
+	error * 503
+	handle_errors {
+		rewrite * /index.html
+		file_server
+	}
+}

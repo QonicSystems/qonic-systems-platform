@@ -1,0 +1,70 @@
+# Qonic Systems — the whole stack on one VPS:
+#   • caddy  — HTTPS + routing for all three hostnames (see deploy/Caddyfile)
+#   • app    — Qonic Consulting (this Next.js app)
+#   • db     — PostgreSQL
+#
+#   1. Copy .env.example to .env and fill in the real values (see docs/DEPLOY.md).
+#   2. Set POSTGRES_PASSWORD in .env.
+#   3. Point the three DNS records at this server, then: docker compose up -d --build
+#
+# Caddy fetches Let's Encrypt certificates automatically for every hostname in
+# deploy/Caddyfile, so DNS must resolve to this box before it starts.
+
+services:
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./deploy/sites:/srv:ro
+      - caddy-data:/data      # certificates — must persist across restarts
+      - caddy-config:/config
+
+
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: qonic
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+      POSTGRES_DB: qonic
+    volumes:
+      - qonic-db:/var/lib/postgresql/data
+    healthcheck:
+      # The app waits for this before migrating, so a cold start doesn't race the DB.
+      test: ["CMD-SHELL", "pg_isready -U qonic -d qonic"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # Not published to the host — only the app container reaches it.
+    expose:
+      - "5432"
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    # Secrets (bootstrap CEO, ENCRYPTION_KEY, SMTP) come from .env …
+    env_file:
+      - .env
+    # … but the DB host must point at the `db` service, so it is set here and
+    # overrides whatever DATABASE_URL is in .env (which is for local development).
+    environment:
+      DATABASE_URL: postgresql://qonic:${POSTGRES_PASSWORD:-change-me}@db:5432/qonic
+      NODE_ENV: production
+    # Reachable only from the server itself (curl localhost:3000) for debugging —
+    # the public internet reaches the app through Caddy, never this port directly.
+    ports:
+      - "127.0.0.1:3000:3000"
+
+volumes:
+  qonic-db:
+  caddy-data:
+  caddy-config:
