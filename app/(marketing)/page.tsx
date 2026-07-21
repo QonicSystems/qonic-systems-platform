@@ -5,6 +5,7 @@ import { Reveal } from "@/components/reveal";
 import { SectionHeading } from "@/components/section-heading";
 import { Stats } from "@/components/stats";
 import { TestimonialCarousel } from "@/components/testimonial-carousel";
+import { TypingHeadline } from "@/components/typing-headline";
 
 const clients = ["TechFlow Solutions", "MedTech Innovators", "NovaBio Therapeutics", "GlobalPharma Inc.", "Helix Biosciences", "Northwind Corporate"];
 
@@ -16,8 +17,7 @@ export default function HomePage() {
       <div className="aurora aurora--two" aria-hidden="true" />
       <div className="site-container relative grid items-center gap-14 py-32 lg:min-h-screen lg:grid-cols-[1.05fr_1fr] lg:py-24">
         <div>
-          <p className="hero-pill hero-in"><span />Talent &amp; Consulting Solutions</p>
-          <h1 className="hero-in" style={{ "--reveal-delay": "90ms" } as React.CSSProperties}>Connecting Talent. <span>Creating Tomorrow.</span></h1>
+          <TypingHeadline />
           <p className="hero-copy hero-in" style={{ "--reveal-delay": "180ms" } as React.CSSProperties}>We help ambitious companies and professionals connect with opportunity, insight, and lasting impact.</p>
           <div className="hero-in flex flex-wrap gap-4" style={{ "--reveal-delay": "270ms" } as React.CSSProperties}>
             <a href="/contact" className="button button-primary button-large">Start a Conversation <ArrowRight /></a>
@@ -28,10 +28,32 @@ export default function HomePage() {
           <div className="network-visual" aria-hidden="true">
             <span className="float-card float-card--a"><i><IndustryIcon name="code" /></i><span><strong>850+</strong><small>Placements made</small></span></span>
             <span className="float-card float-card--b"><i><IndustryIcon name="heart" /></i><span><strong>96%</strong><small>Client retention</small></span></span>
-            <svg viewBox="0 0 500 500" fill="none">
-              <path d="m250 100 150 100-50 150-100 70-100-70-50-150 150-100Zm0 150 100-50m-100 50-100-50m100 0v-150m0 150-100 100m100-100 100 100" />
-              <circle cx="250" cy="100" r="30" /><circle cx="100" cy="200" r="33" /><circle cx="400" cy="200" r="33" /><circle cx="250" cy="250" r="38" /><circle cx="150" cy="350" r="33" /><circle cx="350" cy="350" r="29" /><circle cx="250" cy="420" r="31" />
-              <text x="250" y="105">IT</text><text x="100" y="205">Pharma</text><text x="400" y="205">Biotech</text><text x="250" y="256">QONIC</text><text x="150" y="355">Devices</text><text x="350" y="355">Corp</text><text x="250" y="426">Talent</text>
+            <svg className="net" viewBox="0 0 500 500" fill="none">
+              {/* soft glow behind the constellation */}
+              <circle className="net-glow" cx="250" cy="250" r="185" />
+              {/* clean radial spokes: hub → each industry */}
+              <g className="net-links">
+                <line x1="250" y1="250" x2="250" y2="100" /><line x1="250" y1="250" x2="380" y2="175" />
+                <line x1="250" y1="250" x2="380" y2="325" /><line x1="250" y1="250" x2="250" y2="400" />
+                <line x1="250" y1="250" x2="120" y2="325" /><line x1="250" y1="250" x2="120" y2="175" />
+              </g>
+              {/* a spark travelling each spoke toward the hub */}
+              <g className="net-flows">
+                <line x1="250" y1="250" x2="250" y2="100" /><line x1="250" y1="250" x2="380" y2="175" />
+                <line x1="250" y1="250" x2="380" y2="325" /><line x1="250" y1="250" x2="250" y2="400" />
+                <line x1="250" y1="250" x2="120" y2="325" /><line x1="250" y1="250" x2="120" y2="175" />
+              </g>
+              {/* industry nodes */}
+              <g className="net-node n1"><circle cx="250" cy="100" r="34" /><text x="250" y="100">IT</text></g>
+              <g className="net-node n2"><circle cx="380" cy="175" r="34" /><text x="380" y="175">Biotech</text></g>
+              <g className="net-node n3"><circle cx="380" cy="325" r="34" /><text x="380" y="325">Corp</text></g>
+              <g className="net-node n4"><circle cx="250" cy="400" r="34" /><text x="250" y="400">Talent</text></g>
+              <g className="net-node n5"><circle cx="120" cy="325" r="34" /><text x="120" y="325">Devices</text></g>
+              <g className="net-node n6"><circle cx="120" cy="175" r="34" /><text x="120" y="175">Pharma</text></g>
+              {/* the hub */}
+              <circle className="net-hub-pulse" cx="250" cy="250" r="50" />
+              <circle className="net-hub" cx="250" cy="250" r="50" />
+              <text className="net-hub-label" x="250" y="250">QONIC</text>
             </svg>
           </div>
         </div>

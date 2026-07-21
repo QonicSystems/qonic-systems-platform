@@ -22,11 +22,11 @@ export default async function DirectoryPage() {
 
     <div className="portal-grid">
       {people.map((person) => <article key={person.id} className="portal-card portal-card--person">
-        <Avatar name={person.name} photoUrl={person.photoUrl} size={48} />
+        <Avatar name={person.name} photoUrl={person.photoUrl} size={64} />
         <div>
           <strong>{person.name}</strong>
           <p>{person.jobTitle ?? person.role.label}</p>
-          <a className="text-link" href={`mailto:${person.email}`}>{person.email}</a>
+          <a className="text-link" href={`mailto:${person.email}`} title={person.email}>{person.email}</a>
           {person.phone && <p className="portal-muted">{person.phone}</p>}
           {person.manager && <p className="portal-muted">Reports to {person.manager.name}</p>}
         </div>
