@@ -268,6 +268,9 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 .auth-shell { position: relative; display: grid; min-height: 100dvh; place-content: center; gap: 1.5rem; overflow: hidden; padding: 2rem 1.25rem; background: var(--canvas); }
 .auth-aurora { position: absolute; top: -20rem; left: 50%; width: 46rem; height: 46rem; transform: translateX(-50%); border-radius: 999px; background: radial-gradient(circle, rgb(255 215 0 / .10), transparent 65%); filter: blur(70px); pointer-events: none; }
 .auth-card { position: relative; width: min(100%, 27rem); border: 1px solid var(--line); border-radius: 1.4rem; background: #fff; padding: clamp(1.75rem, 5vw, 2.5rem); box-shadow: var(--shadow-lg); }
+/* The brand link is inline-flex (for the header/footer), so on its own it hugs
+   its content and sits left. In the auth card it must be centred. */
+.auth-card .brand { display: flex; justify-content: center; }
 .auth-title { margin: 0 0 .5rem; color: var(--ink); font-family: var(--font-display), sans-serif; font-size: 1.6rem; font-weight: 800; letter-spacing: -.03em; }
 .auth-subtitle { margin: 0 0 1.75rem; color: var(--body); font-size: .95rem; line-height: 1.6; }
 .auth-footnote { position: relative; margin: 0; color: var(--faint); font-size: .82rem; text-align: center; }

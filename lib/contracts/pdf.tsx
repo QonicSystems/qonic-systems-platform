@@ -1,6 +1,6 @@
 import { Document, Image, Page, StyleSheet, Text, View, renderToBuffer } from "@react-pdf/renderer";
 import { formatDate, formatSalary, type ContractPayload } from "@/lib/contracts/payload";
-import { PdfLockup } from "@/lib/pdf-brand";
+import { PdfLockup, PdfParentMark } from "@/lib/pdf-brand";
 import { FIELD_LABELS, findTemplate, type LetterTemplate } from "@/lib/contracts/templates";
 
 export type LetterContext = {
@@ -53,8 +53,9 @@ function LetterDocument({ template, context }: { template: LetterTemplate; conte
     <Page size="A4" style={styles.page}>
       <View style={styles.header}>
         <PdfLockup />
-        <View>
-          <Text style={styles.meta}>Reference: {context.reference}</Text>
+        <View style={{ alignItems: "flex-end" }}>
+          <PdfParentMark />
+          <Text style={[styles.meta, { marginTop: 8 }]}>Reference: {context.reference}</Text>
           <Text style={styles.meta}>Issued: {formatDate(context.releasedAt.toISOString().slice(0, 10))}</Text>
         </View>
       </View>

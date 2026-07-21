@@ -1,5 +1,5 @@
 import { Document, Page, StyleSheet, Text, View, renderToBuffer } from "@react-pdf/renderer";
-import { PdfLockup } from "@/lib/pdf-brand";
+import { PdfLockup, PdfParentMark } from "@/lib/pdf-brand";
 import { formatMoney, formatQuantity } from "@/lib/money";
 
 export type InvoiceContext = {
@@ -59,8 +59,9 @@ function InvoiceDocument({ context }: { context: InvoiceContext }) {
           <PdfLockup />
           <Text style={styles.meta}>Global Plaza, Innovation District, Suite 400</Text>
         </View>
-        <View>
-          <Text style={styles.title}>INVOICE</Text>
+        <View style={{ alignItems: "flex-end" }}>
+          <PdfParentMark />
+          <Text style={[styles.title, { marginTop: 8 }]}>INVOICE</Text>
           <Text style={styles.number}>{context.number}</Text>
         </View>
       </View>

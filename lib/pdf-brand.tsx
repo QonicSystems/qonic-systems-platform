@@ -24,8 +24,20 @@ const styles = StyleSheet.create({
   taglineText: { fontSize: 6.5, color: "#8a6a08", letterSpacing: 0.9 },
   // The rules flex so they always meet the text, as on the site.
   rule: { flexGrow: 1, height: 1, backgroundColor: "#8a6a08" },
+
+  // Parent endorsement (right of the letterhead): the Qonic Systems mark, sized
+  // and coloured to read as secondary to the issuing vertical on the left.
+  parent: { flexDirection: "column", alignItems: "flex-end" },
+  parentLabel: { fontSize: 5.5, color: "#8a8a8a", letterSpacing: 0.8, marginBottom: 2 },
+  parentRow: { flexDirection: "row", alignItems: "center", gap: 3 },
+  parentMark: { width: 11, height: 11.6 },
+  parentName: { fontSize: 10.5, fontWeight: 700, color: "#111111" },
+  parentSoft: { fontWeight: 400, color: "#111111" },
 });
 
+/**
+ * The issuing vertical's lockup — Qonic Consulting — for the LEFT of a letterhead.
+ */
 export function PdfLockup() {
   return (
     <View style={styles.lockup}>
@@ -40,6 +52,25 @@ export function PdfLockup() {
         <View style={styles.rule} />
         <Text style={styles.taglineText}>{site.tagline}</Text>
         <View style={styles.rule} />
+      </View>
+    </View>
+  );
+}
+
+/**
+ * The parent company mark — Qonic Systems — for the RIGHT of a letterhead.
+ * Qonic Consulting is a venture of Qonic Systems, so every document carries both:
+ * the vertical that issued it on the left, the parent on the right.
+ */
+export function PdfParentMark() {
+  return (
+    <View style={styles.parent}>
+      <Text style={styles.parentLabel}>A VENTURE OF</Text>
+      <View style={styles.parentRow}>
+        <Svg viewBox={LOGO_VIEWBOX} style={styles.parentMark}>
+          {LOGO_PATHS.map((d) => <Path key={d} d={d} fill={site.brand.mark} />)}
+        </Svg>
+        <Text style={styles.parentName}>QONIC<Text style={styles.parentSoft}> systems</Text></Text>
       </View>
     </View>
   );
