@@ -14,6 +14,20 @@ function createClient() {
 // reload would construct a new client and exhaust the connection pool in minutes.
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 
-export const db: PrismaClient = globalForPrisma.prisma ?? createClient();
+function getClient() {
+  if (!globalForPrisma.prisma) {
+    globalForPrisma.prisma = createClient();
+  }
+  return globalForPrisma.prisma;
+}
 
-if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = db;
+// Next imports route modules while collecting build metadata. Creating the
+// client at module scope would make that import require DATABASE_URL, even
+// though no request (and therefore no database operation) is being handled.
+// Keep the same `db` API, but create the client only when it is first used.
+export const db = new Proxy({} as PrismaClient, {
+  get(_target, property) {
+    const value = Reflect.get(getClient(), property);
+    return typeof value === "function" ? value.bind(getClient()) : value;
+  },
+});
