@@ -3,6 +3,8 @@ node_modules/
 coverage/
 test-results/
 playwright-report/
+next-env.d.ts
+*.tsbuildinfo
 
 # Environment — Prisma (migrate/seed/studio) reads a plain `.env` by default,
 # so it must be ignored or DATABASE_URL gets committed.
@@ -15,3 +17,4 @@ lib/generated/
 
 /lib/generated/prisma
 .storage/
+.vercel

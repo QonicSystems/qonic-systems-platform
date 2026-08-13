@@ -7,7 +7,10 @@ import { PrismaClient } from "@/lib/generated/prisma/client";
 function createClient() {
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) throw new Error("DATABASE_URL is not set.");
-  return new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
+  // Each cold Vercel function instance builds its own pool; pg's default max
+  // of 10 per pool can exhaust a small Postgres's connection limit under
+  // concurrent serverless invocations even with a pooled connection string.
+  return new PrismaClient({ adapter: new PrismaPg({ connectionString, max: 3 }) });
 }
 
 // Dev HMR re-evaluates modules on every edit. Without a globalThis guard each
