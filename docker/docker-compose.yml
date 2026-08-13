@@ -28,7 +28,7 @@ services:
     volumes:
       # Paths are relative to this compose file (docker/), so ../ reaches the repo root.
       - ../deploy/Caddyfile:/etc/caddy/Caddyfile:ro
-      - ../deploy/sites:/srv:ro
+      - ../public:/srv:ro
       - caddy-data:/data      # certificates — must persist across restarts
       - caddy-config:/config
 

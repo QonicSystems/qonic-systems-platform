@@ -29,7 +29,7 @@ services:
     volumes:
       # Paths are relative to this compose file (docker/), so ../ reaches the repo root.
       - ../deploy/Caddyfile.local:/etc/caddy/Caddyfile:ro
-      - ../deploy/sites:/srv:ro
+      - ../public:/srv:ro
 
   db:
     image: postgres:16
