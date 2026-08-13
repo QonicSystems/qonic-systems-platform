@@ -5,6 +5,9 @@ const nextConfig: NextConfig = {
   // A stray lockfile in a parent directory makes Next infer the wrong workspace
   // root; pin it to this project.
   outputFileTracingRoot: import.meta.dirname,
+  // Turbopack infers its own root the same way, and getting it wrong makes it
+  // resolve `next` from the parent and panic. Pin it too.
+  turbopack: { root: import.meta.dirname },
   // Native binary — must not be bundled.
   serverExternalPackages: ["@node-rs/argon2"],
   // Signatures are read from disk at render time, so the tracer cannot see them

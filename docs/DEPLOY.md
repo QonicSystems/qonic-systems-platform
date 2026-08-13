@@ -40,9 +40,10 @@ they build the Docker image and give you a managed Postgres. Expect ~$5/mo app +
 is automatic. Set the same environment variables from `.env.example` in their
 dashboard, and point `DATABASE_URL` at their managed database.
 
-> Not Vercel for the whole thing: it hosts the Next.js part beautifully, but you
-> still need a separate Postgres, and its serverless model fights the always-on
-> database sessions this app relies on. The VPS/PaaS route is simpler here.
+> Vercel hosts the Next.js part beautifully, but you still need a separate
+> Postgres, and its serverless model fights the always-on database sessions this
+> app relies on. If you deploy there anyway, see
+> [Deploying on Vercel](#deploying-on-vercel) for the hostname setup.
 
 ---
 
@@ -100,7 +101,7 @@ can only do that once these DNS **A records** all point at your server's IP:
 
 If your domain isn't `qonicsystems.com`, do a find-and-replace across three files:
 `deploy/Caddyfile` (the hostnames) and the links inside
-`deploy/sites/landing/index.html` and `deploy/sites/shutterpact/index.html`.
+`public/landing/index.html` and `public/shutterpact/index.html`.
 
 ### 6. Start everything
 The compose files live in `docker/`. So you don't repeat the path, set it once
@@ -132,10 +133,53 @@ vertical is ready.
 
 ### The umbrella pages
 The chooser and the Shutterpact placeholder are plain static files in
-`deploy/sites/` — edit the copy or styling there and `docker compose restart caddy`
+`public/landing/` and `public/shutterpact/` — they live under `public/` so that the
+Vercel deployment can serve them too (see "Deploying on Vercel" below), and Caddy
+mounts that same directory at `/srv`. Edit the copy or styling there and
+`docker compose restart caddy`
 to publish. When Shutterpact's web app is ready, change its block in
 `deploy/Caddyfile` from serving the static page to `reverse_proxy` (pointed at its
 container), exactly like the consulting block.
+
+---
+
+## Deploying on Vercel
+
+Vercel has no Caddy, and it does not route by hostname: **every domain attached
+to a project hits the same deployment**. So the split that `deploy/Caddyfile`
+does on the VPS is done in `middleware.ts` instead, keyed on the first label of
+the incoming `Host` header:
+
+| Hostname | Serves | How |
+|---|---|---|
+| `qonicsystems.com`, `www.qonicsystems.com` | The umbrella chooser | rewrite to `public/landing/index.html` |
+| `consulting.qonicsystems.com` | Qonic Consulting (this app) | passes straight through |
+| `shutterpact.qonicsystems.com` | "Still developing" placeholder | `public/shutterpact/index.html`, served `503` |
+| anything else (`localhost`, `*.vercel.app`) | the app | so `next dev`, preview URLs, and the e2e suite are unaffected |
+
+Unknown paths on the parent domain get `public/landing/404.html` with a real
+`404`. Both status codes match what Caddy returns, so the two deployments behave
+the same.
+
+### Setup
+
+1. **Attach all four domains** to the one project — Vercel → Settings → Domains:
+   `qonicsystems.com`, `www.qonicsystems.com`, `consulting.qonicsystems.com`,
+   `shutterpact.qonicsystems.com`. Add `www` as a *domain*, not as a redirect to
+   the apex; the middleware already serves it the chooser.
+2. **Create the DNS records Vercel shows you** on that screen (an `A` record for
+   the apex, `CNAME`s for the subdomains). Use the exact values in the dashboard
+   rather than any written down here — Vercel changes them.
+3. **Set the environment variables** from `.env.example` in Settings →
+   Environment Variables. `DATABASE_URL` must point at a managed Postgres
+   (Neon, Supabase, RDS) — Vercel has no database of its own, and the connection
+   string needs its pooled endpoint, since every serverless invocation opens its
+   own connection.
+4. **Run the migrations** against that database once, from your laptop:
+   `DATABASE_URL="<the production URL>" npm run db:setup`.
+
+If you ever move to a different apex domain, update `siteFor()` in
+`middleware.ts` — it matches the literal label `qonicsystems`.
 
 ---
 
