@@ -1,5 +1,5 @@
 import { PeopleTable, type PersonRow } from "@/components/admin/people-table";
-import { canAdminister, canAssignRole, describeAuthority } from "@/lib/auth/authority";
+import { canAdminister, canAssignRole, canEditIdentity, describeAuthority } from "@/lib/auth/authority";
 import { can, requirePermission } from "@/lib/auth/guard";
 import { db } from "@/lib/db";
 
@@ -27,7 +27,10 @@ export default async function AdminPeoplePage() {
     roleLabel: user.role.label,
     status: user.status,
     lastLoginAt: user.lastLoginAt ? user.lastLoginAt.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : null,
-    canEdit: mayEdit && canAdminister(context, { id: user.id, role: user.role }).ok,
+    // Editing yourself is allowed for identity fields only; the role select is
+    // disabled for your own row and the API refuses a self role change anyway.
+    canEdit: mayEdit && canEditIdentity(context, { id: user.id, role: user.role }).ok,
+    isSelf: user.id === context.user.id,
   }));
 
   const roleOptions = roles.map((role) => ({

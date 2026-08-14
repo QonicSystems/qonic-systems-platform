@@ -29,13 +29,17 @@
   --ease: cubic-bezier(.22, 1, .36, 1);
   --header-h: 5rem;
 
-  /* Shared shell geometry. The marketing header and the portal bar were built
-     separately and drifted — 78rem vs 82rem wide, 5rem vs 4.5rem tall — so the
-     two chromes never quite looked like the same product. Both now read from
-     these, which is what keeps them aligned as either one changes.
-     78rem wins because it is the public site's measure; the portal narrows to
-     match, and its wide tables already scroll inside .matrix-scroll. */
+  /* Shared shell geometry, so the marketing header and the portal bar stay
+     visually related as either one changes.
+
+     The two widths are deliberately NOT the same. Collapsing the portal to the
+     marketing site's 78rem looked tidier but broke the nav: the portal bar
+     carries eight nav groups plus search, bell and avatar, where the marketing
+     bar carries seven links and two buttons. At 78rem the nav overflowed its
+     box by ~22px once the search field appeared, and since .portal-nav centres
+     its content that overflow spilled left across the wordmark. */
   --shell-max: 78rem;
+  --shell-max-portal: 82rem;
   --header-h-compact: 4.5rem;
 }
 
@@ -319,7 +323,7 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 .portal { min-height: 100dvh; background: var(--canvas-sub); }
 .portal-bar { position: sticky; top: 0; z-index: 40; border-bottom: 1px solid var(--line); background: rgb(252 251 249 / .88); backdrop-filter: blur(16px) saturate(1.6); }
 .portal-bar-inner > .brand { flex: 0 0 auto; }
-.portal-bar-inner { display: flex; width: min(100% - 2rem, var(--shell-max)); margin-inline: auto; min-height: var(--header-h-compact); align-items: center; justify-content: space-between; gap: 1rem; }
+.portal-bar-inner { display: flex; width: min(100% - 2rem, var(--shell-max-portal)); margin-inline: auto; min-height: var(--header-h-compact); align-items: center; justify-content: space-between; gap: 1rem; }
 /* No overflow here: an overflow container clips absolutely-positioned
    descendants, which would hide the dropdowns that hang below the bar. The
    nav is only displayed at a width where all groups already fit, so the
@@ -342,7 +346,7 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 .portal-menu-item:hover { background: var(--canvas-sub); }
 .portal-menu-item--danger { border-top: 1px solid var(--line); color: #b91c1c; }
 
-.portal-main { width: min(100% - 2rem, var(--shell-max)); margin-inline: auto; padding-block: clamp(2rem, 4vw, 3rem); }
+.portal-main { width: min(100% - 2rem, var(--shell-max-portal)); margin-inline: auto; padding-block: clamp(2rem, 4vw, 3rem); }
 .portal-page { display: grid; gap: 2rem; }
 .portal-page--narrow { max-width: 44rem; }
 .portal-page-head { display: grid; gap: .35rem; }
@@ -564,7 +568,7 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 
 /* --- Global search, notifications, MFA --- */
 .global-search { position: relative; display: none; flex: 0 0 auto; }
-@media (min-width: 1360px) { .global-search { display: block; } }
+@media (min-width: 1460px) { .global-search { display: block; } }
 .global-search-input { width: 11rem; border: 1px solid var(--line); border-radius: .6rem; background: #fff; padding: .45rem .7rem; font-size: .85rem; }
 .global-search-results { position: absolute; right: 0; top: calc(100% + .4rem); z-index: 50; width: 24rem; max-height: 22rem; overflow-y: auto; border: 1px solid var(--line); border-radius: .8rem; background: #fff; box-shadow: var(--shadow-lg); animation: fade-up .18s var(--ease); }
 .global-search-hit { display: flex; gap: .7rem; align-items: flex-start; padding: .6rem .85rem; text-decoration: none; transition: background .2s; }

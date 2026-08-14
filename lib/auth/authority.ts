@@ -22,8 +22,12 @@ const deny = (reason: string, status: 403 | 409 = 403): AuthorityResult => ({ ok
  * The super admin bypasses the comparison entirely.
  */
 export function canAdminister(actor: AuthContext, target: TargetUser): AuthorityResult {
-  // Editing yourself through the admin console would let anyone with user.manage
-  // change their own role and escalate in a single request.
+  // Stays a blanket denial. This guard also feeds deactivate, delete, GDPR
+  // erase and contract authoring, where acting on yourself is either a footgun
+  // (locking yourself out) or a conflict of interest (writing your own contract
+  // letter). The one case that legitimately needs a self-edit — changing your
+  // own name or email — opts in explicitly at the route instead; see
+  // canEditIdentity below.
   if (actor.user.id === target.id) return deny("You cannot change your own account here. Use your profile instead.", 409);
 
   if (actor.role.isSuperAdmin) return ALLOWED;
@@ -35,6 +39,34 @@ export function canAdminister(actor: AuthContext, target: TargetUser): Authority
     return deny(`You can only manage people in roles junior to ${actor.role.label}.`);
   }
   return ALLOWED;
+}
+
+/**
+ * Whether `actor` may edit `target`'s identity fields — name, email, phone,
+ * job title. Same as canAdminister except that editing YOURSELF is allowed.
+ *
+ * Exists because a sole super admin otherwise had no route to change their own
+ * email: self-service profile treats email as an identity and refuses it, and
+ * the admin console refused every self-edit, leaving only database access. The
+ * reason that blanket ban existed — self role escalation — is handled by
+ * canChangeOwnRole, which the same route checks separately.
+ */
+export function canEditIdentity(actor: AuthContext, target: TargetUser): AuthorityResult {
+  if (actor.user.id === target.id) return ALLOWED;
+  return canAdminister(actor, target);
+}
+
+/**
+ * Refuses a self role change.
+ *
+ * This is the half of the blanket self-edit ban that actually mattered: without
+ * it, anyone holding `user.manage` could promote themselves in a single
+ * request. Identity fields are safe to self-edit; the role is not.
+ */
+export function canChangeOwnRole(actor: AuthContext, target: TargetUser, roleChanged: boolean): AuthorityResult {
+  if (!roleChanged) return ALLOWED;
+  if (actor.user.id !== target.id) return ALLOWED;
+  return deny("You cannot change your own role. Ask another administrator.", 409);
 }
 
 /**

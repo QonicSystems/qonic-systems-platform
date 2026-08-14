@@ -16,6 +16,8 @@ export type PersonRow = {
   lastLoginAt: string | null;
   /** Computed on the server from the viewer's seniority. */
   canEdit: boolean;
+  /** The viewer's own row: identity is editable, role and removal are not. */
+  isSelf: boolean;
 };
 
 type RoleOption = { id: string; label: string; assignable: boolean };
@@ -77,10 +79,10 @@ export function PeopleTable({ people, roles, canDeactivate, canDelete }: {
             <td>
               {person.canEdit ? <div className="row-actions">
                 <button type="button" className="row-action" onClick={() => { setEditing(person); setNotice(null); }} disabled={busy}>Edit</button>
-                {canDeactivate && <button type="button" className="row-action" onClick={() => toggleStatus(person)} disabled={busy}>
+                {canDeactivate && !person.isSelf && <button type="button" className="row-action" onClick={() => toggleStatus(person)} disabled={busy}>
                   {person.status === "ACTIVE" ? "Deactivate" : "Reactivate"}
                 </button>}
-                {canDelete && <button type="button" className="row-action row-action--danger" onClick={() => { setConfirming(person); setNotice(null); }} disabled={busy}>Remove</button>}
+                {canDelete && !person.isSelf && <button type="button" className="row-action row-action--danger" onClick={() => { setConfirming(person); setNotice(null); }} disabled={busy}>Remove</button>}
               </div> : <span className="row-locked">No access</span>}
             </td>
           </tr>)}
@@ -159,11 +161,12 @@ function EditDialog({ person, roles, busy, onClose, onSave }: {
           </div>
           <div className="sm:col-span-2">
             <label htmlFor="edit-role">Role <em>*</em></label>
-            <select id="edit-role" value={data.roleId} onChange={(event) => update("roleId", event.target.value)} aria-invalid={Boolean(errors.roleId)}>
+            <select id="edit-role" value={data.roleId} onChange={(event) => update("roleId", event.target.value)} disabled={person.isSelf} aria-invalid={Boolean(errors.roleId)}>
               {roles.map((role) => <option key={role.id} value={role.id} disabled={!role.assignable && role.id !== person.roleId}>
                 {role.label}{!role.assignable && role.id !== person.roleId ? " — not assignable by you" : ""}
               </option>)}
             </select>
+            {person.isSelf ? <p className="field-hint">You cannot change your own role — ask another administrator.</p> : null}
             {errors.roleId ? <p className="form-error">{errors.roleId}</p>
               : <p className="field-hint">Changing someone&apos;s role signs them out so their new access takes effect.</p>}
           </div>

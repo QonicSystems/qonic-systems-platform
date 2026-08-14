@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { clientIp, recordAudit } from "@/lib/audit";
-import { canAdminister, canAssignRole } from "@/lib/auth/authority";
+import { canAdminister, canAssignRole, canChangeOwnRole, canEditIdentity } from "@/lib/auth/authority";
 import { guardRoute } from "@/lib/auth/guard";
 import { emailPattern } from "@/lib/contact";
 import { db } from "@/lib/db";
@@ -20,7 +20,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const target = await db.user.findUnique({ where: { id }, include: withRole });
   if (!target) return NextResponse.json({ message: "That account no longer exists." }, { status: 404 });
 
-  const authority = canAdminister(context, target);
+  const authority = canEditIdentity(context, target);
   if (!authority.ok) return NextResponse.json({ message: authority.reason }, { status: authority.status });
 
   let body: unknown;
@@ -53,6 +53,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (Object.keys(errors).length) return NextResponse.json({ message: "Please correct the highlighted fields.", errors }, { status: 422 });
 
   const roleChanged = nextRole!.id !== target.roleId;
+
+  // Self-edits are permitted for identity but never for role, so this is
+  // checked separately from canAdminister rather than folded into it.
+  const ownRole = canChangeOwnRole(context, target, roleChanged);
+  if (!ownRole.ok) return NextResponse.json({ message: ownRole.reason }, { status: ownRole.status });
+
   if (roleChanged) {
     const assignable = canAssignRole(context, nextRole!);
     if (!assignable.ok) return NextResponse.json({ message: assignable.reason }, { status: assignable.status });

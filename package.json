@@ -9,6 +9,7 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
+    "check:services": "tsx scripts/check-services.ts",
     "test": "vitest run",
     "test:e2e": "playwright test",
     "db:generate": "prisma generate",
@@ -20,6 +21,7 @@
     "db:setup": "npm run db:deploy && npm run db:seed",
     "db:setup:test": "tsx prisma/setup-test-db.ts",
     "db:set-password": "tsx prisma/set-password.ts",
+    "db:set-email": "tsx prisma/set-email.ts",
     "db:seed:holidays": "tsx prisma/seed-holidays.ts"
   },
   "dependencies": {
