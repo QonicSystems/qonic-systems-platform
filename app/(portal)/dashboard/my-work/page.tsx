@@ -20,7 +20,20 @@ export default async function MyWorkPage() {
 
   const [timesheets, leave, expenses, contracts] = await Promise.all([
     can(context, "timesheet.submit")
-      ? db.timesheet.findMany({ where: { userId, status: { in: ["DRAFT", "SUBMITTED", "REJECTED"] } }, orderBy: { weekStart: "desc" }, take: 5, select: { id: true, weekStart: true, status: true } })
+      // A DRAFT with no entries is not outstanding work: /timesheets upserts a
+      // sheet for the current week on every visit, so merely opening that page
+      // creates one. Only drafts with time recorded are worth chasing.
+      ? db.timesheet.findMany({
+          where: {
+            userId,
+            OR: [
+              { status: { in: ["SUBMITTED", "REJECTED"] } },
+              { status: "DRAFT", entries: { some: {} } },
+            ],
+          },
+          orderBy: { weekStart: "desc" }, take: 5,
+          select: { id: true, weekStart: true, status: true },
+        })
       : [],
     can(context, "leave.request")
       ? db.leaveRequest.findMany({ where: { userId, status: "PENDING" }, orderBy: { startDate: "asc" }, take: 5, include: { leaveType: { select: { label: true } } } })

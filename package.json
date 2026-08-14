@@ -22,6 +22,7 @@
     "db:setup:test": "tsx prisma/setup-test-db.ts",
     "db:set-password": "tsx prisma/set-password.ts",
     "db:set-email": "tsx prisma/set-email.ts",
+    "db:add-user": "tsx prisma/add-user.ts",
     "db:seed:holidays": "tsx prisma/seed-holidays.ts"
   },
   "dependencies": {
