@@ -1,7 +1,8 @@
 import { cache } from "react";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { NextResponse } from "next/server";
+import { crossSiteRejection } from "@/lib/http/same-origin";
 import { db } from "@/lib/db";
 import { resolvePermissions } from "@/lib/auth/permissions";
 import { ABSOLUTE_TTL_MS, IDLE_TTL_MS, REFRESH_AFTER_MS, SESSION_COOKIE, hashSessionToken, sessionCookieOptions } from "@/lib/auth/session";
@@ -98,6 +99,14 @@ export async function requirePermission(permission: string, nextPath?: string): 
 export async function guardRoute(
   permission?: string,
 ): Promise<{ context: AuthContext; response?: never } | { context?: never; response: NextResponse }> {
+  // Every protected route funnels through here, so this is the one place a
+  // CSRF check covers all of them. Read from next/headers rather than taking a
+  // Request parameter: getAuthContext() already calls cookies(), so a request
+  // scope is a precondition of this function either way, and threading a new
+  // argument through ~40 call sites would be easy to miss one of.
+  const crossSite = crossSiteRejection(await headers());
+  if (crossSite) return { response: crossSite };
+
   const context = await getAuthContext();
   if (!context) return { response: NextResponse.json({ message: "Please sign in to continue." }, { status: 401 }) };
   if (permission && !can(context, permission)) {

@@ -32,16 +32,29 @@ const PORTAL_PREFIXES = [
 type Site = "landing" | "shutterpact" | "app";
 
 /**
- * Which of the three sites a hostname belongs to, decided on its first label so
- * that .com, .localhost, and any future domain all behave the same.
+ * Hostnames that serve the two static sibling sites, matched in full.
  *
+ * This was previously decided on the first label alone, which was neater but
+ * unsafe: `staticSite` below fetches an origin derived from the request, so a
+ * Host of `qonicsystems.attacker.example` also matched "qonicsystems" and would
+ * have made the Edge function fetch the attacker's server and return its HTML
+ * from our own origin. Vercel only routes attached domains and deploy/Caddyfile
+ * matches explicit hostnames, so that was never reachable in production — but
+ * an exact allowlist removes the class of bug rather than relying on the layer
+ * in front. A new hostname now needs a line here, which is the intended
+ * trade-off.
+ */
+const LANDING_HOSTS = new Set(["qonicsystems.com", "www.qonicsystems.com", "qonicsystems.localhost", "www.qonicsystems.localhost"]);
+const SHUTTERPACT_HOSTS = new Set(["shutterpact.qonicsystems.com", "shutterpact.qonicsystems.localhost"]);
+
+/**
  * Anything unrecognised — localhost, 127.0.0.1, *.vercel.app preview URLs — is
  * the app, so `next dev` and the e2e suite keep reaching the portal directly.
  */
 function siteFor(host: string): Site {
-  const label = host.split(":")[0].split(".")[0].toLowerCase();
-  if (label === "shutterpact") return "shutterpact";
-  if (label === "qonicsystems" || label === "www") return "landing";
+  const name = host.split(":")[0].toLowerCase();
+  if (SHUTTERPACT_HOSTS.has(name)) return "shutterpact";
+  if (LANDING_HOSTS.has(name)) return "landing";
   return "app";
 }
 

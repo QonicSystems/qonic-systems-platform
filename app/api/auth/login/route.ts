@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { crossSiteRejection } from "@/lib/http/same-origin";
 import { clientIp, recordAudit } from "@/lib/audit";
 import { validateLoginPayload } from "@/lib/auth/login";
 import { verifyDummyPassword, verifyPassword } from "@/lib/auth/password";
@@ -22,6 +23,9 @@ const LOCKOUT_MS = 15 * 60 * 1000;
 const GENERIC_FAILURE = "Email or password is incorrect.";
 
 export async function POST(request: Request) {
+  const crossSite = crossSiteRejection(request.headers);
+  if (crossSite) return crossSite;
+
   let body: unknown;
   try { body = await request.json(); } catch { return NextResponse.json({ message: "Please submit a valid request." }, { status: 400 }); }
 
@@ -37,8 +41,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: GENERIC_FAILURE }, { status: 401 });
   }
 
+  // A locked account answers exactly like a wrong password. Saying "too many
+  // attempts" would confirm the address is registered, which undoes the work
+  // GENERIC_FAILURE and verifyDummyPassword do above: send 8 junk passwords,
+  // and a change of response on the 9th tells you the account exists.
   if (user.lockedUntil && user.lockedUntil > new Date()) {
-    return NextResponse.json({ message: "Too many failed attempts. Please try again in a few minutes." }, { status: 429 });
+    return NextResponse.json({ message: GENERIC_FAILURE }, { status: 401 });
   }
 
   if (!await verifyPassword(user.passwordHash, data.password)) {

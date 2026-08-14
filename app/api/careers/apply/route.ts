@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { crossSiteRejection } from "@/lib/http/same-origin";
 import { emailPattern } from "@/lib/contact";
 import { db } from "@/lib/db";
 
@@ -14,6 +15,9 @@ type ApplyErrors = Partial<Record<"name" | "email" | "phone" | "resumeUrl" | "co
  * touch an existing candidate's data, or reach a job that is not public.
  */
 export async function POST(request: Request) {
+  const crossSite = crossSiteRejection(request.headers);
+  if (crossSite) return crossSite;
+
   let body: unknown;
   try { body = await request.json(); } catch { return NextResponse.json({ message: "Please submit a valid request." }, { status: 400 }); }
   const input = typeof body === "object" && body !== null ? body as Record<string, unknown> : {};
@@ -47,17 +51,27 @@ export async function POST(request: Request) {
 
   try {
     await db.$transaction(async (tx) => {
-      const candidate = await tx.candidate.upsert({
-        where: { email },
-        // An existing record is NOT overwritten with form data; only missing
-        // details are filled in, so a recruiter's notes survive a re-application.
-        update: {
-          phone: phone || undefined,
-          resumeUrl: resumeUrl || undefined,
-          consentAt: new Date(),
-        },
-        create: { name, email, phone: phone || null, resumeUrl: resumeUrl || null, source: "Careers site", consentAt: new Date(), notes: note || null },
-      });
+      const existingCandidate = await tx.candidate.findUnique({ where: { email } });
+
+      // Anyone can post any email address here, so an existing record must be
+      // treated as belonging to someone else until proven otherwise: only
+      // genuine blanks are filled in. `upsert` with `field || undefined` looks
+      // like it does this but does not — Prisma reads `undefined` as "skip", so
+      // a supplied value overwrote the stored one and a stranger could repoint
+      // a live candidate's CV link at a URL of their choosing. `consentAt` is
+      // likewise left alone: it records when *that person* gave consent, and
+      // must not be refreshed by a third party.
+      const candidate = existingCandidate
+        ? await tx.candidate.update({
+            where: { id: existingCandidate.id },
+            data: {
+              phone: existingCandidate.phone ?? (phone || null),
+              resumeUrl: existingCandidate.resumeUrl ?? (resumeUrl || null),
+            },
+          })
+        : await tx.candidate.create({
+            data: { name, email, phone: phone || null, resumeUrl: resumeUrl || null, source: "Careers site", consentAt: new Date(), notes: note || null },
+          });
 
       const existing = await tx.application.findUnique({ where: { jobId_candidateId: { jobId, candidateId: candidate.id } } });
       if (existing) return; // Silently idempotent.

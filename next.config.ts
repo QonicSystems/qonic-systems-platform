@@ -19,6 +19,32 @@ const nextConfig: NextConfig = {
   // Hides the floating dev-tools badge, which overlapped the hero CTA on small screens.
   // Dev-only UI — it never shipped in production builds.
   devIndicators: false,
+  /**
+   * Security headers. HSTS is deliberately absent — Vercel and Caddy both set
+   * it at the edge, and a second value here would only risk disagreeing.
+   *
+   * `frame-ancestors 'none'` is the load-bearing one: without it the portal can
+   * be framed, and an authenticated CEO can be UI-redressed into clicking
+   * "Deactivate" or confirming an audit purge.
+   *
+   * Note this is NOT a full CSP. A real `default-src 'self'` policy needs
+   * nonces for Next's inline bootstrap scripts, plus allowances for the
+   * reCAPTCHA script and frame — that belongs in its own change with its own
+   * verification, not bundled into a security fix that must ship today.
+   */
+  async headers() {
+    return [{
+      source: "/:path*",
+      headers: [
+        { key: "Content-Security-Policy", value: "frame-ancestors 'none'" },
+        { key: "X-Frame-Options", value: "DENY" },
+        { key: "X-Content-Type-Options", value: "nosniff" },
+        { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+        { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), interest-cohort=()" },
+        { key: "X-DNS-Prefetch-Control", value: "off" },
+      ],
+    }];
+  },
 };
 
 export default nextConfig;

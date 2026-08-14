@@ -1,5 +1,6 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { ErrorPage } from "@/components/error-page";
 import { PortalShell } from "@/components/portal/portal-shell";
 import { can, requireAuth } from "@/lib/auth/guard";
 import { isGroup, portalNavigation, type NavGroup, type NavItem } from "@/lib/portal-nav";
@@ -11,6 +12,13 @@ export const metadata = { robots: { index: false, follow: false } };
 
 export default async function PortalLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const context = await requireAuth();
+
+  // `portal.access` is offered as a toggle in the admin console, so it has to
+  // actually gate something — until now nothing read it and switching it off
+  // changed nothing. Rendered rather than redirected on purpose: every portal
+  // route lives under this layout and /login bounces signed-in visitors back to
+  // /dashboard, so any redirect from here is an infinite loop.
+  if (!can(context, "portal.access")) return <ErrorPage code={403} homeHref="/" />;
 
   // A bootstrapped or admin-reset account must set its own password before it
   // can reach anything else. Checked server-side on every portal render, so it

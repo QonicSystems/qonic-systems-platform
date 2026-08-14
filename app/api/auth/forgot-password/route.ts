@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
+import { crossSiteRejection } from "@/lib/http/same-origin";
 import nodemailer from "nodemailer";
+import { appOrigin } from "@/lib/app-origin";
 import { clientIp, recordAudit } from "@/lib/audit";
 import { RESET_TTL_MS, createResetToken, hashResetToken, resetEmail, resetUrl } from "@/lib/auth/reset";
 import { emailPattern } from "@/lib/contact";
@@ -23,6 +25,9 @@ function smtp() {
 }
 
 export async function POST(request: Request) {
+  const crossSite = crossSiteRejection(request.headers);
+  if (crossSite) return crossSite;
+
   let body: unknown;
   try { body = await request.json(); } catch { return NextResponse.json({ message: "Please submit a valid request." }, { status: 400 }); }
   const input = typeof body === "object" && body !== null ? body as Record<string, unknown> : {};
@@ -48,12 +53,20 @@ export async function POST(request: Request) {
   });
 
   const config = smtp();
-  const url = resetUrl(new URL(request.url).origin, token);
+  const url = resetUrl(appOrigin(), token);
 
   if (!config) {
-    // Without SMTP the link cannot be delivered. Log it so local development
-    // still works, and keep the response neutral.
-    console.warn(`[password-reset] SMTP not configured. Reset link for ${email}: ${url}`);
+    // Without SMTP the link cannot be delivered. Outside production, print it
+    // so local development still works. In production the URL must never be
+    // logged: it is a bearer token valid for an hour, and anyone with log
+    // access — a drain, a shared dashboard, a later leak — could take over any
+    // account by requesting a reset the victim never sees. Log the
+    // misconfiguration instead, and keep the response neutral either way.
+    if (process.env.NODE_ENV === "production") {
+      console.error("[password-reset] SMTP is not configured — reset emails cannot be delivered.");
+    } else {
+      console.warn(`[password-reset] SMTP not configured. Reset link for ${email}: ${url}`);
+    }
     return NextResponse.json({ message: NEUTRAL });
   }
 
