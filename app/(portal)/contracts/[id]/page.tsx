@@ -6,6 +6,7 @@ import { requireAuth } from "@/lib/auth/guard";
 import { formatDate, formatSalary, type ContractPayload } from "@/lib/contracts/payload";
 import { availableTransitions, canEditContent, canViewLetter, describeStatus } from "@/lib/contracts/workflow";
 import { db } from "@/lib/db";
+import { StatusChip } from "@/components/status-chip";
 
 export const metadata = { title: "Contract Letter" };
 
@@ -37,7 +38,7 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
       <p className="eyebrow">{letter.reference}</p>
       <h1 className="portal-title">Contract letter — {letter.subject.name}</h1>
       <p className="portal-lead">
-        <span className={`status-chip status-chip--${letter.status.toLowerCase().replace(/_/g, "-")}`}>{describeStatus(letter.status)}</span>
+        <StatusChip status={letter.status} label={describeStatus(letter.status)} />
         {" "}Drafted by {letter.author.name}.
       </p>
     </header>

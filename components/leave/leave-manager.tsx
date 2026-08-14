@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
+import { StatusChip } from "@/components/status-chip";
 
 export type LeaveTypeOption = { id: string; label: string; colour: string; entitled: number; used: number; tracksBalance: boolean };
 export type LeaveRow = {
@@ -139,7 +140,7 @@ function LeaveTable({ rows, showRequester, busy, onDecide }: {
           <td>{row.from} → {row.to}</td>
           <td>{row.days}</td>
           <td>
-            <span className={`status-chip status-chip--${row.status.toLowerCase()}`}>{row.status.toLowerCase()}</span>
+            <StatusChip status={row.status} />
             {row.decisionNote && <span className="portal-muted">{row.decisionNote}</span>}
           </td>
           <td>

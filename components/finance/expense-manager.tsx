@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
+import { StatusChip } from "@/components/status-chip";
 
 const CATEGORIES = ["Travel", "Accommodation", "Meals", "Software", "Equipment", "Training", "Other"];
 type Row = { id: string; spentOn: string; category: string; amount: string; description: string; project: string; status: string; receiptUrl: string | null; note: string | null };
@@ -49,7 +50,7 @@ export function ExpenseManager({ expenses, projects, today }: {
             <td>{expense.project}</td>
             <td>{expense.amount}</td>
             <td>
-              <span className={`status-chip status-chip--${expense.status.toLowerCase()}`}>{expense.status.toLowerCase()}</span>
+              <StatusChip status={expense.status} />
               {expense.receiptUrl && <a className="portal-muted" href={expense.receiptUrl} target="_blank" rel="noreferrer noopener">Receipt</a>}
             </td>
           </tr>)}

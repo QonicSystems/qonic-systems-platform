@@ -7,6 +7,8 @@ import { verifyCode } from "@/lib/auth/totp";
 import { decrypt, sha256 } from "@/lib/crypto";
 import { ABSOLUTE_TTL_MS, IDLE_TTL_MS, SESSION_COOKIE, createSessionToken, hashSessionToken, safeRedirectPath, sessionCookieOptions } from "@/lib/auth/session";
 import { db } from "@/lib/db";
+import { crossSiteRejection } from "@/lib/http/same-origin";
+import { BUCKETS, rateLimitRejection } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -22,6 +24,16 @@ const LOCKOUT_MS = 15 * 60 * 1000;
 const GENERIC_FAILURE = "Email or password is incorrect.";
 
 export async function POST(request: Request) {
+  const crossSite = crossSiteRejection(request.headers);
+  if (crossSite) return crossSite;
+
+  // Per-IP, where the lockout below is per-account. The lockout stops one
+  // account being brute-forced; it does nothing about one host trying the same
+  // password against every account, and it is itself the lever for locking a
+  // known user out on purpose. Both are per-caller problems.
+  const throttled = await rateLimitRejection(BUCKETS.login, request);
+  if (throttled) return throttled;
+
   let body: unknown;
   try { body = await request.json(); } catch { return NextResponse.json({ message: "Please submit a valid request." }, { status: 400 }); }
 
@@ -37,8 +49,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: GENERIC_FAILURE }, { status: 401 });
   }
 
+  // A locked account answers exactly like a wrong password. Saying "too many
+  // attempts" would confirm the address is registered, which undoes the work
+  // GENERIC_FAILURE and verifyDummyPassword do above: send 8 junk passwords,
+  // and a change of response on the 9th tells you the account exists.
   if (user.lockedUntil && user.lockedUntil > new Date()) {
-    return NextResponse.json({ message: "Too many failed attempts. Please try again in a few minutes." }, { status: 429 });
+    return NextResponse.json({ message: GENERIC_FAILURE }, { status: 401 });
   }
 
   if (!await verifyPassword(user.passwordHash, data.password)) {

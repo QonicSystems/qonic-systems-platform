@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { crossSiteRejection } from "@/lib/http/same-origin";
 import { clientIp, recordAudit } from "@/lib/audit";
 import { SESSION_COOKIE, hashSessionToken } from "@/lib/auth/session";
 import { db } from "@/lib/db";
@@ -7,6 +8,9 @@ import { db } from "@/lib/db";
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
+  const crossSite = crossSiteRejection(request.headers);
+  if (crossSite) return crossSite;
+
   const store = await cookies();
   const token = store.get(SESSION_COOKIE)?.value;
 

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { StatusChip } from "@/components/status-chip";
 
 type Claim = { id: string; name: string; spentOn: string; category: string; amount: string; description: string; project: string; status: string; billable: boolean; receiptUrl: string | null };
 
@@ -36,7 +37,7 @@ export function ExpenseApprovals({ claims }: { claims: ReadonlyArray<Claim> }) {
             <td>{claim.spentOn}</td>
             <td>{claim.project}</td>
             <td>{claim.amount}</td>
-            <td><span className={`status-chip status-chip--${claim.status.toLowerCase()}`}>{claim.status.toLowerCase()}</span></td>
+            <td><StatusChip status={claim.status} /></td>
             <td>
               <div className="row-actions">
                 {claim.receiptUrl && <a className="row-action" href={claim.receiptUrl} target="_blank" rel="noreferrer noopener">Receipt</a>}

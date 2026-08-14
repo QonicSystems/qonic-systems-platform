@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import nodemailer from "nodemailer";
+import { captchaRejection } from "@/lib/captcha";
 import { validateContactPayload } from "@/lib/contact";
+import { crossSiteRejection } from "@/lib/http/same-origin";
+import { BUCKETS, rateLimitRejection } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -15,8 +18,20 @@ function configuration() {
 }
 
 export async function POST(request: Request) {
+  const crossSite = crossSiteRejection(request.headers);
+  if (crossSite) return crossSite;
+
+  // Throttle before anything else: this endpoint sends mail from our own SMTP
+  // account, so an unthrottled loop burns the quota and the sender reputation.
+  const throttled = await rateLimitRejection(BUCKETS.contact, request);
+  if (throttled) return throttled;
+
   let body: unknown;
   try { body = await request.json(); } catch { return NextResponse.json({ message: "Please submit a valid request." }, { status: 400 }); }
+
+  const captcha = await captchaRejection("contact", (body as Record<string, unknown>)?.captchaToken);
+  if (captcha) return captcha;
+
   const { data, errors } = validateContactPayload(body);
   if (!data) return NextResponse.json({ message: "Please correct the highlighted fields.", errors }, { status: 422 });
   const smtp = configuration();

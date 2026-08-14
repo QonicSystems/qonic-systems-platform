@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { crossSiteRejection } from "@/lib/http/same-origin";
 import { clientIp, recordAudit } from "@/lib/audit";
 import { describePasswordProblem, hashPassword } from "@/lib/auth/password";
 import { hashResetToken } from "@/lib/auth/reset";
@@ -9,6 +10,9 @@ export const runtime = "nodejs";
 type Errors = Partial<Record<"password" | "confirmPassword" | "token", string>>;
 
 export async function POST(request: Request) {
+  const crossSite = crossSiteRejection(request.headers);
+  if (crossSite) return crossSite;
+
   let body: unknown;
   try { body = await request.json(); } catch { return NextResponse.json({ message: "Please submit a valid request." }, { status: 400 }); }
   const input = typeof body === "object" && body !== null ? body as Record<string, unknown> : {};

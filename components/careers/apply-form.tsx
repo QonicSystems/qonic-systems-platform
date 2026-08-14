@@ -1,11 +1,13 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { useCaptcha } from "@/components/use-captcha";
 
 type Errors = Partial<Record<"name" | "email" | "phone" | "resumeUrl" | "consent", string>>;
 
 export function ApplyForm({ jobId }: { jobId: string }) {
   const empty = { name: "", email: "", phone: "", resumeUrl: "", note: "", consent: false };
+  const captchaToken = useCaptcha("apply");
   const [data, setData] = useState(empty);
   const [errors, setErrors] = useState<Errors>({});
   const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
@@ -21,7 +23,7 @@ export function ApplyForm({ jobId }: { jobId: string }) {
     setStatus("submitting"); setMessage("");
     try {
       const response = await fetch("/api/careers/apply", {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...data, jobId }),
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...data, jobId, captchaToken: await captchaToken() }),
       });
       const result = await response.json() as { message?: string; errors?: Errors };
       if (!response.ok) { setErrors(result.errors ?? {}); setMessage(result.message ?? "Unable to apply."); setStatus("error"); return; }

@@ -33,9 +33,26 @@ export async function recordAudit(entry: AuditEntry, client: Prisma.TransactionC
   });
 }
 
-/** Best-effort client IP from the proxy headers. */
+/**
+ * Best-effort client IP from the proxy headers.
+ *
+ * Takes the RIGHTMOST entry of x-forwarded-for, not the leftmost. Any client
+ * can send their own x-forwarded-for and our proxy appends to it, so the left
+ * of the list is whatever the caller invented — reading it let anyone forge the
+ * IP recorded against auth.login.failed, user.delete or audit.purge. The last
+ * hop is the one our own edge wrote, so it is the only one we can trust.
+ *
+ * Vercel's own x-vercel-forwarded-for is preferred where present: it is set by
+ * the platform and cannot be spoofed.
+ */
 export function clientIp(request: Request): string | null {
+  const vercel = request.headers.get("x-vercel-forwarded-for");
+  if (vercel) return vercel.split(",")[0].trim();
+
   const forwarded = request.headers.get("x-forwarded-for");
-  if (forwarded) return forwarded.split(",")[0].trim();
+  if (forwarded) {
+    const hops = forwarded.split(",").map((hop) => hop.trim()).filter(Boolean);
+    if (hops.length) return hops[hops.length - 1];
+  }
   return request.headers.get("x-real-ip");
 }

@@ -16,6 +16,10 @@ export function LoginForm() {
   const router = useRouter();
   const next = useSearchParams().get("next");
   const [data, setData] = useState(emptyPayload);
+  const [totpCode, setTotpCode] = useState("");
+  // The server asks for a second factor only after the password is known-good,
+  // so this flips once and then the same form re-submits with the code.
+  const [mfaRequired, setMfaRequired] = useState(false);
   const [errors, setErrors] = useState<LoginErrors>({});
   const [status, setStatus] = useState<"idle" | "submitting" | "error">("idle");
   const [message, setMessage] = useState("");
@@ -33,10 +37,14 @@ export function LoginForm() {
       const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...data, next }),
+        body: JSON.stringify({ ...data, next, ...(totpCode ? { totpCode } : {}) }),
       });
-      const result = await response.json() as { errors?: LoginErrors; message?: string; redirectTo?: string };
+      const result = await response.json() as { errors?: LoginErrors; message?: string; redirectTo?: string; mfaRequired?: boolean };
       if (!response.ok) {
+        // Without this branch the six-digit prompt had nowhere to be typed, so
+        // enabling 2FA locked the account holder out of the portal entirely.
+        if (result.mfaRequired) setMfaRequired(true);
+        setTotpCode("");
         setErrors(result.errors ?? {});
         setMessage(result.message ?? "Unable to sign in. Please try again.");
         setStatus("error");
@@ -68,8 +76,15 @@ export function LoginForm() {
       {errors.password && <p id="password-error" className="form-error">{errors.password}</p>}
     </div>
 
+    {mfaRequired && <div className="mt-5">
+      <label htmlFor="totpCode">Authentication Code</label>
+      <input id="totpCode" name="totpCode" type="text" inputMode="numeric" autoComplete="one-time-code"
+        autoFocus maxLength={11} value={totpCode} onChange={(event) => setTotpCode(event.target.value)} />
+      <p className="field-hint">Enter the 6-digit code from your authenticator app, or one of your backup codes.</p>
+    </div>}
+
     <button className="button button-primary mt-7 w-full justify-center" type="submit" disabled={status === "submitting"}>
-      {status === "submitting" ? "Signing in…" : "Sign In"}
+      {status === "submitting" ? "Signing in…" : mfaRequired ? "Verify" : "Sign In"}
     </button>
 
     {status === "error" && message && <p className="form-status form-status--error" role="alert">{message}</p>}

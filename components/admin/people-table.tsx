@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { StatusChip } from "@/components/status-chip";
 
 export type PersonRow = {
   id: string;
@@ -71,7 +72,7 @@ export function PeopleTable({ people, roles, canDeactivate, canDelete }: {
           {people.map((person) => <tr key={person.id}>
             <th scope="row"><strong>{person.name}</strong><span>{person.email}</span></th>
             <td>{person.roleLabel}</td>
-            <td><span className={`status-chip status-chip--${person.status.toLowerCase()}`}>{person.status.toLowerCase()}</span></td>
+            <td><StatusChip status={person.status} /></td>
             <td>{person.lastLoginAt ?? "Never"}</td>
             <td>
               {person.canEdit ? <div className="row-actions">

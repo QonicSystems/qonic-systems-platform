@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
+import { captchaRejection } from "@/lib/captcha";
 import { emailPattern } from "@/lib/contact";
 import { db } from "@/lib/db";
+import { crossSiteRejection } from "@/lib/http/same-origin";
+import { BUCKETS, rateLimitRejection } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -14,15 +17,29 @@ type ApplyErrors = Partial<Record<"name" | "email" | "phone" | "resumeUrl" | "co
  * touch an existing candidate's data, or reach a job that is not public.
  */
 export async function POST(request: Request) {
+  const crossSite = crossSiteRejection(request.headers);
+  if (crossSite) return crossSite;
+
+  // Each accepted request writes candidate + application + event rows inside a
+  // transaction, against a pool capped at 3 connections per instance, so an
+  // unthrottled flood degrades the whole portal and not just this endpoint.
+  const throttled = await rateLimitRejection(BUCKETS.apply, request);
+  if (throttled) return throttled;
+
   let body: unknown;
   try { body = await request.json(); } catch { return NextResponse.json({ message: "Please submit a valid request." }, { status: 400 }); }
   const input = typeof body === "object" && body !== null ? body as Record<string, unknown> : {};
 
-  const jobId = String(input.jobId ?? "");
-  const name = String(input.name ?? "").trim();
-  const email = String(input.email ?? "").trim().toLowerCase();
-  const phone = String(input.phone ?? "").trim();
-  const resumeUrl = String(input.resumeUrl ?? "").trim();
+  const captcha = await captchaRejection("apply", input.captchaToken);
+  if (captcha) return captcha;
+
+  // Free text is capped on the way in. Route handlers have no body-size limit
+  // in Next, so without this a multi-megabyte `name` is stored verbatim.
+  const jobId = String(input.jobId ?? "").slice(0, 100);
+  const name = String(input.name ?? "").trim().slice(0, 200);
+  const email = String(input.email ?? "").trim().toLowerCase().slice(0, 320);
+  const phone = String(input.phone ?? "").trim().slice(0, 50);
+  const resumeUrl = String(input.resumeUrl ?? "").trim().slice(0, 2000);
   const note = String(input.note ?? "").trim().slice(0, 2000);
 
   const errors: ApplyErrors = {};
@@ -47,17 +64,27 @@ export async function POST(request: Request) {
 
   try {
     await db.$transaction(async (tx) => {
-      const candidate = await tx.candidate.upsert({
-        where: { email },
-        // An existing record is NOT overwritten with form data; only missing
-        // details are filled in, so a recruiter's notes survive a re-application.
-        update: {
-          phone: phone || undefined,
-          resumeUrl: resumeUrl || undefined,
-          consentAt: new Date(),
-        },
-        create: { name, email, phone: phone || null, resumeUrl: resumeUrl || null, source: "Careers site", consentAt: new Date(), notes: note || null },
-      });
+      const existingCandidate = await tx.candidate.findUnique({ where: { email } });
+
+      // Anyone can post any email address here, so an existing record must be
+      // treated as belonging to someone else until proven otherwise: only
+      // genuine blanks are filled in. `upsert` with `field || undefined` looks
+      // like it does this but does not — Prisma reads `undefined` as "skip", so
+      // a supplied value overwrote the stored one and a stranger could repoint
+      // a live candidate's CV link at a URL of their choosing. `consentAt` is
+      // likewise left alone: it records when *that person* gave consent, and
+      // must not be refreshed by a third party.
+      const candidate = existingCandidate
+        ? await tx.candidate.update({
+            where: { id: existingCandidate.id },
+            data: {
+              phone: existingCandidate.phone ?? (phone || null),
+              resumeUrl: existingCandidate.resumeUrl ?? (resumeUrl || null),
+            },
+          })
+        : await tx.candidate.create({
+            data: { name, email, phone: phone || null, resumeUrl: resumeUrl || null, source: "Careers site", consentAt: new Date(), notes: note || null },
+          });
 
       const existing = await tx.application.findUnique({ where: { jobId_candidateId: { jobId, candidateId: candidate.id } } });
       if (existing) return; // Silently idempotent.

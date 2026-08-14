@@ -35,13 +35,24 @@ export async function POST(request: Request) {
   }
   if (Object.keys(errors).length) return NextResponse.json({ message: "Please correct the highlighted fields.", errors }, { status: 422 });
 
+  // Same rule as timesheets: you can only book against a project you are on.
+  // Passing the id straight through meant an unknown one raised an uncaught FK
+  // error (a 500), and a real one let you charge a project you are not part of.
+  const projectId = String(input.projectId ?? "").trim() || null;
+  if (projectId) {
+    const assignment = await db.projectAssignment.findFirst({ where: { userId: context.user.id, projectId }, select: { id: true } });
+    if (!assignment) {
+      return NextResponse.json({ message: "You can only claim expenses against projects you are assigned to.", errors: { projectId: "Choose a project you are assigned to." } }, { status: 403 });
+    }
+  }
+
   const submit = input.submit === true;
   const created = await db.$transaction(async (tx) => {
     const expense = await tx.expense.create({
       data: {
         userId: context.user.id, amount: amount!, spentOn: new Date(`${spentOn}T00:00:00.000Z`),
         description, category, receiptUrl: receiptUrl || null,
-        projectId: String(input.projectId ?? "").trim() || null,
+        projectId,
         billable: input.billable === true,
         status: submit ? "SUBMITTED" : "DRAFT",
       },

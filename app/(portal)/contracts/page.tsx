@@ -2,6 +2,7 @@ import Link from "next/link";
 import { can, requirePermission } from "@/lib/auth/guard";
 import { describeStatus } from "@/lib/contracts/workflow";
 import { db } from "@/lib/db";
+import { StatusChip } from "@/components/status-chip";
 
 export const metadata = { title: "Contract Letters" };
 
@@ -47,7 +48,7 @@ export default async function ContractsPage() {
               </th>
               <td>{letter.subject.name}</td>
               <td>{payload.jobTitle ?? "—"}</td>
-              <td><span className={`status-chip status-chip--${letter.status.toLowerCase().replace(/_/g, "-")}`}>{describeStatus(letter.status)}</span></td>
+              <td><StatusChip status={letter.status} label={describeStatus(letter.status)} /></td>
               <td>{letter.updatedAt.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</td>
             </tr>;
           })}

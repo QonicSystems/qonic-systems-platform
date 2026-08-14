@@ -3,6 +3,7 @@
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { BILLING_LABELS, BILLING_MODELS, PROJECT_STATUSES } from "@/lib/delivery/validate";
+import { StatusChip } from "@/components/status-chip";
 
 type Row = { id: string; code: string; name: string; client: string; status: string; billing: string; budget: string; manager: string; team: number; hours: string };
 type Errors = Partial<Record<"name" | "code" | "clientId" | "status" | "billing" | "budgetAmount" | "defaultRate" | "startDate" | "endDate", string>>;
@@ -55,7 +56,7 @@ export function ProjectManager({ projects, clients, people, canManage }: {
             <td>{project.manager}</td>
             <td>{project.team}</td>
             <td>{project.hours}</td>
-            <td><span className={`status-chip status-chip--${project.status.toLowerCase().replace(/_/g, "-")}`}>{project.status.toLowerCase().replace(/_/g, " ")}</span></td>
+            <td><StatusChip status={project.status} /></td>
           </tr>)}
         </tbody>
       </table>

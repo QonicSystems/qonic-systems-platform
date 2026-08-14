@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import type { ContactErrors, ContactPayload } from "@/lib/contact";
+import { useCaptcha } from "@/components/use-captcha";
 
 const emptyPayload: ContactPayload = { name: "", email: "", phone: "", industry: "", message: "" };
 const industries = [["it", "Information Technology"], ["non-it", "Non-IT & Corporate"], ["pharma", "Pharmaceuticals"], ["biotech", "Biotechnology"], ["medical-devices", "Medical Devices"], ["other", "Other"]];
@@ -11,11 +12,12 @@ export function ContactForm() {
   const [errors, setErrors] = useState<ContactErrors>({});
   const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
   const [message, setMessage] = useState("");
+  const captchaToken = useCaptcha("contact");
   const update = (name: keyof ContactPayload, value: string) => { setData((current) => ({ ...current, [name]: value })); setErrors((current) => ({ ...current, [name]: undefined })); };
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault(); setStatus("submitting"); setMessage("");
     try {
-      const response = await fetch("/api/contact", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+      const response = await fetch("/api/contact", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...data, captchaToken: await captchaToken() }) });
       const result = await response.json() as { errors?: ContactErrors; message?: string };
       if (!response.ok) { setErrors(result.errors ?? {}); setMessage(result.message ?? "Unable to send your request. Please try again."); setStatus("error"); return; }
       setData(emptyPayload); setErrors({}); setMessage("Thank you! We’ll be in touch within 4 business hours."); setStatus("success");
