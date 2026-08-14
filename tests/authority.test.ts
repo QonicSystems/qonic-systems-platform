@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canAdminister, canAssignRole } from "@/lib/auth/authority";
+import { canAdminister, canAssignRole, canChangeOwnRole, canEditIdentity } from "@/lib/auth/authority";
 import type { AuthContext } from "@/lib/auth/guard";
 
 // Mirrors the seeded ranks: CEO 0, Co-Founder 10, HR/Accounts/Projects 20, Employee 50.
@@ -72,5 +72,47 @@ describe("canAssignRole — preventing privilege escalation", () => {
     const result = canAssignRole(CO_FOUNDER, role("ceo", 0, true));
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.reason).toMatch(/super.admin/i);
+  });
+});
+
+describe("canEditIdentity — self-edit of name/email/phone", () => {
+  it("lets you edit your own identity, which canAdminister refuses", () => {
+    const self = { id: CEO.user.id, role: CEO.role };
+    expect(canAdminister(CEO, self).ok).toBe(false);
+    expect(canEditIdentity(CEO, self).ok).toBe(true);
+  });
+
+  it("lets a non-super-admin edit their own identity too", () => {
+    const self = { id: HR.user.id, role: HR.role };
+    expect(canEditIdentity(HR, self).ok).toBe(true);
+  });
+
+  it("still applies seniority to everyone else", () => {
+    expect(canEditIdentity(HR, target("employee", 50)).ok).toBe(true);
+    expect(canEditIdentity(HR, target("co_founder", 10)).ok).toBe(false);
+    expect(canEditIdentity(HR, target("ceo", 0, true)).ok).toBe(false);
+  });
+});
+
+describe("canChangeOwnRole — the escalation guard the self-edit relaxation relies on", () => {
+  it("refuses a self role change", () => {
+    const self = { id: HR.user.id, role: HR.role };
+    const result = canChangeOwnRole(HR, self, true);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.status).toBe(409);
+  });
+
+  it("allows a self edit that leaves the role alone", () => {
+    const self = { id: HR.user.id, role: HR.role };
+    expect(canChangeOwnRole(HR, self, false).ok).toBe(true);
+  });
+
+  it("does not interfere with changing someone else's role", () => {
+    expect(canChangeOwnRole(CEO, target("employee", 50), true).ok).toBe(true);
+  });
+
+  it("blocks self-escalation even for the super admin", () => {
+    const self = { id: CEO.user.id, role: CEO.role };
+    expect(canChangeOwnRole(CEO, self, true).ok).toBe(false);
   });
 });
