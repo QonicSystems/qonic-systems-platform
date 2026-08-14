@@ -23,13 +23,18 @@ export type PersonRow = {
 type RoleOption = { id: string; label: string; assignable: boolean };
 type Errors = Partial<Record<"name" | "email" | "phone" | "jobTitle" | "roleId", string>>;
 
-export function PeopleTable({ people, roles, canDeactivate, canDelete }: {
+export function PeopleTable({ people, roles, canDeactivate, canDelete, canCreate }: {
   people: ReadonlyArray<PersonRow>;
   roles: ReadonlyArray<RoleOption>;
   canDeactivate: boolean;
   canDelete: boolean;
+  canCreate: boolean;
 }) {
   const router = useRouter();
+  const [adding, setAdding] = useState(false);
+  // Shown only when email could not be delivered, so the invite can still be
+  // handed over. It is a bearer token, so it is never persisted anywhere.
+  const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [editing, setEditing] = useState<PersonRow | null>(null);
   const [confirming, setConfirming] = useState<PersonRow | null>(null);
   const [busy, setBusy] = useState(false);
@@ -39,7 +44,7 @@ export function PeopleTable({ people, roles, canDeactivate, canDelete }: {
     setBusy(true);
     try {
       const response = await fetch(url, { headers: { "Content-Type": "application/json" }, ...init });
-      const result = await response.json() as { message?: string; errors?: Errors };
+      const result = await response.json() as { message?: string; errors?: Errors; inviteUrl?: string };
       if (!response.ok) { setNotice({ tone: "error", text: result.message ?? "Unable to complete that action." }); return result; }
       setNotice({ tone: "success", text: result.message ?? "Done." });
       router.refresh();
@@ -60,7 +65,18 @@ export function PeopleTable({ people, roles, canDeactivate, canDelete }: {
   };
 
   return <div>
+    {canCreate && <div className="action-bar">
+      <button type="button" className="button button-primary" onClick={() => { setAdding(true); setNotice(null); setInviteUrl(null); }} disabled={busy}>
+        Add Person
+      </button>
+    </div>}
+
     {notice && <p className={`form-status form-status--${notice.tone}`} role="status">{notice.text}</p>}
+
+    {inviteUrl && <div className="portal-panel">
+      <p className="portal-note">Send them this link so they can choose a password. It expires in seven days.</p>
+      <p className="mfa-secret">{inviteUrl}</p>
+    </div>}
 
     <div className="matrix-scroll">
       <table className="matrix matrix--people">
@@ -98,6 +114,17 @@ export function PeopleTable({ people, roles, canDeactivate, canDelete }: {
       onSave={async (payload) => {
         const result = await act(`/api/admin/users/${editing.id}`, { method: "PATCH", body: JSON.stringify(payload) });
         if (!result?.errors) setEditing(null);
+        return result?.errors ?? {};
+      }}
+    />}
+
+    {adding && <AddDialog
+      roles={roles}
+      busy={busy}
+      onClose={() => setAdding(false)}
+      onSave={async (payload) => {
+        const result = await act("/api/admin/users", { method: "POST", body: JSON.stringify(payload) });
+        if (!result?.errors) { setAdding(false); setInviteUrl(result?.inviteUrl ?? null); }
         return result?.errors ?? {};
       }}
     />}
@@ -175,6 +202,71 @@ function EditDialog({ person, roles, busy, onClose, onSave }: {
         <div className="dialog-actions">
           <button type="button" className="button button-outline" onClick={onClose} disabled={busy}>Cancel</button>
           <button type="submit" className="button button-primary" disabled={busy}>{busy ? "Saving…" : "Save Changes"}</button>
+        </div>
+      </form>
+    </div>
+  </div>;
+}
+
+/**
+ * Create a colleague. Roles the viewer may not assign are disabled rather than
+ * hidden, so it is clear the option exists and why it is unavailable — the same
+ * treatment the edit dialog gives them.
+ */
+function AddDialog({ roles, busy, onClose, onSave }: {
+  roles: ReadonlyArray<RoleOption>;
+  busy: boolean;
+  onClose: () => void;
+  onSave: (payload: Record<string, string>) => Promise<Errors>;
+}) {
+  const assignable = roles.filter((role) => role.assignable);
+  const [data, setData] = useState({ name: "", email: "", phone: "", jobTitle: "", roleId: assignable[0]?.id ?? "" });
+  const [errors, setErrors] = useState<Errors>({});
+
+  const update = (key: keyof typeof data, value: string) => {
+    setData((current) => ({ ...current, [key]: value }));
+    setErrors((current) => ({ ...current, [key]: undefined }));
+  };
+
+  return <div className="dialog-backdrop" role="dialog" aria-modal="true" aria-labelledby="add-title">
+    <div className="dialog dialog--wide">
+      <h3 id="add-title" className="dialog-title">Add a person</h3>
+      <form className="contact-form" noValidate onSubmit={async (event) => { event.preventDefault(); setErrors(await onSave(data)); }}>
+        <div className="grid gap-5 sm:grid-cols-2">
+          <div>
+            <label htmlFor="add-name">Full Name <em>*</em></label>
+            <input id="add-name" autoFocus value={data.name} onChange={(event) => update("name", event.target.value)} aria-invalid={Boolean(errors.name)} />
+            {errors.name && <p className="form-error">{errors.name}</p>}
+          </div>
+          <div>
+            <label htmlFor="add-email">Work Email <em>*</em></label>
+            <input id="add-email" type="email" value={data.email} onChange={(event) => update("email", event.target.value)} aria-invalid={Boolean(errors.email)} />
+            {errors.email && <p className="form-error">{errors.email}</p>}
+          </div>
+          <div>
+            <label htmlFor="add-phone">Phone Number</label>
+            <input id="add-phone" type="tel" value={data.phone} onChange={(event) => update("phone", event.target.value)} aria-invalid={Boolean(errors.phone)} />
+            {errors.phone && <p className="form-error">{errors.phone}</p>}
+          </div>
+          <div>
+            <label htmlFor="add-jobTitle">Job Title</label>
+            <input id="add-jobTitle" value={data.jobTitle} onChange={(event) => update("jobTitle", event.target.value)} />
+          </div>
+          <div className="sm:col-span-2">
+            <label htmlFor="add-role">Role <em>*</em></label>
+            <select id="add-role" value={data.roleId} onChange={(event) => update("roleId", event.target.value)} aria-invalid={Boolean(errors.roleId)}>
+              {roles.map((role) => <option key={role.id} value={role.id} disabled={!role.assignable}>
+                {role.label}{!role.assignable ? " — not assignable by you" : ""}
+              </option>)}
+            </select>
+            {errors.roleId ? <p className="form-error">{errors.roleId}</p>
+              : <p className="field-hint">They choose their own password from an emailed invite — nobody else ever knows it.</p>}
+          </div>
+        </div>
+
+        <div className="dialog-actions">
+          <button type="button" className="button button-outline" onClick={onClose} disabled={busy}>Cancel</button>
+          <button type="submit" className="button button-primary" disabled={busy}>{busy ? "Adding…" : "Send Invite"}</button>
         </div>
       </form>
     </div>
