@@ -1,48 +1,55 @@
 import Link from "next/link";
+import { StatusChip } from "@/components/status-chip";
 import { requireAuth } from "@/lib/auth/guard";
-import { PERMISSIONS } from "@/lib/auth/permissions";
 import { db } from "@/lib/db";
 
 export const metadata = { title: "Dashboard" };
+
+const shortDate = (value: Date) => value.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 
 export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ denied?: string }> }) {
   const context = await requireAuth();
   const denied = (await searchParams).denied === "1";
 
-  const [teamCount, myContracts] = await Promise.all([
+  const [teamCount, myContracts, openLeave, recentContracts] = await Promise.all([
     db.user.count({ where: { status: "ACTIVE" } }),
     db.contractLetter.count({ where: { subjectUserId: context.user.id } }),
+    db.leaveRequest.count({ where: { userId: context.user.id, status: "PENDING" } }),
+    // Own letters only — the full list lives behind contract.view_all.
+    db.contractLetter.findMany({
+      where: { subjectUserId: context.user.id },
+      orderBy: { updatedAt: "desc" },
+      take: 5,
+      select: { id: true, reference: true, status: true, updatedAt: true },
+    }),
   ]);
 
-  const granted = PERMISSIONS.filter((permission) => context.permissions.has(permission.key));
-
-  return <div className="portal-page">
+  return <>
     {denied && <p className="form-status form-status--error" role="alert">You do not have permission to view that page.</p>}
-
-    <header className="portal-page-head">
-      <p className="eyebrow">{context.role.label}</p>
-      <h1 className="portal-title">Welcome back, {context.user.name.split(" ")[0]}.</h1>
-      <p className="portal-lead">Here is what your account currently has access to.</p>
-    </header>
 
     <div className="portal-grid">
       <article className="portal-card"><span className="portal-stat">{teamCount}</span><p>Active team members</p></article>
       <article className="portal-card"><span className="portal-stat">{myContracts}</span><p>My contract letters</p></article>
-      <article className="portal-card"><span className="portal-stat">{context.role.isSuperAdmin ? "All" : granted.length}</span><p>Permissions granted</p></article>
+      <article className="portal-card"><span className="portal-stat">{openLeave}</span><p>My leave requests awaiting a decision</p></article>
     </div>
 
     <section className="portal-section">
-      <h2 className="portal-section-title">Your access</h2>
-      {context.role.isSuperAdmin
-        ? <p className="portal-note">As <strong>{context.role.label}</strong> you hold super-admin rights — every capability is available to you, and your access cannot be switched off.</p>
-        : <p className="portal-note">These are enabled for the <strong>{context.role.label}</strong> role. The CEO can change them at any time.</p>}
-      <ul className="permission-list">
-        {granted.map((permission) => <li key={permission.key}><strong>{permission.label}</strong><span>{permission.description}</span></li>)}
-      </ul>
+      <h2 className="portal-section-title">Your recent contract letters</h2>
+      {recentContracts.length === 0
+        ? <p className="portal-note">Nothing yet. Letters issued to you will appear here.</p>
+        : <div className="matrix-scroll">
+            <table className="matrix matrix--people">
+              <thead><tr><th scope="col">Letter</th><th scope="col">Status</th><th scope="col">Updated</th><th scope="col">Actions</th></tr></thead>
+              <tbody>
+                {recentContracts.map((letter) => <tr key={letter.id}>
+                  <th scope="row"><strong>{letter.reference}</strong></th>
+                  <td><StatusChip status={letter.status} /></td>
+                  <td>{shortDate(letter.updatedAt)}</td>
+                  <td><div className="row-actions"><Link className="row-action" href={`/contracts/${letter.id}`}>View</Link></div></td>
+                </tr>)}
+              </tbody>
+            </table>
+          </div>}
     </section>
-
-    {context.permissions.has("admin.access") && <p className="portal-note">
-      Manage people and permissions in the <Link className="text-link" href="/admin">administration area</Link>.
-    </p>}
-  </div>;
+  </>;
 }

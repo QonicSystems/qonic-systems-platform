@@ -174,9 +174,26 @@ the same.
    Environment Variables. `DATABASE_URL` must point at a managed Postgres
    (Neon, Supabase, RDS) — Vercel has no database of its own, and the connection
    string needs its pooled endpoint, since every serverless invocation opens its
-   own connection.
-4. **Run the migrations** against that database once, from your laptop:
-   `DATABASE_URL="<the production URL>" npm run db:setup`.
+   own connection. **Do not set `TEST_DATABASE_URL`** in production: it is only
+   read by `prisma/setup-test-db.ts`, which TRUNCATEs every table.
+
+   Two that are easy to miss:
+   - `SMTP_*` and `CONTACT_*` — without them the contact form returns 503 and
+     **no password-reset email is ever sent**. Reset still "succeeds" from the
+     visitor's point of view, because the response is deliberately neutral.
+   - `NEXT_PUBLIC_RECAPTCHA_SITE_KEY` is inlined at **build** time, so it must
+     exist before the build runs, not just at runtime. Set it, redeploy, and
+     only then does the widget load. `RECAPTCHA_SECRET_KEY` is read at runtime;
+     while it is unset, captcha verification is skipped entirely (by design, so
+     local and CI work without keys) and only the rate limiter is protecting the
+     public forms.
+
+4. **Migrations run themselves.** `vercel.json`'s build command is
+   `db:generate && db:deploy && db:seed && build`, so every deploy applies
+   pending migrations and re-runs the seed. The seed is idempotent — it creates
+   the bootstrap CEO only when the user table is empty — but it does mean
+   `BOOTSTRAP_CEO_EMAIL`, `_NAME` and `_PASSWORD` must be present at build time
+   for the very first deploy against an empty database.
 
 If you ever move to a different apex domain, update `siteFor()` in
 `middleware.ts` — it matches the literal label `qonicsystems`.

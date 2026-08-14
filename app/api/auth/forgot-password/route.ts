@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
-import { crossSiteRejection } from "@/lib/http/same-origin";
 import nodemailer from "nodemailer";
 import { appOrigin } from "@/lib/app-origin";
 import { clientIp, recordAudit } from "@/lib/audit";
 import { RESET_TTL_MS, createResetToken, hashResetToken, resetEmail, resetUrl } from "@/lib/auth/reset";
+import { captchaRejection } from "@/lib/captcha";
 import { emailPattern } from "@/lib/contact";
 import { db } from "@/lib/db";
+import { crossSiteRejection } from "@/lib/http/same-origin";
+import { BUCKETS, rateLimitRejection } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -28,10 +30,20 @@ export async function POST(request: Request) {
   const crossSite = crossSiteRejection(request.headers);
   if (crossSite) return crossSite;
 
+  // Every accepted request mails a real person and invalidates the link they
+  // may already be holding, so this doubles as a mail-bomb and a denial of
+  // password recovery against a known address.
+  const throttled = await rateLimitRejection(BUCKETS.forgotPassword, request);
+  if (throttled) return throttled;
+
   let body: unknown;
   try { body = await request.json(); } catch { return NextResponse.json({ message: "Please submit a valid request." }, { status: 400 }); }
   const input = typeof body === "object" && body !== null ? body as Record<string, unknown> : {};
-  const email = String(input.email ?? "").trim().toLowerCase();
+
+  const captcha = await captchaRejection("forgot_password", input.captchaToken);
+  if (captcha) return captcha;
+
+  const email = String(input.email ?? "").trim().toLowerCase().slice(0, 320);
 
   if (!emailPattern.test(email)) {
     return NextResponse.json({ message: "Please correct the highlighted fields.", errors: { email: "Please enter a valid email address." } }, { status: 422 });

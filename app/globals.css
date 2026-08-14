@@ -28,6 +28,15 @@
   --ring: 0 0 0 1px rgb(17 17 17 / .07);
   --ease: cubic-bezier(.22, 1, .36, 1);
   --header-h: 5rem;
+
+  /* Shared shell geometry. The marketing header and the portal bar were built
+     separately and drifted — 78rem vs 82rem wide, 5rem vs 4.5rem tall — so the
+     two chromes never quite looked like the same product. Both now read from
+     these, which is what keeps them aligned as either one changes.
+     78rem wins because it is the public site's measure; the portal narrows to
+     match, and its wide tables already scroll inside .matrix-scroll. */
+  --shell-max: 78rem;
+  --header-h-compact: 4.5rem;
 }
 
 * { box-sizing: border-box; }
@@ -39,7 +48,7 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 ::selection { background: var(--accent-soft); color: var(--accent-dark); }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
 
-.site-container { width: min(100% - 2rem, 78rem); margin-inline: auto; }
+.site-container { width: min(100% - 2rem, var(--shell-max)); margin-inline: auto; }
 .skip-link { position: fixed; z-index: 100; top: 1rem; left: 1rem; transform: translateY(-200%); border-radius: .6rem; background: var(--accent-deep); padding: .7rem 1rem; color: #fff; font-weight: 700; text-decoration: none; transition: transform .2s var(--ease); }
 .skip-link:focus { transform: translateY(0); }
 
@@ -66,7 +75,7 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 .site-header { position: fixed; inset: 0 0 auto; z-index: 50; color: var(--ink); transition: background .3s var(--ease), box-shadow .3s var(--ease), border-color .3s var(--ease); border-bottom: 1px solid transparent; }
 .site-header--scrolled { background: rgb(252 251 249 / .82); border-bottom-color: var(--line); box-shadow: 0 1px 24px -8px rgb(15 20 25 / .14); backdrop-filter: blur(16px) saturate(1.6); }
 .site-header nav { height: var(--header-h); transition: height .3s var(--ease); }
-.site-header--scrolled nav { height: 4.25rem; }
+.site-header--scrolled nav { height: var(--header-h-compact); }
 .brand { display: inline-flex; align-items: center; gap: .7rem; color: var(--ink); font-family: var(--font-display), sans-serif; font-size: 1.1rem; font-weight: 800; letter-spacing: -.04em; text-decoration: none; }
 .nav-link { position: relative; border-radius: .5rem; padding: .5rem .8rem; color: var(--body); font-size: .9rem; font-weight: 600; text-decoration: none; transition: color .2s var(--ease); }
 .nav-link::after { position: absolute; bottom: .2rem; left: .8rem; width: 0; height: 1.5px; border-radius: 2px; background: var(--accent); content: ""; transition: width .3s var(--ease); }
@@ -277,7 +286,7 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 .footer-link:hover { color: var(--accent-deep); padding-left: .3rem; }
 
 @media (min-width: 1024px) { .network-visual { display: block; } }
-@media (max-width: 420px) { .brand { font-size: .95rem; } .site-container { width: min(100% - 1.25rem, 78rem); } }
+@media (max-width: 420px) { .brand { font-size: .95rem; } .site-container { width: min(100% - 1.25rem, var(--shell-max)); } }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
@@ -310,13 +319,13 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 .portal { min-height: 100dvh; background: var(--canvas-sub); }
 .portal-bar { position: sticky; top: 0; z-index: 40; border-bottom: 1px solid var(--line); background: rgb(252 251 249 / .88); backdrop-filter: blur(16px) saturate(1.6); }
 .portal-bar-inner > .brand { flex: 0 0 auto; }
-.portal-bar-inner { display: flex; width: min(100% - 2rem, 82rem); margin-inline: auto; min-height: 4.5rem; align-items: center; justify-content: space-between; gap: 1rem; }
+.portal-bar-inner { display: flex; width: min(100% - 2rem, var(--shell-max)); margin-inline: auto; min-height: var(--header-h-compact); align-items: center; justify-content: space-between; gap: 1rem; }
 /* No overflow here: an overflow container clips absolutely-positioned
    descendants, which would hide the dropdowns that hang below the bar. The
    nav is only displayed at a width where all groups already fit, so the
    clipping safety net is unnecessary as well as harmful. */
 .portal-nav { display: none; gap: .05rem; min-width: 0; flex: 1 1 auto; justify-content: center; }
-.portal-link { position: relative; border-radius: .55rem; padding: .5rem .6rem; color: var(--body); font-size: .87rem; font-weight: 600; white-space: nowrap; text-decoration: none; transition: color .2s var(--ease), background .2s var(--ease); }
+.portal-link { position: relative; border-radius: .55rem; padding: .5rem .7rem; color: var(--body); font-size: .9rem; font-weight: 600; white-space: nowrap; text-decoration: none; transition: color .2s var(--ease), background .2s var(--ease); }
 .portal-link:hover { background: rgb(15 20 25 / .04); color: var(--ink); }
 .portal-link.is-active { background: var(--accent-tint); color: var(--accent-dark); }
 @media (min-width: 1150px) { .portal-nav { display: flex; } }
@@ -333,7 +342,7 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 .portal-menu-item:hover { background: var(--canvas-sub); }
 .portal-menu-item--danger { border-top: 1px solid var(--line); color: #b91c1c; }
 
-.portal-main { width: min(100% - 2rem, 82rem); margin-inline: auto; padding-block: clamp(2rem, 4vw, 3rem); }
+.portal-main { width: min(100% - 2rem, var(--shell-max)); margin-inline: auto; padding-block: clamp(2rem, 4vw, 3rem); }
 .portal-page { display: grid; gap: 2rem; }
 .portal-page--narrow { max-width: 44rem; }
 .portal-page-head { display: grid; gap: .35rem; }
@@ -376,9 +385,29 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 .permission-list span { color: var(--faint); font-size: .8rem; line-height: 1.5; }
 
 /* --- Admin --- */
-.admin-tabs { display: flex; flex-wrap: wrap; gap: .4rem; border-bottom: 1px solid var(--line); padding-bottom: .75rem; }
-.admin-tab { border-radius: .55rem; padding: .5rem .9rem; color: var(--body); font-size: .9rem; font-weight: 600; text-decoration: none; transition: background .2s, color .2s; }
-.admin-tab:hover { background: var(--accent-tint); color: var(--accent-dark); }
+/* Tabs under a page title. Named .page-tab rather than .admin-tab because the
+   dashboard uses them too; .admin-tab is kept as an alias so nothing that still
+   references it breaks. The .is-active rule is new — the admin tabs previously
+   had no active state at all, so you could not tell which section you were in.
+   Active styling matches .portal-link.is-active, and uses --accent-dark for the
+   text because --accent is a 1.6:1 fill colour and fails contrast as type. */
+.page-tabs, .admin-tabs { display: flex; flex-wrap: wrap; gap: .4rem; border-bottom: 1px solid var(--line); padding-bottom: .75rem; }
+.page-tab, .admin-tab { position: relative; border-radius: .55rem; padding: .5rem .9rem; color: var(--body); font-size: .9rem; font-weight: 600; text-decoration: none; transition: background .2s, color .2s; }
+.page-tab:hover, .admin-tab:hover { background: var(--accent-tint); color: var(--accent-dark); }
+/* Active = coloured type plus an underline, and no fill. The underline hugs the
+   tab rather than sitting on the container's bottom border: the row wraps to
+   two lines on a phone, and an underline pinned to the container would detach
+   from every tab that is not on the last line. */
+.page-tab.is-active { color: var(--accent-dark); }
+.page-tab.is-active::after { content: ""; position: absolute; right: .55rem; bottom: .12rem; left: .55rem; height: 2px; border-radius: 2px; background: var(--accent-deep); }
+
+/* Breadcrumb trail above a page title. */
+.crumbs ol { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem; margin: 0; padding: 0; list-style: none; }
+.crumbs li { display: inline-flex; align-items: center; gap: .3rem; }
+.crumbs a, .crumbs span { color: var(--faint); font-size: .78rem; font-weight: 600; letter-spacing: .01em; text-decoration: none; }
+.crumbs a:hover { color: var(--accent-dark); text-decoration: underline; }
+.crumbs [aria-current="page"] { color: var(--ink-soft); }
+.crumb-sep { color: var(--line); }
 
 .matrix-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 1rem; background: #fff; box-shadow: var(--shadow-sm); }
 .matrix { width: 100%; border-collapse: collapse; font-size: .88rem; }

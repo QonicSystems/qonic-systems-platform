@@ -22,25 +22,25 @@ enum UserStatus {
 }
 
 model User {
-  id                 String     @id @default(cuid())
-  email              String     @unique
-  passwordHash       String
-  name               String
-  phone              String?
-  jobTitle           String?
-  employeeCode       String?    @unique
+  id           String     @id @default(cuid())
+  email        String     @unique
+  passwordHash String
+  name         String
+  phone        String?
+  jobTitle     String?
+  employeeCode String?    @unique
   /// Link to an externally hosted avatar. Nothing is uploaded or stored by this
   /// application — see ROADMAP for the "everything on the fly" decision.
-  photoUrl           String?
-  status             UserStatus @default(ACTIVE)
+  photoUrl     String?
+  status       UserStatus @default(ACTIVE)
 
   // --- HR record (Phase 3) ---
-  dateOfBirth      DateTime?
-  joinedOn         DateTime?
-  leftOn           DateTime?
-  address          String?
-  emergencyName    String?
-  emergencyPhone   String?
+  dateOfBirth       DateTime?
+  joinedOn          DateTime?
+  leftOn            DateTime?
+  address           String?
+  emergencyName     String?
+  emergencyPhone    String?
   emergencyRelation String?
 
   /// Self-relation driving the org chart and the leave approval chain.
@@ -48,35 +48,35 @@ model User {
   manager   User?   @relation("ReportsTo", fields: [managerId], references: [id], onDelete: SetNull)
   reports   User[]  @relation("ReportsTo")
 
-  clientsOwned       Client[]            @relation("ClientOwner")
-  jobsOwned          Job[]               @relation("JobOwner")
-  applicationsOwned  Application[]       @relation("ApplicationOwner")
-  interviews         Interview[]         @relation("Interviewer")
-  placements         Placement[]         @relation("PlacementRecruiter")
-  paymentsRecorded   Payment[]           @relation("PaymentRecorder")
-  expenses           Expense[]           @relation("ExpenseOwner")
-  expenseDecisions   Expense[]           @relation("ExpenseApprover")
-  notifications      Notification[]      @relation("NotificationRecipient")
+  clientsOwned       Client[]             @relation("ClientOwner")
+  jobsOwned          Job[]                @relation("JobOwner")
+  applicationsOwned  Application[]        @relation("ApplicationOwner")
+  interviews         Interview[]          @relation("Interviewer")
+  placements         Placement[]          @relation("PlacementRecruiter")
+  paymentsRecorded   Payment[]            @relation("PaymentRecorder")
+  expenses           Expense[]            @relation("ExpenseOwner")
+  expenseDecisions   Expense[]            @relation("ExpenseApprover")
+  notifications      Notification[]       @relation("NotificationRecipient")
   bankDetail         BankDetail?
-  projectsManaged    Project[]           @relation("ProjectManager")
+  projectsManaged    Project[]            @relation("ProjectManager")
   projectAssignments ProjectAssignment[]
-  timesheets         Timesheet[]         @relation("TimesheetOwner")
-  timesheetDecisions Timesheet[]         @relation("TimesheetApprover")
-  leaveRequests  LeaveRequest[] @relation("LeaveRequester")
-  leaveDecisions LeaveRequest[] @relation("LeaveDecider")
-  leaveBalances  LeaveBalance[]
-  resetTokens    PasswordResetToken[]
-  mustChangePassword Boolean    @default(false)
+  timesheets         Timesheet[]          @relation("TimesheetOwner")
+  timesheetDecisions Timesheet[]          @relation("TimesheetApprover")
+  leaveRequests      LeaveRequest[]       @relation("LeaveRequester")
+  leaveDecisions     LeaveRequest[]       @relation("LeaveDecider")
+  leaveBalances      LeaveBalance[]
+  resetTokens        PasswordResetToken[]
+  mustChangePassword Boolean              @default(false)
   lastLoginAt        DateTime?
-  failedLoginCount   Int        @default(0)
+  failedLoginCount   Int                  @default(0)
   lockedUntil        DateTime?
 
   // --- Two-factor authentication (Phase 8) ---
   /// Base32 TOTP secret, encrypted at rest. Null until enrolment starts.
-  totpSecretEnc  String?
+  totpSecretEnc    String?
   /// Only true once a code has been verified — a half-finished enrolment
   /// must never lock someone out.
-  totpEnabled    Boolean  @default(false)
+  totpEnabled      Boolean @default(false)
   /// Hashed single-use recovery codes, newline separated.
   totpBackupHashes String?
 
@@ -101,20 +101,20 @@ model User {
 
 /// Single-use, short-lived. Only the hash is stored, exactly as with sessions.
 model PasswordResetToken {
-  id        String   @id @default(cuid())
-  tokenHash String   @unique
+  id        String    @id @default(cuid())
+  tokenHash String    @unique
   userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   expiresAt DateTime
   usedAt    DateTime?
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
 
   @@index([userId])
   @@index([expiresAt])
 }
 
 model Session {
-  id String @id @default(cuid())
+  id        String @id @default(cuid())
   /// sha256 of the cookie value. The raw token is never stored, so a database
   /// leak yields no usable sessions.
   tokenHash String @unique
@@ -122,10 +122,10 @@ model Session {
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  ipAddress String?
-  userAgent String?
+  ipAddress         String?
+  userAgent         String?
   /// Idle expiry, rolled forward on use.
-  expiresAt DateTime
+  expiresAt         DateTime
   /// Hard cap. Never extended, so a stolen session cannot live forever.
   absoluteExpiresAt DateTime
 
@@ -138,11 +138,11 @@ model Session {
 // -------------------------------------------------------------------- RBAC --
 
 model Role {
-  id          String  @id @default(cuid())
+  id           String  @id @default(cuid())
   /// Stable identifier referenced from code (lib/auth/roles.ts). Never renamed.
-  key         String  @unique
-  label       String
-  description String?
+  key          String  @unique
+  label        String
+  description  String?
   /// True for the CEO row only. Grants an unconditional allow-all bypass, so the
   /// CEO can never lock themselves out by mis-toggling their own permissions.
   isSuperAdmin Boolean @default(false)
@@ -160,7 +160,7 @@ model Role {
 }
 
 model Permission {
-  id String @id @default(cuid())
+  id          String  @id @default(cuid())
   /// Dotted key, e.g. "contract.release". Seeded from the code-owned catalog.
   key         String  @unique
   /// Groups the admin console's toggle matrix into sections.
@@ -303,17 +303,17 @@ enum LeaveStatus {
 
 /// Configurable leave types, so a new category needs no migration.
 model LeaveType {
-  id           String  @id @default(cuid())
-  key          String  @unique
-  label        String
-  description  String?
+  id            String  @id @default(cuid())
+  key           String  @unique
+  label         String
+  description   String?
   /// Days granted per employee per year. 0 means unlimited/unaccrued (e.g. unpaid).
-  annualDays   Int     @default(0)
+  annualDays    Int     @default(0)
   /// Whether a balance is tracked and decremented on approval.
   tracksBalance Boolean @default(true)
-  colour       String  @default("#0e9384")
-  isActive     Boolean @default(true)
-  sortOrder    Int     @default(0)
+  colour        String  @default("#0e9384")
+  isActive      Boolean @default(true)
+  sortOrder     Int     @default(0)
 
   requests LeaveRequest[]
   balances LeaveBalance[]
@@ -321,17 +321,17 @@ model LeaveType {
 
 /// One row per employee, leave type, and year.
 model LeaveBalance {
-  id          String @id @default(cuid())
-  userId      String
-  user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  leaveTypeId String
-  leaveType   LeaveType @relation(fields: [leaveTypeId], references: [id], onDelete: Cascade)
-  year        Int
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  leaveTypeId  String
+  leaveType    LeaveType @relation(fields: [leaveTypeId], references: [id], onDelete: Cascade)
+  year         Int
   /// Days granted for the year, which may be adjusted per person.
-  entitledDays Float @default(0)
+  entitledDays Float     @default(0)
   /// Days consumed by APPROVED requests. Maintained transactionally with the
   /// request itself so the two can never disagree.
-  usedDays     Float @default(0)
+  usedDays     Float     @default(0)
 
   @@unique([userId, leaveTypeId, year])
   @@index([userId, year])
@@ -350,9 +350,9 @@ model LeaveRequest {
   reason      String?
   status      LeaveStatus @default(PENDING)
 
-  decidedById String?
-  decidedBy   User?     @relation("LeaveDecider", fields: [decidedById], references: [id], onDelete: SetNull)
-  decidedAt   DateTime?
+  decidedById  String?
+  decidedBy    User?     @relation("LeaveDecider", fields: [decidedById], references: [id], onDelete: SetNull)
+  decidedAt    DateTime?
   decisionNote String?
 
   createdAt DateTime @default(now())
@@ -398,13 +398,13 @@ model Client {
 }
 
 model ClientContact {
-  id       String  @id @default(cuid())
-  clientId String
-  client   Client  @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  name     String
-  email    String?
-  phone    String?
-  title    String?
+  id        String  @id @default(cuid())
+  clientId  String
+  client    Client  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  name      String
+  email     String?
+  phone     String?
+  title     String?
   isPrimary Boolean @default(false)
 
   @@index([clientId])
@@ -437,7 +437,7 @@ model Project {
 
   /// Minor units (paise/cents) to avoid floating-point money.
   budgetAmount   Int?
-  budgetCurrency String  @default("INR")
+  budgetCurrency String @default("INR")
   /// Charge-out rate in minor units per hour.
   defaultRate    Int?
 
@@ -465,15 +465,15 @@ model Project {
 
 /// Who may book time to a project, and at what rate.
 model ProjectAssignment {
-  id        String  @id @default(cuid())
-  projectId String
-  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  userId    String
-  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                String  @id @default(cuid())
+  projectId         String
+  project           Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId            String
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   /// Overrides Project.defaultRate for this person.
-  rate      Int?
+  rate              Int?
   /// Planned share of a working week, for capacity reporting.
-  allocationPercent Int @default(100)
+  allocationPercent Int     @default(100)
 
   createdAt DateTime @default(now())
 
@@ -505,12 +505,12 @@ enum TimesheetStatus {
 
 /// A week of time for one person, and the unit that gets approved and locked.
 model Timesheet {
-  id       String          @id @default(cuid())
-  userId   String
-  user     User            @relation("TimesheetOwner", fields: [userId], references: [id], onDelete: Cascade)
+  id        String          @id @default(cuid())
+  userId    String
+  user      User            @relation("TimesheetOwner", fields: [userId], references: [id], onDelete: Cascade)
   /// Monday of the week, in UTC.
-  weekStart DateTime       @db.Date
-  status   TimesheetStatus @default(DRAFT)
+  weekStart DateTime        @db.Date
+  status    TimesheetStatus @default(DRAFT)
 
   submittedAt  DateTime?
   decidedById  String?
@@ -529,11 +529,11 @@ model Timesheet {
 }
 
 model TimeEntry {
-  id          String    @id @default(cuid())
+  id          String       @id @default(cuid())
   timesheetId String
-  timesheet   Timesheet @relation(fields: [timesheetId], references: [id], onDelete: Cascade)
+  timesheet   Timesheet    @relation(fields: [timesheetId], references: [id], onDelete: Cascade)
   projectId   String
-  project     Project   @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  project     Project      @relation(fields: [projectId], references: [id], onDelete: Restrict)
   taskId      String?
   task        ProjectTask? @relation(fields: [taskId], references: [id], onDelete: SetNull)
 
@@ -577,17 +577,17 @@ enum MilestoneStatus {
 }
 
 model ProjectMilestone {
-  id        String          @id @default(cuid())
-  projectId String
-  project   Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  name      String
-  dueDate   DateTime        @db.Date
-  status    MilestoneStatus @default(PENDING)
+  id          String          @id @default(cuid())
+  projectId   String
+  project     Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name        String
+  dueDate     DateTime        @db.Date
+  status      MilestoneStatus @default(PENDING)
   /// Fixed-price projects bill on milestones; minor units.
-  amount    Int?
+  amount      Int?
   completedAt DateTime?
-  notes     String?
-  sortOrder Int             @default(0)
+  notes       String?
+  sortOrder   Int             @default(0)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -613,20 +613,20 @@ model Job {
   client    Client    @relation(fields: [clientId], references: [id], onDelete: Restrict)
   status    JobStatus @default(DRAFT)
 
-  description  String?
-  location     String?
+  description    String?
+  location       String?
   employmentType String  @default("Full-time")
-  openings     Int      @default(1)
+  openings       Int     @default(1)
   /// Minor units. The salary band advertised to candidates.
-  salaryMin    Int?
-  salaryMax    Int?
-  currency     String   @default("INR")
+  salaryMin      Int?
+  salaryMax      Int?
+  currency       String  @default("INR")
   /// Placement fee as a percentage of first-year salary.
-  feePercent   Float?
+  feePercent     Float?
   /// Target days to fill, used to flag ageing requisitions.
-  slaDays      Int?
+  slaDays        Int?
   /// Shown on the public careers page.
-  isPublished  Boolean  @default(false)
+  isPublished    Boolean @default(false)
 
   ownerId String?
   owner   User?   @relation("JobOwner", fields: [ownerId], references: [id], onDelete: SetNull)
@@ -641,18 +641,18 @@ model Job {
 }
 
 model Candidate {
-  id     String  @id @default(cuid())
-  name   String
-  email  String  @unique
-  phone  String?
+  id             String  @id @default(cuid())
+  name           String
+  email          String  @unique
+  phone          String?
   /// A LINK to an externally hosted CV. Nothing is uploaded or stored here.
-  resumeUrl String?
-  linkedinUrl String?
-  location  String?
-  headline  String?
+  resumeUrl      String?
+  linkedinUrl    String?
+  location       String?
+  headline       String?
   /// Comma-separated for now; a tag table is a later refinement.
-  skills    String?
-  source    String  @default("Direct")
+  skills         String?
+  source         String  @default("Direct")
   /// Minor units.
   currentSalary  Int?
   expectedSalary Int?
@@ -696,7 +696,7 @@ model Application {
   /// Free-text reason captured when an application is rejected or withdrawn.
   outcomeReason String?
   /// Came in through the public careers form rather than being sourced.
-  isInbound Boolean @default(false)
+  isInbound     Boolean @default(false)
 
   events     ApplicationEvent[]
   interviews Interview[]
@@ -762,10 +762,10 @@ model Placement {
   applicationId String      @unique
   application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
 
-  startDate DateTime @db.Date
+  startDate  DateTime @db.Date
   /// Minor units.
-  salary    Int
-  currency  String   @default("INR")
+  salary     Int
+  currency   String   @default("INR")
   /// Percentage of salary charged to the client.
   feePercent Float
   /// Denormalised at placement time so a later fee-policy change cannot
@@ -801,34 +801,34 @@ enum InvoiceStatus {
 }
 
 model Invoice {
-  id       String        @id @default(cuid())
-  number   String        @unique
-  clientId String
-  client   Client        @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  id        String        @id @default(cuid())
+  number    String        @unique
+  clientId  String
+  client    Client        @relation(fields: [clientId], references: [id], onDelete: Restrict)
   projectId String?
-  project   Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  status   InvoiceStatus @default(DRAFT)
+  project   Project?      @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  status    InvoiceStatus @default(DRAFT)
 
   issueDate DateTime @db.Date
   dueDate   DateTime @db.Date
   currency  String   @default("INR")
 
   /// All minor units, computed from the lines and frozen when the invoice is sent.
-  subtotal  Int   @default(0)
+  subtotal   Int   @default(0)
   taxPercent Float @default(0)
-  taxAmount Int   @default(0)
-  total     Int   @default(0)
-  paidAmount Int  @default(0)
+  taxAmount  Int   @default(0)
+  total      Int   @default(0)
+  paidAmount Int   @default(0)
 
-  notes String?
+  notes    String?
   /// Set when issued, so the document can be re-rendered exactly as sent.
-  sentAt DateTime?
+  sentAt   DateTime?
   voidedAt DateTime?
 
-  lines      InvoiceLine[]
-  payments   Payment[]
+  lines       InvoiceLine[]
+  payments    Payment[]
   creditNotes CreditNote[]
-  placements Placement[]
+  placements  Placement[]
   timeEntries TimeEntry[]
 
   createdAt DateTime @default(now())
@@ -840,16 +840,16 @@ model Invoice {
 }
 
 model InvoiceLine {
-  id        String  @id @default(cuid())
-  invoiceId String
-  invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  id          String  @id @default(cuid())
+  invoiceId   String
+  invoice     Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   description String
   /// Hundredths of a unit (hours × 100) so 7.5h is exact.
-  quantity  Int
+  quantity    Int
   /// Minor units per unit.
-  unitRate  Int
-  amount    Int
-  sortOrder Int     @default(0)
+  unitRate    Int
+  amount      Int
+  sortOrder   Int     @default(0)
 
   @@index([invoiceId])
 }
@@ -885,24 +885,24 @@ model Expense {
   userId String
   user   User   @relation("ExpenseOwner", fields: [userId], references: [id], onDelete: Cascade)
 
-  spentOn  DateTime @db.Date
-  category String   @default("Other")
+  spentOn     DateTime @db.Date
+  category    String   @default("Other")
   /// Minor units.
-  amount   Int
-  currency String   @default("INR")
+  amount      Int
+  currency    String   @default("INR")
   description String
   /// A LINK to a receipt hosted elsewhere; nothing is stored here.
-  receiptUrl String?
+  receiptUrl  String?
 
   projectId String?
   project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
   /// Whether it should be passed on to the client.
   billable  Boolean  @default(false)
 
-  status ExpenseStatus @default(DRAFT)
-  decidedById String?
-  decidedBy   User?   @relation("ExpenseApprover", fields: [decidedById], references: [id], onDelete: SetNull)
-  decidedAt   DateTime?
+  status       ExpenseStatus @default(DRAFT)
+  decidedById  String?
+  decidedBy    User?         @relation("ExpenseApprover", fields: [decidedById], references: [id], onDelete: SetNull)
+  decidedAt    DateTime?
   decisionNote String?
   reimbursedAt DateTime?
 
@@ -980,15 +980,36 @@ model BankDetail {
 /// A credit note against an invoice — the correct instrument once a payment
 /// exists and voiding is no longer allowed.
 model CreditNote {
-  id        String  @id @default(cuid())
-  number    String  @unique
-  invoiceId String
-  invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  id         String   @id @default(cuid())
+  number     String   @unique
+  invoiceId  String
+  invoice    Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
   /// Minor units. Never exceeds the invoice total.
-  amount    Int
-  reason    String
-  issuedAt  DateTime @default(now())
+  amount     Int
+  reason     String
+  issuedAt   DateTime @default(now())
   issuedById String?
 
   @@index([invoiceId])
+}
+
+// ---------------------------------------------------------- Abuse controls --
+
+/// A fixed-window counter for per-IP throttling of the public endpoints.
+///
+/// Postgres rather than Redis on purpose: the app already depends on this
+/// database, and adding a second datastore for a handful of counters would buy
+/// atomicity we can get from a unique index anyway. One row per (key, window),
+/// swept by lib/rate-limit.ts as it goes, so the table stays small.
+model RateLimit {
+  id          String   @id @default(cuid())
+  /// "<bucket>:<client ip>", e.g. "login:203.0.113.7".
+  key         String
+  /// Start of the fixed window this row counts. Part of the unique key, so a
+  /// new window inserts a new row instead of racing an update.
+  windowStart DateTime
+  count       Int      @default(0)
+
+  @@unique([key, windowStart])
+  @@index([windowStart])
 }

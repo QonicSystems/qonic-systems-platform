@@ -5,6 +5,7 @@ import { can, requirePermission } from "@/lib/auth/guard";
 import { PIPELINE, STAGE_LABELS, availableStages, jobAgeing } from "@/lib/ats/pipeline";
 import { formatMoney } from "@/lib/money";
 import { db } from "@/lib/db";
+import { StatusChip } from "@/components/status-chip";
 
 export const metadata = { title: "Pipeline" };
 
@@ -37,7 +38,7 @@ export default async function JobPipelinePage({ params }: { params: Promise<{ id
       <p className="eyebrow">{job.reference} · {job.client.name}</p>
       <h1 className="portal-title">{job.title}</h1>
       <p className="portal-lead">
-        <span className={`status-chip status-chip--${job.status.toLowerCase().replace(/_/g, "-")}`}>{job.status.toLowerCase().replace(/_/g, " ")}</span>
+        <StatusChip status={job.status} />
         {" "}{job.openings} opening{job.openings === 1 ? "" : "s"} · open {days} day{days === 1 ? "" : "s"}
         {overSla && <strong className="text-over"> · past its {job.slaDays}-day SLA</strong>}
         {job.salaryMin && job.salaryMax ? ` · ${formatMoney(job.salaryMin, job.currency)} – ${formatMoney(job.salaryMax, job.currency)}` : ""}

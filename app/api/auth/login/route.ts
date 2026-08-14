@@ -1,6 +1,5 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { crossSiteRejection } from "@/lib/http/same-origin";
 import { clientIp, recordAudit } from "@/lib/audit";
 import { validateLoginPayload } from "@/lib/auth/login";
 import { verifyDummyPassword, verifyPassword } from "@/lib/auth/password";
@@ -8,6 +7,8 @@ import { verifyCode } from "@/lib/auth/totp";
 import { decrypt, sha256 } from "@/lib/crypto";
 import { ABSOLUTE_TTL_MS, IDLE_TTL_MS, SESSION_COOKIE, createSessionToken, hashSessionToken, safeRedirectPath, sessionCookieOptions } from "@/lib/auth/session";
 import { db } from "@/lib/db";
+import { crossSiteRejection } from "@/lib/http/same-origin";
+import { BUCKETS, rateLimitRejection } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -25,6 +26,13 @@ const GENERIC_FAILURE = "Email or password is incorrect.";
 export async function POST(request: Request) {
   const crossSite = crossSiteRejection(request.headers);
   if (crossSite) return crossSite;
+
+  // Per-IP, where the lockout below is per-account. The lockout stops one
+  // account being brute-forced; it does nothing about one host trying the same
+  // password against every account, and it is itself the lever for locking a
+  // known user out on purpose. Both are per-caller problems.
+  const throttled = await rateLimitRejection(BUCKETS.login, request);
+  if (throttled) return throttled;
 
   let body: unknown;
   try { body = await request.json(); } catch { return NextResponse.json({ message: "Please submit a valid request." }, { status: 400 }); }

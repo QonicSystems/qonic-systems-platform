@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
+import { StatusChip } from "@/components/status-chip";
 
 type Row = { id: string; number: string; client: string; project: string; status: string; issued: string; due: string; total: string; outstanding: string; ageing: string };
 
@@ -57,7 +58,7 @@ export function InvoiceManager({ invoices, clients, projects, canManage, canReco
             <td>{invoice.due}{invoice.ageing !== "—" && invoice.ageing !== "current" && <span className="portal-muted text-over">{invoice.ageing} days late</span>}</td>
             <td>{invoice.total}</td>
             <td>{invoice.outstanding}</td>
-            <td><span className={`status-chip status-chip--${invoice.status.toLowerCase().replace(/_/g, "-")}`}>{invoice.status.toLowerCase().replace(/_/g, " ")}</span></td>
+            <td><StatusChip status={invoice.status} /></td>
             <td>
               <div className="row-actions">
                 <a className="row-action" href={`/api/invoices/${invoice.id}/pdf`} target="_blank" rel="noreferrer noopener">PDF</a>

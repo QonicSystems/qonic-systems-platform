@@ -3,6 +3,7 @@
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CLIENT_STATUSES } from "@/lib/delivery/validate";
+import { StatusChip } from "@/components/status-chip";
 
 type Row = { id: string; name: string; code: string; status: string; industry: string; owner: string; projectCount: number };
 type Errors = Partial<Record<"name" | "code" | "status" | "website" | "ownerId", string>>;
@@ -47,7 +48,7 @@ export function ClientManager({ clients, owners, canManage }: {
             <td>{client.industry || "—"}</td>
             <td>{client.owner}</td>
             <td>{client.projectCount}</td>
-            <td><span className={`status-chip status-chip--${client.status.toLowerCase()}`}>{client.status.toLowerCase()}</span></td>
+            <td><StatusChip status={client.status} /></td>
           </tr>)}
         </tbody>
       </table>

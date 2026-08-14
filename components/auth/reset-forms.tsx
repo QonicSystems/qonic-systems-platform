@@ -3,8 +3,10 @@
 import { FormEvent, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useCaptcha } from "@/components/use-captcha";
 
 export function ForgotPasswordForm() {
+  const captchaToken = useCaptcha("forgot_password");
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<"idle" | "submitting" | "done" | "error">("idle");
   const [message, setMessage] = useState("");
@@ -14,7 +16,7 @@ export function ForgotPasswordForm() {
     event.preventDefault();
     setStatus("submitting"); setError("");
     try {
-      const response = await fetch("/api/auth/forgot-password", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email }) });
+      const response = await fetch("/api/auth/forgot-password", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, captchaToken: await captchaToken() }) });
       const result = await response.json() as { message?: string; errors?: { email?: string } };
       if (!response.ok) { setError(result.errors?.email ?? ""); setMessage(result.message ?? "Unable to send."); setStatus("error"); return; }
       setMessage(result.message ?? "Check your inbox."); setStatus("done");

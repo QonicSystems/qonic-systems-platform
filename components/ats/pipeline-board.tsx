@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { StatusChip } from "@/components/status-chip";
 
 type Stage = { key: string; label: string };
 export type BoardApplication = {
@@ -85,7 +86,7 @@ export function PipelineBoard({ jobId, stages, applications, addableCandidates, 
           <tbody>
             {closed.map((app) => <tr key={app.id}>
               <th scope="row"><strong>{app.candidateName}</strong></th>
-              <td><span className={`status-chip status-chip--${app.stage.toLowerCase()}`}>{app.stage.toLowerCase()}</span></td>
+              <td><StatusChip status={app.stage} /></td>
               <td>{app.outcomeReason ?? "—"}</td>
             </tr>)}
           </tbody>

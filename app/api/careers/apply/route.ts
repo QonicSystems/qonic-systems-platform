@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
-import { crossSiteRejection } from "@/lib/http/same-origin";
+import { captchaRejection } from "@/lib/captcha";
 import { emailPattern } from "@/lib/contact";
 import { db } from "@/lib/db";
+import { crossSiteRejection } from "@/lib/http/same-origin";
+import { BUCKETS, rateLimitRejection } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -18,15 +20,26 @@ export async function POST(request: Request) {
   const crossSite = crossSiteRejection(request.headers);
   if (crossSite) return crossSite;
 
+  // Each accepted request writes candidate + application + event rows inside a
+  // transaction, against a pool capped at 3 connections per instance, so an
+  // unthrottled flood degrades the whole portal and not just this endpoint.
+  const throttled = await rateLimitRejection(BUCKETS.apply, request);
+  if (throttled) return throttled;
+
   let body: unknown;
   try { body = await request.json(); } catch { return NextResponse.json({ message: "Please submit a valid request." }, { status: 400 }); }
   const input = typeof body === "object" && body !== null ? body as Record<string, unknown> : {};
 
-  const jobId = String(input.jobId ?? "");
-  const name = String(input.name ?? "").trim();
-  const email = String(input.email ?? "").trim().toLowerCase();
-  const phone = String(input.phone ?? "").trim();
-  const resumeUrl = String(input.resumeUrl ?? "").trim();
+  const captcha = await captchaRejection("apply", input.captchaToken);
+  if (captcha) return captcha;
+
+  // Free text is capped on the way in. Route handlers have no body-size limit
+  // in Next, so without this a multi-megabyte `name` is stored verbatim.
+  const jobId = String(input.jobId ?? "").slice(0, 100);
+  const name = String(input.name ?? "").trim().slice(0, 200);
+  const email = String(input.email ?? "").trim().toLowerCase().slice(0, 320);
+  const phone = String(input.phone ?? "").trim().slice(0, 50);
+  const resumeUrl = String(input.resumeUrl ?? "").trim().slice(0, 2000);
   const note = String(input.note ?? "").trim().slice(0, 2000);
 
   const errors: ApplyErrors = {};

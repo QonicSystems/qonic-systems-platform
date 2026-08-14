@@ -3,6 +3,7 @@
 import { FormEvent, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { StatusChip } from "@/components/status-chip";
 
 type Row = { id: string; reference: string; title: string; client: string; status: string; openings: number; applications: number; published: boolean; days: number; overSla: boolean; band: string };
 type Errors = Record<string, string>;
@@ -60,7 +61,7 @@ export function JobManager({ jobs, clients, canManage }: {
             <td>{job.applications}</td>
             <td>{job.days}d {job.overSla && <strong className="text-over">SLA</strong>}</td>
             <td>
-              <span className={`status-chip status-chip--${job.status.toLowerCase().replace(/_/g, "-")}`}>{job.status.toLowerCase().replace(/_/g, " ")}</span>
+              <StatusChip status={job.status} />
               {job.published && <span className="portal-muted">Published</span>}
             </td>
             {canManage && <td>

@@ -1,4 +1,5 @@
-import Link from "next/link";
+import { Breadcrumbs } from "@/components/portal/breadcrumbs";
+import { PageTabs } from "@/components/portal/page-tabs";
 import { can, requirePermission } from "@/lib/auth/guard";
 
 const tabs = [
@@ -12,13 +13,13 @@ export default async function AdminLayout({ children }: Readonly<{ children: Rea
   const visible = tabs.filter((tab) => can(context, tab.permission));
 
   return <div className="portal-page">
+    <Breadcrumbs items={[{ label: "Dashboard", href: "/dashboard" }, { label: "Administration" }]} />
     <header className="portal-page-head">
       <p className="eyebrow">Administration</p>
       <h1 className="portal-title">Manage your organisation</h1>
+      <p className="portal-lead">People, roles and the audit trail for this workspace.</p>
     </header>
-    <nav className="admin-tabs" aria-label="Administration sections">
-      {visible.map((tab) => <Link key={tab.href} href={tab.href} className="admin-tab">{tab.label}</Link>)}
-    </nav>
+    <PageTabs tabs={visible.map(({ label, href }) => ({ label, href }))} label="Administration sections" />
     {children}
   </div>;
 }
