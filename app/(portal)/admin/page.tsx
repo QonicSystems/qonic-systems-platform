@@ -50,6 +50,10 @@ export default async function AdminPeoplePage() {
       roles={roleOptions}
       canDeactivate={can(context, "user.deactivate")}
       canDelete={can(context, "user.delete")}
+      // Same permission as editing — user.manage is described as "Create
+      // accounts and edit their details". Whether any given role can actually
+      // be assigned is decided per role by canAssignRole below.
+      canCreate={mayEdit && roleOptions.some((role) => role.assignable)}
     />
   </section>;
 }

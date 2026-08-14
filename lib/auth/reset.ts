@@ -16,6 +16,31 @@ export function resetUrl(origin: string, token: string): string {
   return `${origin}/reset-password?token=${encodeURIComponent(token)}`;
 }
 
+/**
+ * The same token, worded for someone who has never signed in. A new colleague
+ * being told their password was "reset" would reasonably wonder who set it.
+ * Given a longer life than a reset because an invite often waits for a start
+ * date rather than being acted on within the hour.
+ */
+export const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+export function inviteEmail(name: string, url: string, inviter: string): { subject: string; text: string } {
+  return {
+    subject: "Your QONIC consulting account",
+    text: [
+      `Hello ${name},`,
+      "",
+      `${inviter} has created an account for you on the QONIC consulting staff portal.`,
+      "Choose your password to get started:",
+      url,
+      "",
+      "The link expires in seven days. If it lapses, use \"Forgotten your password?\" on the sign-in page.",
+      "",
+      "QONIC consulting",
+    ].join("\n"),
+  };
+}
+
 export function resetEmail(name: string, url: string): { subject: string; text: string } {
   return {
     subject: "Reset your QONIC consulting password",
