@@ -4,6 +4,8 @@ import { canAdminister, canAssignRole, canChangeOwnRole, canEditIdentity } from 
 import { guardRoute } from "@/lib/auth/guard";
 import { emailPattern } from "@/lib/contact";
 import { db } from "@/lib/db";
+import { isForeignKeyViolation, isRecordNotFound, isUniqueEmailViolation } from "@/lib/db-errors";
+import { notify } from "@/lib/notify";
 
 export const runtime = "nodejs";
 
@@ -27,11 +29,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   try { body = await request.json(); } catch { return NextResponse.json({ message: "Please submit a valid request." }, { status: 400 }); }
   const input = typeof body === "object" && body !== null ? body as Record<string, unknown> : {};
 
+  // Same caps as the create route — otherwise the identical field is stored at
+  // one length when added and another when edited.
   const data = {
-    name: String(input.name ?? "").trim(),
-    email: String(input.email ?? "").trim().toLowerCase(),
-    phone: String(input.phone ?? "").trim(),
-    jobTitle: String(input.jobTitle ?? "").trim(),
+    name: String(input.name ?? "").trim().slice(0, 200),
+    email: String(input.email ?? "").trim().toLowerCase().slice(0, 320),
+    phone: String(input.phone ?? "").trim().slice(0, 50),
+    jobTitle: String(input.jobTitle ?? "").trim().slice(0, 200),
     roleId: String(input.roleId ?? "").trim(),
   };
 
@@ -67,16 +71,36 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const before = { name: target.name, email: target.email, phone: target.phone, jobTitle: target.jobTitle, role: target.role.key };
   const after = { name: data.name, email: data.email, phone: data.phone || null, jobTitle: data.jobTitle || null, role: nextRole!.key };
 
-  await db.$transaction(async (tx) => {
+  try {
+    await db.$transaction(async (tx) => {
     await tx.user.update({
       where: { id: target.id },
       data: { name: data.name, email: data.email, phone: data.phone || null, jobTitle: data.jobTitle || null, roleId: nextRole!.id },
     });
     // A role change is a large enough authority shift to require re-authentication,
     // so every existing session for that person is dropped.
-    if (roleChanged) await tx.session.deleteMany({ where: { userId: target.id } });
+    if (roleChanged) {
+      await tx.session.deleteMany({ where: { userId: target.id } });
+      // Being signed out mid-task with no explanation reads as a bug. The
+      // notification survives the session drop and is waiting on next sign-in.
+      await notify({
+        userId: target.id,
+        kind: "SYSTEM",
+        title: `Your role is now ${nextRole!.label}`,
+        body: "You were signed out so the change takes effect. Sign in again to continue.",
+      }, tx);
+    }
     await recordAudit({ actorId: context.user.id, action: roleChanged ? "user.update.role" : "user.update", entityType: "User", entityId: target.id, before, after, ipAddress: clientIp(request) }, tx);
-  });
+    });
+  } catch (error) {
+    // The uniqueness pre-check above is a read, so a concurrent write can still
+    // land between it and this update. Report it as the field error the caller
+    // already knows how to render rather than a 500.
+    if (isUniqueEmailViolation(error)) {
+      return NextResponse.json({ message: "Please correct the highlighted fields.", errors: { email: "Another account already uses that email address." } }, { status: 422 });
+    }
+    throw error;
+  }
 
   return NextResponse.json({ message: roleChanged ? `${data.name} updated and signed out to re-authenticate.` : `${data.name} updated.` });
 }
@@ -102,19 +126,33 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
     }, { status: 409 });
   }
 
-  await db.$transaction(async (tx) => {
-    // Audit first: the row survives the delete because AuditLog.actor is SetNull
-    // and we record the subject in `before` rather than as a relation.
-    await recordAudit({
-      actorId: context.user.id,
-      action: "user.delete",
-      entityType: "User",
-      entityId: target.id,
-      before: { name: target.name, email: target.email, role: target.role.key },
-      ipAddress: clientIp(request),
-    }, tx);
-    await tx.user.delete({ where: { id: target.id } }); // sessions/overrides cascade
-  });
+  try {
+    await db.$transaction(async (tx) => {
+      // Audit first: the row survives the delete because AuditLog.actor is SetNull
+      // and we record the subject in `before` rather than as a relation.
+      await recordAudit({
+        actorId: context.user.id,
+        action: "user.delete",
+        entityType: "User",
+        entityId: target.id,
+        before: { name: target.name, email: target.email, role: target.role.key },
+        ipAddress: clientIp(request),
+      }, tx);
+      await tx.user.delete({ where: { id: target.id } }); // sessions/overrides cascade
+    });
+  } catch (error) {
+    // The count above is a separate read, so a letter created in between still
+    // trips the FK Restrict. Same refusal, rather than a 500.
+    if (isForeignKeyViolation(error)) {
+      return NextResponse.json({
+        message: `${target.name} now has paperwork on record and cannot be removed. Deactivate the account instead.`,
+      }, { status: 409 });
+    }
+    if (isRecordNotFound(error)) {
+      return NextResponse.json({ message: "That account no longer exists." }, { status: 404 });
+    }
+    throw error;
+  }
 
   return NextResponse.json({ message: `${target.name} has been removed.` });
 }

@@ -9,6 +9,7 @@ import { hashPassword } from "@/lib/auth/password";
 import { INVITE_TTL_MS, createResetToken, hashResetToken, inviteEmail, resetUrl } from "@/lib/auth/reset";
 import { emailPattern } from "@/lib/contact";
 import { db } from "@/lib/db";
+import { isUniqueEmailViolation } from "@/lib/db-errors";
 
 export const runtime = "nodejs";
 
@@ -74,13 +75,21 @@ export async function POST(request: Request) {
   if (!assignable.ok) return NextResponse.json({ message: assignable.reason }, { status: assignable.status });
 
   const token = createResetToken();
-  const created = await db.$transaction(async (tx) => {
+  // argon2 is deliberately slow. Hashing inside the transaction held it open for
+  // the whole computation, which can exceed Prisma's 5s interactive timeout
+  // (P2028) under load — and the value does not depend on anything in the
+  // transaction, so there is no reason for it to be there.
+  const passwordHash = await hashPassword(randomBytes(24).toString("base64url"));
+
+  let created;
+  try {
+    created = await db.$transaction(async (tx) => {
     const user = await tx.user.create({
       data: {
         name: data.name, email: data.email, phone: data.phone || null, jobTitle: data.jobTitle || null,
         roleId: role!.id, status: "ACTIVE", mustChangePassword: true,
         // Random and never revealed to anyone, including the administrator.
-        passwordHash: await hashPassword(randomBytes(24).toString("base64url")),
+        passwordHash,
       },
     });
     await tx.passwordResetToken.create({
@@ -90,8 +99,14 @@ export async function POST(request: Request) {
       actorId: context.user.id, action: "user.create", entityType: "User", entityId: user.id,
       after: { name: data.name, email: data.email, role: role!.key }, ipAddress: clientIp(request),
     }, tx);
-    return user;
-  });
+      return user;
+    });
+  } catch (error) {
+    if (isUniqueEmailViolation(error)) {
+      return NextResponse.json({ message: "Please correct the highlighted fields.", errors: { email: "Another account already uses that email address." } }, { status: 422 });
+    }
+    throw error;
+  }
 
   const url = resetUrl(appOrigin(), token);
   const config = smtp();

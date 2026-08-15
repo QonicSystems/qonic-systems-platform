@@ -20,7 +20,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
   const input = typeof body === "object" && body !== null ? body as Record<string, unknown> : {};
   const permissionKey = String(input.permissionKey ?? "");
-  const enabled = input.enabled === true;
+  // A real boolean, not `=== true`: a missing or malformed field used to mean
+  // "disable", so a malformed request silently revoked a capability.
+  if (typeof input.enabled !== "boolean") {
+    return NextResponse.json({ message: "Please submit a valid request." }, { status: 422 });
+  }
+  const enabled = input.enabled;
 
   const [role, permission] = await Promise.all([
     db.role.findUnique({ where: { id: roleId } }),

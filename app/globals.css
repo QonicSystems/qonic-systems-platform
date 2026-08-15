@@ -464,6 +464,31 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 
 /* --- Contract letters --- */
 .action-bar { display: flex; flex-wrap: wrap; gap: .6rem; }
+/* Right-aligned toolbar above a table: an optional search on the left, the
+   primary action on the right, matching the reference console layout. */
+.action-bar--split { justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: .9rem; }
+.action-bar--split > :last-child { margin-left: auto; }
+
+/* purge-audit.tsx referenced these two classes and neither existed, so the
+   destructive panel rendered as unstyled text with no visual separation from
+   the log above it. */
+/* Audit log: filter row, expandable detail, JSON payloads. */
+.audit-filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .75rem; margin-bottom: 1rem; }
+.audit-filters label { display: block; margin-bottom: .3rem; color: var(--ink); font-size: .78rem; font-weight: 700; }
+.audit-filters .search-input { min-width: 10rem; padding: .45rem .6rem; font-size: .85rem; }
+.audit-filter-actions { display: flex; gap: .4rem; margin-left: auto; }
+.audit-detail-grid { display: grid; gap: .7rem; padding: .3rem 0 .6rem; }
+.audit-detail-grid p { margin: 0; font-size: .82rem; color: var(--body); }
+.audit-json { margin: .3rem 0 0; max-height: 16rem; overflow: auto; border: 1px solid var(--line); border-radius: .6rem; background: var(--canvas-sub); padding: .6rem .8rem; font-size: .76rem; line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
+
+.purge-panel { margin-top: 1.6rem; border: 1px solid #fecaca; border-radius: 1rem; background: #fef2f2; padding: 1.1rem 1.2rem; }
+.purge-title { margin: 0 0 .5rem; color: #b91c1c; font-family: var(--font-display), sans-serif; font-size: 1.05rem; font-weight: 800; }
+
+/* .search-input had no focus treatment at all, so tabbing into it gave no
+   feedback while every .contact-form input did. */
+.search-input:hover { border-color: var(--accent-soft); }
+.search-input:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 4px rgb(255 215 0 / .12); }
+.search-input::placeholder { color: var(--faint); }
 .status-chip--draft { background: var(--canvas-sub); color: var(--body); }
 .status-chip--pending-release { background: #fef3c7; color: #92400e; }
 .status-chip--changes-requested { background: #ffedd5; color: #9a3412; }

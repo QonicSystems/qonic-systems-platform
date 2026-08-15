@@ -1,41 +1,79 @@
+import { AuditTable } from "@/components/admin/audit-table";
 import { PurgeAudit } from "@/components/admin/purge-audit";
 import { requirePermission } from "@/lib/auth/guard";
 import { db } from "@/lib/db";
 
 export const metadata = { title: "Audit Log" };
 
-export default async function AuditPage() {
-  const context = await requirePermission("audit.view");
-  const entries = await db.auditLog.findMany({ include: { actor: true }, orderBy: { createdAt: "desc" }, take: 100 });
+const PAGE_SIZE = 50;
 
-  // How much each retention window would remove, so the dialog can state the
-  // real consequence rather than a vague warning.
-  const now = new Date().getTime();
-  const [total, ...counts] = await Promise.all([
+/**
+ * The log was previously the 100 newest rows with no filters and no way to
+ * reach anything older — for a compliance record, "we cannot show you what
+ * happened last month" is the wrong answer. Filters and paging are applied in
+ * the query so the page stays server-rendered.
+ */
+export default async function AuditPage({ searchParams }: {
+  searchParams: Promise<{ actor?: string; action?: string; from?: string; to?: string; page?: string }>;
+}) {
+  const context = await requirePermission("audit.view");
+  const params = await searchParams;
+
+  const page = Math.max(1, Number.parseInt(params.page ?? "1", 10) || 1);
+  const actorId = params.actor?.trim() || undefined;
+  const action = params.action?.trim() || undefined;
+  const isDate = (value?: string) => Boolean(value && /^\d{4}-\d{2}-\d{2}$/.test(value));
+  const from = isDate(params.from) ? new Date(`${params.from}T00:00:00.000Z`) : undefined;
+  // Inclusive of the chosen day, which is what a person picking a date means.
+  const to = isDate(params.to) ? new Date(`${params.to}T23:59:59.999Z`) : undefined;
+
+  const where = {
+    ...(actorId ? { actorId } : {}),
+    ...(action ? { action } : {}),
+    ...(from || to ? { createdAt: { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } } : {}),
+  };
+
+  const [entries, matching, total, actors, actions] = await Promise.all([
+    db.auditLog.findMany({ where, include: { actor: { select: { name: true, email: true } } }, orderBy: { createdAt: "desc" }, skip: (page - 1) * PAGE_SIZE, take: PAGE_SIZE }),
+    db.auditLog.count({ where }),
     db.auditLog.count(),
-    ...[30, 90, 180, 365].map((days) =>
-      db.auditLog.count({ where: { createdAt: { lt: new Date(now - days * 86_400_000) } } })),
+    // Only people who actually appear in the log — a filter listing names with
+    // nothing behind them is just a dead end.
+    db.user.findMany({ where: { auditLogs: { some: {} } }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
+    db.auditLog.findMany({ distinct: ["action"], select: { action: true }, orderBy: { action: "asc" } }),
   ]);
+
+  const now = new Date().getTime();
+  const counts = await Promise.all([30, 90, 180, 365].map((days) =>
+    db.auditLog.count({ where: { createdAt: { lt: new Date(now - days * 86_400_000) } } })));
   const olderThanOptions = [30, 90, 180, 365].map((days, index) => ({ days, count: counts[index] }));
 
   return <section className="portal-section">
     <h2 className="portal-section-title">Audit log</h2>
-    <p className="portal-note">The 100 most recent privileged actions.</p>
+    <p className="portal-note">
+      {matching.toLocaleString()} matching {matching === 1 ? "entry" : "entries"}
+      {matching !== total && ` of ${total.toLocaleString()}`}. Every privileged action is recorded and cannot be edited.
+    </p>
 
-    <div className="matrix-scroll">
-      <table className="matrix matrix--people">
-        <thead><tr><th scope="col">When</th><th scope="col">Who</th><th scope="col">Action</th><th scope="col">Detail</th></tr></thead>
-        <tbody>
-          {entries.length === 0 && <tr><td colSpan={4}>No activity recorded yet.</td></tr>}
-          {entries.map((entry) => <tr key={entry.id}>
-            <td>{entry.createdAt.toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })}</td>
-            <td>{entry.actor?.name ?? "—"}</td>
-            <td><code className="audit-action">{entry.action}</code></td>
-            <td>{entry.after ? <code className="audit-detail">{JSON.stringify(entry.after)}</code> : "—"}</td>
-          </tr>)}
-        </tbody>
-      </table>
-    </div>
+    <AuditTable
+      entries={entries.map((entry) => ({
+        id: entry.id,
+        when: entry.createdAt.toISOString(),
+        actor: entry.actor?.name ?? "—",
+        actorEmail: entry.actor?.email ?? null,
+        action: entry.action,
+        entityType: entry.entityType,
+        entityId: entry.entityId,
+        ipAddress: entry.ipAddress,
+        before: entry.before ? JSON.stringify(entry.before, null, 2) : null,
+        after: entry.after ? JSON.stringify(entry.after, null, 2) : null,
+      }))}
+      actors={actors}
+      actions={actions.map((entry) => entry.action)}
+      filters={{ actor: actorId ?? "", action: action ?? "", from: params.from ?? "", to: params.to ?? "" }}
+      page={page}
+      pageCount={Math.max(1, Math.ceil(matching / PAGE_SIZE))}
+    />
 
     {context.role.isSuperAdmin && <PurgeAudit olderThanOptions={olderThanOptions} totalEntries={total} />}
   </section>;

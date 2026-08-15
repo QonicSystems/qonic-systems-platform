@@ -2,7 +2,10 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
+import { EmptyState } from "@/components/portal/empty-state";
 import { StatusChip } from "@/components/status-chip";
+import { TableToolbar } from "@/components/portal/table-toolbar";
+import { useFilter } from "@/lib/ui/filter";
 
 type Row = { id: string; number: string; client: string; project: string; status: string; issued: string; due: string; total: string; outstanding: string; ageing: string };
 
@@ -18,6 +21,7 @@ export function InvoiceManager({ invoices, clients, projects, canManage, canReco
 }) {
   const router = useRouter();
   const empty = { clientId: clients[0]?.id ?? "", projectId: "", issueDate: today, dueDate: dueDefault, taxPercent: "18", fromTimesheets: true, notes: "", currency: "INR" };
+  const { query, setQuery, rows, isFiltered } = useFilter(invoices, (invoice) => [invoice.number, invoice.client, invoice.project, invoice.status]);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(empty);
   const [paying, setPaying] = useState<Row | null>(null);
@@ -46,13 +50,17 @@ export function InvoiceManager({ invoices, clients, projects, canManage, canReco
 
   return <div>
     {notice && <p className={`form-status form-status--${notice.tone}`} role="status">{notice.text}</p>}
-    {canManage && <p><button type="button" className="button button-primary" onClick={() => setOpen(true)} disabled={clients.length === 0}>Raise an invoice</button></p>}
+    <TableToolbar search={query} onSearch={setQuery} placeholder="Search invoices…" label="Search invoices">
+      {canManage && <button type="button" className="button button-primary" onClick={() => setOpen(true)} disabled={clients.length === 0}>Raise an invoice</button>}
+    </TableToolbar>
 
-    {invoices.length === 0 ? <p className="portal-note">No invoices yet.</p> : <div className="matrix-scroll">
+    {rows.length === 0
+      ? <EmptyState message="No invoices yet." filteredMessage="Nothing matches that search." isFiltered={isFiltered} />
+      : <div className="matrix-scroll">
       <table className="matrix matrix--people">
         <thead><tr><th scope="col">Invoice</th><th scope="col">Client</th><th scope="col">Due</th><th scope="col">Total</th><th scope="col">Outstanding</th><th scope="col">Status</th><th scope="col">Actions</th></tr></thead>
         <tbody>
-          {invoices.map((invoice) => <tr key={invoice.id}>
+          {rows.map((invoice) => <tr key={invoice.id}>
             <th scope="row"><strong>{invoice.number}</strong><span>{invoice.project} · issued {invoice.issued}</span></th>
             <td>{invoice.client}</td>
             <td>{invoice.due}{invoice.ageing !== "—" && invoice.ageing !== "current" && <span className="portal-muted text-over">{invoice.ageing} days late</span>}</td>

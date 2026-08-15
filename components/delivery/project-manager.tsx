@@ -3,7 +3,10 @@
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { BILLING_LABELS, BILLING_MODELS, PROJECT_STATUSES } from "@/lib/delivery/validate";
+import { EmptyState } from "@/components/portal/empty-state";
 import { StatusChip } from "@/components/status-chip";
+import { TableToolbar } from "@/components/portal/table-toolbar";
+import { useFilter } from "@/lib/ui/filter";
 
 type Row = { id: string; code: string; name: string; client: string; status: string; billing: string; budget: string; manager: string; team: number; hours: string };
 type Errors = Partial<Record<"name" | "code" | "clientId" | "status" | "billing" | "budgetAmount" | "defaultRate" | "startDate" | "endDate", string>>;
@@ -15,6 +18,7 @@ export function ProjectManager({ projects, clients, people, canManage }: {
   canManage: boolean;
 }) {
   const router = useRouter();
+  const { query, setQuery, rows, isFiltered } = useFilter(projects, (project) => [project.name, project.code, project.client, project.status, project.manager]);
   const [open, setOpen] = useState(false);
   const empty = { name: "", code: "", clientId: clients[0]?.id ?? "", status: "PLANNED", billing: "TIME_AND_MATERIALS", budgetAmount: "", budgetCurrency: "INR", defaultRate: "", startDate: "", endDate: "", managerId: "", notes: "" };
   const [form, setForm] = useState(empty);
@@ -39,16 +43,20 @@ export function ProjectManager({ projects, clients, people, canManage }: {
 
   return <div>
     {notice && <p className={`form-status form-status--${notice.tone}`} role="status">{notice.text}</p>}
-    {canManage && <p>
-      <button type="button" className="button button-primary" onClick={() => setOpen(true)} disabled={clients.length === 0}>Create a project</button>
-      {clients.length === 0 && <span className="field-hint"> Add a client first.</span>}
-    </p>}
+    {canManage && <TableToolbar search={query} onSearch={setQuery} placeholder="Search projects…" label="Search projects">
+      <>
+        <button type="button" className="button button-primary" onClick={() => setOpen(true)} disabled={clients.length === 0}>Create a project</button>
+        {clients.length === 0 && <span className="field-hint"> Add a client first.</span>}
+      </>
+    </TableToolbar>}
 
-    {projects.length === 0 ? <p className="portal-note">No projects yet.</p> : <div className="matrix-scroll">
+    {rows.length === 0
+      ? <EmptyState message="No projects yet." filteredMessage="Nothing matches that search." isFiltered={isFiltered} />
+      : <div className="matrix-scroll">
       <table className="matrix matrix--people">
         <thead><tr><th scope="col">Project</th><th scope="col">Client</th><th scope="col">Billing</th><th scope="col">Budget</th><th scope="col">Manager</th><th scope="col">Team</th><th scope="col">Hours</th><th scope="col">Status</th></tr></thead>
         <tbody>
-          {projects.map((project) => <tr key={project.id}>
+          {rows.map((project) => <tr key={project.id}>
             <th scope="row"><strong>{project.name}</strong><span>{project.code}</span></th>
             <td>{project.client}</td>
             <td>{project.billing}</td>

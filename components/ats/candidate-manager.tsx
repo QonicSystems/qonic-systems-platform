@@ -1,27 +1,25 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
+import { EmptyState } from "@/components/portal/empty-state";
+import { TableToolbar } from "@/components/portal/table-toolbar";
+import { useFilter } from "@/lib/ui/filter";
 
 type Row = { id: string; name: string; email: string; headline: string; location: string; skills: string; source: string; resumeUrl: string | null; hasConsent: boolean; applications: string[] };
 type Errors = Record<string, string>;
 
 export function CandidateManager({ candidates, canManage }: { candidates: ReadonlyArray<Row>; canManage: boolean }) {
   const router = useRouter();
-  const [query, setQuery] = useState("");
+  // This component's own filter became lib/ui/filter.ts, so every table now
+  // behaves the same way rather than this one being the exception.
+  const { query, setQuery, rows, isFiltered } = useFilter(candidates, (c) => [c.name, c.email, c.headline, c.skills, c.location]);
   const [open, setOpen] = useState(false);
   const empty = { name: "", email: "", phone: "", headline: "", location: "", skills: "", source: "Direct", resumeUrl: "", linkedinUrl: "", noticePeriod: "", currentSalary: "", expectedSalary: "", notes: "", consent: false };
   const [form, setForm] = useState(empty);
   const [errors, setErrors] = useState<Errors>({});
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ tone: "success" | "error"; text: string } | null>(null);
-
-  // Client-side filter is fine at this scale; a server search comes with volume.
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return candidates;
-    return candidates.filter((c) => [c.name, c.email, c.headline, c.skills, c.location].join(" ").toLowerCase().includes(q));
-  }, [candidates, query]);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -39,17 +37,17 @@ export function CandidateManager({ candidates, canManage }: { candidates: Readon
   return <div>
     {notice && <p className={`form-status form-status--${notice.tone}`} role="status">{notice.text}</p>}
 
-    <div className="action-bar">
+    <TableToolbar search={query} onSearch={setQuery} placeholder="Search name, skills, or location" label="Search candidates">
       {canManage && <button type="button" className="button button-primary" onClick={() => setOpen(true)}>Add a candidate</button>}
-      <input className="search-input" type="search" value={query} onChange={(e) => setQuery(e.target.value)}
-        placeholder="Search name, skills, or location" aria-label="Search candidates" />
-    </div>
+    </TableToolbar>
 
-    {filtered.length === 0 ? <p className="portal-note">{query ? "No candidates match that search." : "No candidates yet."}</p> : <div className="matrix-scroll">
+    {rows.length === 0
+      ? <EmptyState message="No candidates yet." filteredMessage="No candidates match that search." isFiltered={isFiltered} />
+      : <div className="matrix-scroll">
       <table className="matrix matrix--people">
         <thead><tr><th scope="col">Candidate</th><th scope="col">Skills</th><th scope="col">Source</th><th scope="col">Pipelines</th><th scope="col">CV</th></tr></thead>
         <tbody>
-          {filtered.map((c) => <tr key={c.id}>
+          {rows.map((c) => <tr key={c.id}>
             <th scope="row">
               <strong>{c.name}</strong>
               <span>{c.headline || c.email}{c.location && ` · ${c.location}`}</span>

@@ -2,7 +2,10 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
+import { EmptyState } from "@/components/portal/empty-state";
 import { StatusChip } from "@/components/status-chip";
+import { TableToolbar } from "@/components/portal/table-toolbar";
+import { useFilter } from "@/lib/ui/filter";
 
 const CATEGORIES = ["Travel", "Accommodation", "Meals", "Software", "Equipment", "Training", "Other"];
 type Row = { id: string; spentOn: string; category: string; amount: string; description: string; project: string; status: string; receiptUrl: string | null; note: string | null };
@@ -16,6 +19,7 @@ export function ExpenseManager({ expenses, projects, today }: {
 }) {
   const router = useRouter();
   const empty = { amount: "", spentOn: today, category: "Travel", description: "", receiptUrl: "", projectId: "", billable: false };
+  const { query, setQuery, rows, isFiltered } = useFilter(expenses, (expense) => [expense.description, expense.category, expense.project, expense.status]);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(empty);
   const [errors, setErrors] = useState<Errors>({});
@@ -37,13 +41,17 @@ export function ExpenseManager({ expenses, projects, today }: {
 
   return <div>
     {notice && <p className={`form-status form-status--${notice.tone}`} role="status">{notice.text}</p>}
-    <p><button type="button" className="button button-primary" onClick={() => setOpen(true)}>Claim an expense</button></p>
+    <TableToolbar search={query} onSearch={setQuery} placeholder="Search expenses…" label="Search expenses">
+      <button type="button" className="button button-primary" onClick={() => setOpen(true)}>Claim an expense</button>
+    </TableToolbar>
 
-    {expenses.length === 0 ? <p className="portal-note">No expense claims yet.</p> : <div className="matrix-scroll">
+    {rows.length === 0
+      ? <EmptyState message="No expense claims yet." filteredMessage="Nothing matches that search." isFiltered={isFiltered} />
+      : <div className="matrix-scroll">
       <table className="matrix matrix--people">
         <thead><tr><th scope="col">Description</th><th scope="col">Date</th><th scope="col">Category</th><th scope="col">Project</th><th scope="col">Amount</th><th scope="col">Status</th></tr></thead>
         <tbody>
-          {expenses.map((expense) => <tr key={expense.id}>
+          {rows.map((expense) => <tr key={expense.id}>
             <th scope="row"><strong>{expense.description}</strong>{expense.note && <span>“{expense.note}”</span>}</th>
             <td>{expense.spentOn}</td>
             <td>{expense.category}</td>
