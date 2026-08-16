@@ -49,7 +49,7 @@ async function clearData() {
     "ContractLetterEvent", "ContractLetter",
     "LeaveRequest", "LeaveBalance",
     "Notification", "BankDetail", "PasswordResetToken", "Session",
-    "UserPermissionOverride", "AuditLog", "User"
+    "UserPermissionOverride", "AuditLog", "RateLimit", "User"
     RESTART IDENTITY CASCADE`);
   await db.$disconnect();
   console.log("✔ Test data cleared");

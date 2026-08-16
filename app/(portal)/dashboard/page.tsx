@@ -77,6 +77,12 @@ export default async function DashboardPage({
         </p>
       )}
 
+      <header className="portal-page-head mb-6">
+        <p className="eyebrow">{context.role.label}</p>
+        <h1 className="portal-title">Welcome back, {context.user.name}</h1>
+        <p className="portal-lead">Overview of active recruitment requisitions, operations, projects, and delivery metrics.</p>
+      </header>
+
       {/* Top High-level Stats */}
       <div className="portal-grid">
         <article className="portal-card">

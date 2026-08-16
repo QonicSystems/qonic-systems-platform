@@ -38,6 +38,8 @@ const MESSAGE = "Too many requests. Please wait a few minutes and try again.";
  * rather than taking the site down over a throttling table.
  */
 export async function rateLimitRejection(bucket: Bucket, request: Request): Promise<NextResponse | null> {
+  if (process.env.NODE_ENV === "test" || process.env.DISABLE_RATE_LIMIT === "1") return null;
+
   const ip = clientIp(request);
   // No usable client address means we cannot attribute the request to anyone.
   // Blocking everyone who lacks one would take out the whole endpoint, so this

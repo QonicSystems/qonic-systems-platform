@@ -14,6 +14,7 @@ const DEMO_PASSWORD = "Demo-Passw0rd-2026";
 
 const PEOPLE = [
   { email: "cofounder@qonicsystems.com", name: "Priya Raman", role: ROLE.CO_FOUNDER, jobTitle: "Co-Founder", techStack: "Executive Leadership, System Design" },
+  { email: "hr@qonicsystems.com", name: "Ananya Sharma", role: ROLE.EMPLOYEE, jobTitle: "HR Operations Lead", techStack: "ATS, HR Governance, Contracts" },
   { email: "lead-dev@qonicsystems.com", name: "Neha Kulkarni", role: ROLE.EMPLOYEE, jobTitle: "Lead Full-Stack Developer", techStack: "React, Next.js, Node.js, TypeScript, PostgreSQL" },
   { email: "backend-dev@qonicsystems.com", name: "Rahul Mehta", role: ROLE.EMPLOYEE, jobTitle: "Senior Backend Developer", techStack: "Python, FastAPI, AWS, Docker, Kubernetes" },
   { email: "cloud-dev@qonicsystems.com", name: "Sana Iqbal", role: ROLE.EMPLOYEE, jobTitle: "DevOps & Cloud Engineer", techStack: "Terraform, CI/CD, AWS, Golang, Linux" },
@@ -31,12 +32,23 @@ async function main() {
 
   for (const person of PEOPLE) {
     const role = await db.role.findUniqueOrThrow({ where: { key: person.role } });
-    await db.user.upsert({
+    const user = await db.user.upsert({
       where: { email: person.email },
       update: { roleId: role.id, jobTitle: person.jobTitle, techStack: person.techStack },
-      // Demo users skip the forced password change so tests can sign straight in.
       create: { email: person.email, name: person.name, passwordHash, roleId: role.id, jobTitle: person.jobTitle, techStack: person.techStack, mustChangePassword: false },
     });
+
+    if (person.email === "hr@qonicsystems.com") {
+      const perms = await db.permission.findMany({ where: { key: { in: ["contract.generate", "contract.submit", "contract.view_any", "candidate.manage", "candidate.view"] } } });
+      for (const p of perms) {
+        await db.userPermissionOverride.upsert({
+          where: { userId_permissionId: { userId: user.id, permissionId: p.id } },
+          update: { effect: "ALLOW" },
+          create: { userId: user.id, permissionId: p.id, effect: "ALLOW" },
+        });
+      }
+    }
+
     console.log(`✔ ${person.email} (${role.label})`);
   }
 

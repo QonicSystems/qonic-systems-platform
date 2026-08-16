@@ -82,6 +82,24 @@ export function TimesheetGrid({ timesheetId, weekDates, projects, initialRows, e
   const dayLabel = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", timeZone: "UTC" });
   const isWeekend = (iso: string) => [0, 6].includes(new Date(`${iso}T00:00:00Z`).getUTCDay());
 
+  const autofillStandardWeek = () => {
+    if (projects.length === 0) return;
+    const project = projects[0];
+    const standardDurations = weekDates.map((iso) => (isWeekend(iso) ? "" : "8.0"));
+    
+    if (rows.length === 0) {
+      setRows([{
+        key: `auto-${Date.now()}`,
+        projectId: project.id,
+        taskId: project.tasks[0]?.id ?? null,
+        durations: standardDurations,
+        note: "Standard work week (40h)",
+      }]);
+    } else {
+      setRows((current) => current.map((row, idx) => idx === 0 ? { ...row, durations: standardDurations } : row));
+    }
+  };
+
   return <div>
     {notice && <p className={`form-status form-status--${notice.tone}`} role="status">{notice.text}</p>}
     {status === "REJECTED" && decisionNote && <p className="form-status form-status--error" role="alert">
@@ -94,6 +112,33 @@ export function TimesheetGrid({ timesheetId, weekDates, projects, initialRows, e
     {projects.length === 0 ? <p className="portal-note">
       You are not assigned to any project yet, so there is nowhere to book time. Ask a project manager to add you.
     </p> : <>
+      {editable && (
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-3 p-3 bg-neutral-900/40 border border-neutral-800 rounded-lg">
+          <span className="text-xs text-neutral-400 font-medium">⚡ Smart Actions:</span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="button button-outline text-xs py-1 px-2.5 text-amber-400 border-amber-500/30 hover:border-amber-400"
+              onClick={autofillStandardWeek}
+              disabled={busy}
+              title="Fills Mon–Fri with 8h/day (40 hours total)"
+            >
+              ⚡ Autofill Standard Week (40h)
+            </button>
+            {rows.length > 0 && (
+              <button
+                type="button"
+                className="button button-outline text-xs py-1 px-2.5 text-neutral-400 hover:text-white"
+                onClick={() => setRows([])}
+                disabled={busy}
+              >
+                Clear All
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="matrix-scroll">
         <table className="matrix timesheet">
           <thead>

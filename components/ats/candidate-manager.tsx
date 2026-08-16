@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { EmptyState } from "@/components/portal/empty-state";
 import { TableToolbar } from "@/components/portal/table-toolbar";
 import { useFilter } from "@/lib/ui/filter";
+import { calculateTechMatch } from "@/lib/ats/match";
 
 type Row = {
   id: string;
@@ -37,6 +38,7 @@ export function CandidateManager({
   canDraftContract: boolean;
 }) {
   const router = useRouter();
+  const [matchRequirement, setMatchRequirement] = useState("");
   const { query, setQuery, rows, isFiltered } = useFilter(candidates, (c) => [
     c.name,
     c.email,
@@ -118,11 +120,21 @@ export function CandidateManager({
         placeholder="Search candidate, tech stack, visa, bench status…"
         label="Search candidate pool"
       >
-        {canManage && (
-          <button type="button" className="button button-primary" onClick={() => setOpen(true)}>
-            Add Candidate
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={matchRequirement}
+            onChange={(e) => setMatchRequirement(e.target.value)}
+            placeholder="⚡ AI Match Tech (e.g. React, AWS, Node)"
+            className="text-xs px-2.5 py-1.5 bg-neutral-900 border border-amber-500/30 rounded text-amber-300 placeholder:text-neutral-500 w-56"
+            title="Type tech keywords to instantly calculate compatibility score across candidates"
+          />
+          {canManage && (
+            <button type="button" className="button button-primary" onClick={() => setOpen(true)}>
+              Add Candidate
+            </button>
+          )}
+        </div>
       </TableToolbar>
 
       {rows.length === 0 ? (
@@ -138,8 +150,8 @@ export function CandidateManager({
               <tr>
                 <th scope="col">Candidate</th>
                 <th scope="col">Resource Type</th>
-                <th scope="col">Tech Stack</th>
-                <th scope="col">Visa & Commission</th>
+                <th scope="col">Tech Stack &amp; Compatibility</th>
+                <th scope="col">Visa &amp; Commission</th>
                 <th scope="col">Bench / Utilization</th>
                 <th scope="col">Active Pipelines</th>
                 <th scope="col">CV</th>
@@ -147,68 +159,98 @@ export function CandidateManager({
               </tr>
             </thead>
             <tbody>
-              {rows.map((c) => (
-                <tr key={c.id}>
-                  <th scope="row">
-                    <strong>{c.name}</strong>
-                    <span>
-                      {c.email} {c.location && `· ${c.location}`}
-                    </span>
-                    {c.ssn && c.ssn !== "—" && (
-                      <span className="text-xs text-slate-500 font-mono">SSN: {c.ssn}</span>
-                    )}
-                    {!c.hasConsent && <span className="portal-muted">No consent recorded</span>}
-                  </th>
-                  <td>
-                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-800 border border-slate-200">
-                      {c.source || "Direct"}
-                    </span>
-                  </td>
-                  <td>
-                    <span className="font-semibold text-slate-900">{c.techStack || "—"}</span>
-                  </td>
-                  <td>
-                    <div className="flex flex-col gap-0.5">
-                      <span className="text-xs font-semibold text-slate-800">
-                        {c.visaType || "—"} {c.visaStatus ? `(${c.visaStatus})` : ""}
+              {rows.map((c) => {
+                const match = matchRequirement.trim()
+                  ? calculateTechMatch(c.techStack, matchRequirement)
+                  : null;
+
+                return (
+                  <tr key={c.id}>
+                    <th scope="row">
+                      <strong>{c.name}</strong>
+                      <span>
+                        {c.email} {c.location && `· ${c.location}`}
                       </span>
-                      {c.commissionPaid && c.commissionPaid !== "—" && (
-                        <span className="text-xs text-emerald-700 font-medium">
-                          Comm: {c.commissionPaid}
+                      {c.ssn && c.ssn !== "—" && (
+                        <span className="text-xs text-slate-500 font-mono">SSN: {c.ssn}</span>
+                      )}
+                      {!c.hasConsent && <span className="portal-muted">No consent recorded</span>}
+                    </th>
+                    <td>
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-800 border border-slate-200">
+                        {c.source || "Direct"}
+                      </span>
+                    </td>
+                    <td>
+                      <div className="flex flex-col gap-1">
+                        <span className="font-semibold text-slate-900">{c.techStack || "—"}</span>
+                        {match && (
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <span
+                              className={`inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-bold ${
+                                match.score >= 70
+                                  ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
+                                  : match.score >= 40
+                                  ? "bg-amber-100 text-amber-800 border border-amber-300"
+                                  : "bg-slate-100 text-slate-600 border border-slate-300"
+                              }`}
+                            >
+                              ⚡ {match.score}% Match
+                            </span>
+                            {match.matchedSkills.length > 0 && (
+                              <span className="text-[10px] text-emerald-700">
+                                ({match.matchedSkills.join(", ")})
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                    <td>
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-xs font-semibold text-slate-800">
+                          {c.visaType || "—"} {c.visaStatus ? `(${c.visaStatus})` : ""}
                         </span>
+                        {c.commissionPaid && c.commissionPaid !== "—" && (
+                          <span className="text-xs text-emerald-700 font-medium">
+                            Comm: {c.commissionPaid}
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td>
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                        {c.benchStatus}
+                      </span>
+                    </td>
+                    <td>{c.applications.length === 0 ? "—" : c.applications.join(", ")}</td>
+                    <td>
+                      {c.resumeUrl ? (
+                        <a className="text-link" href={c.resumeUrl} target="_blank" rel="noreferrer noopener">
+                          View CV
+                        </a>
+                      ) : (
+                        "—"
                       )}
-                    </div>
-                  </td>
-                  <td>
-                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
-                      {c.benchStatus}
-                    </span>
-                  </td>
-                  <td>{c.applications.length === 0 ? "—" : c.applications.join(", ")}</td>
-                  <td>
-                    {c.resumeUrl ? (
-                      <a className="text-link" href={c.resumeUrl} target="_blank" rel="noreferrer noopener">
-                        View CV
-                      </a>
-                    ) : (
-                      "—"
-                    )}
-                  </td>
-                  <td>
-                    <div className="row-actions">
-                      {canDraftContract && (
-                        <Link
-                          href="/contracts/new"
-                          className="row-action row-action--highlight"
-                          title="Draft employment contract for candidate"
-                        >
-                          Draft Contract
-                        </Link>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td>
+                      <div className="row-actions flex flex-wrap gap-1">
+                        {canDraftContract && (
+                          <>
+                            <Link
+                              href={`/contracts/new?candidateId=${c.id}&name=${encodeURIComponent(c.name)}&email=${encodeURIComponent(c.email)}`}
+                              className="row-action row-action--highlight"
+                              title="Draft employment contract for candidate"
+                            >
+                              {c.source === "Global Visa Resource" ? "Issue Agreement" : "Draft Contract"}
+                            </Link>
+                          </>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
