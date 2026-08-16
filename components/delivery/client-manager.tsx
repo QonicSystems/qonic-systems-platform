@@ -2,7 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CLIENT_STATUSES } from "@/lib/delivery/validate";
+import { CLIENT_STATUSES, CLIENT_STATUS_LABELS } from "@/lib/delivery/validate";
 import { EmptyState } from "@/components/portal/empty-state";
 import { StatusChip } from "@/components/status-chip";
 import { TableToolbar } from "@/components/portal/table-toolbar";
@@ -81,12 +81,14 @@ export function ClientManager({ clients, owners, canManage }: {
               <label htmlFor="c-industry">Industry</label>
               <input id="c-industry" value={form.industry} onChange={(e) => setForm({ ...form, industry: e.target.value })} />
             </div>
-            <div>
               <label htmlFor="c-status">Status</label>
               <select id="c-status" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
-                {CLIENT_STATUSES.map((status) => <option key={status} value={status}>{status.toLowerCase()}</option>)}
+                {CLIENT_STATUSES.map((status) => (
+                  <option key={status} value={status}>
+                    {CLIENT_STATUS_LABELS[status] ?? status}
+                  </option>
+                ))}
               </select>
-            </div>
             <div>
               <label htmlFor="c-website">Website</label>
               <input id="c-website" value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} aria-invalid={Boolean(errors.website)} placeholder="https://" />

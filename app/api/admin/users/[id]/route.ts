@@ -36,6 +36,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     email: String(input.email ?? "").trim().toLowerCase().slice(0, 320),
     phone: String(input.phone ?? "").trim().slice(0, 50),
     jobTitle: String(input.jobTitle ?? "").trim().slice(0, 200),
+    techStack: String(input.techStack ?? "").trim().slice(0, 500),
     roleId: String(input.roleId ?? "").trim(),
   };
 
@@ -68,15 +69,22 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (!assignable.ok) return NextResponse.json({ message: assignable.reason }, { status: assignable.status });
   }
 
-  const before = { name: target.name, email: target.email, phone: target.phone, jobTitle: target.jobTitle, role: target.role.key };
-  const after = { name: data.name, email: data.email, phone: data.phone || null, jobTitle: data.jobTitle || null, role: nextRole!.key };
+  const before = { name: target.name, email: target.email, phone: target.phone, jobTitle: target.jobTitle, role: target.role.key, techStack: target.techStack };
+  const after = { name: data.name, email: data.email, phone: data.phone || null, jobTitle: data.jobTitle || null, role: nextRole!.key, techStack: data.techStack || null };
 
   try {
     await db.$transaction(async (tx) => {
-    await tx.user.update({
-      where: { id: target.id },
-      data: { name: data.name, email: data.email, phone: data.phone || null, jobTitle: data.jobTitle || null, roleId: nextRole!.id },
-    });
+      await tx.user.update({
+        where: { id: target.id },
+        data: {
+          name: data.name,
+          email: data.email,
+          phone: data.phone || null,
+          jobTitle: data.jobTitle || null,
+          techStack: data.techStack || null,
+          roleId: nextRole!.id,
+        },
+      });
     // A role change is a large enough authority shift to require re-authentication,
     // so every existing session for that person is dropped.
     if (roleChanged) {

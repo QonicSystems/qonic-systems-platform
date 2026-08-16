@@ -13,11 +13,11 @@ import { ROLE } from "../lib/auth/roles";
 const DEMO_PASSWORD = "Demo-Passw0rd-2026";
 
 const PEOPLE = [
-  { email: "cofounder@qonicsystems.com", name: "Priya Raman", role: ROLE.CO_FOUNDER, jobTitle: "Co-Founder" },
-  { email: "hr@qonicsystems.com", name: "Neha Kulkarni", role: ROLE.HR, jobTitle: "Head of People" },
-  { email: "accounts@qonicsystems.com", name: "Rahul Mehta", role: ROLE.ACCOUNTS, jobTitle: "Finance Manager" },
-  { email: "projects@qonicsystems.com", name: "Sana Iqbal", role: ROLE.PROJECTS, jobTitle: "Delivery Lead" },
-  { email: "developer@qonicsystems.com", name: "Arjun Nair", role: ROLE.EMPLOYEE, jobTitle: "Senior Developer" },
+  { email: "cofounder@qonicsystems.com", name: "Priya Raman", role: ROLE.CO_FOUNDER, jobTitle: "Co-Founder", techStack: "Executive Leadership, System Design" },
+  { email: "lead-dev@qonicsystems.com", name: "Neha Kulkarni", role: ROLE.EMPLOYEE, jobTitle: "Lead Full-Stack Developer", techStack: "React, Next.js, Node.js, TypeScript, PostgreSQL" },
+  { email: "backend-dev@qonicsystems.com", name: "Rahul Mehta", role: ROLE.EMPLOYEE, jobTitle: "Senior Backend Developer", techStack: "Python, FastAPI, AWS, Docker, Kubernetes" },
+  { email: "cloud-dev@qonicsystems.com", name: "Sana Iqbal", role: ROLE.EMPLOYEE, jobTitle: "DevOps & Cloud Engineer", techStack: "Terraform, CI/CD, AWS, Golang, Linux" },
+  { email: "developer@qonicsystems.com", name: "Arjun Nair", role: ROLE.EMPLOYEE, jobTitle: "Software Engineer", techStack: "Next.js, TailwindCSS, GraphQL, Node.js" },
 ];
 
 async function main() {
@@ -33,9 +33,9 @@ async function main() {
     const role = await db.role.findUniqueOrThrow({ where: { key: person.role } });
     await db.user.upsert({
       where: { email: person.email },
-      update: { roleId: role.id, jobTitle: person.jobTitle },
+      update: { roleId: role.id, jobTitle: person.jobTitle, techStack: person.techStack },
       // Demo users skip the forced password change so tests can sign straight in.
-      create: { email: person.email, name: person.name, passwordHash, roleId: role.id, jobTitle: person.jobTitle, mustChangePassword: false },
+      create: { email: person.email, name: person.name, passwordHash, roleId: role.id, jobTitle: person.jobTitle, techStack: person.techStack, mustChangePassword: false },
     });
     console.log(`✔ ${person.email} (${role.label})`);
   }

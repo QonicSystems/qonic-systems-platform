@@ -67,6 +67,7 @@ model User {
   leaveBalances      LeaveBalance[]
   resetTokens        PasswordResetToken[]
   mustChangePassword Boolean              @default(false)
+  techStack          String?
   lastLoginAt        DateTime?
   failedLoginCount   Int                  @default(0)
   lockedUntil        DateTime?
@@ -366,8 +367,11 @@ model LeaveRequest {
 // ------------------------------------------------------------- Delivery ----
 
 enum ClientStatus {
-  PROSPECT
   ACTIVE
+  UPCOMING
+  RESCHEDULED
+  CANCELLED
+  PROSPECT
   DORMANT
   ARCHIVED
 }
@@ -411,10 +415,10 @@ model ClientContact {
 }
 
 enum ProjectStatus {
-  PLANNED
   ACTIVE
-  ON_HOLD
   COMPLETED
+  PLANNED
+  ON_HOLD
   CANCELLED
 }
 
@@ -431,7 +435,7 @@ model Project {
   name     String
   clientId String
   client   Client        @relation(fields: [clientId], references: [id], onDelete: Restrict)
-  status   ProjectStatus @default(PLANNED)
+  status   ProjectStatus @default(ACTIVE)
   health   ProjectHealth @default(ON_TRACK)
   billing  BillingModel  @default(TIME_AND_MATERIALS)
 
@@ -440,6 +444,9 @@ model Project {
   budgetCurrency String @default("INR")
   /// Charge-out rate in minor units per hour.
   defaultRate    Int?
+
+  negotiationCompleted Boolean @default(false)
+  completedReason      String?
 
   startDate DateTime? @db.Date
   endDate   DateTime? @db.Date
@@ -641,10 +648,18 @@ model Job {
 }
 
 model Candidate {
-  id             String  @id @default(cuid())
+  id             String    @id @default(cuid())
   name           String
-  email          String  @unique
+  email          String    @unique
   phone          String?
+  ssn            String?
+  visaType       String?
+  visaStatus     String?
+  visaExpiry     DateTime?
+  address        String?
+  commissionPaid Int?
+  techStack      String?
+  benchStatus    String?   @default("Available / On Bench")
   /// A LINK to an externally hosted CV. Nothing is uploaded or stored here.
   resumeUrl      String?
   linkedinUrl    String?
@@ -652,7 +667,7 @@ model Candidate {
   headline       String?
   /// Comma-separated for now; a tag table is a later refinement.
   skills         String?
-  source         String  @default("Direct")
+  source         String    @default("Direct")
   /// Minor units.
   currentSalary  Int?
   expectedSalary Int?
@@ -668,6 +683,7 @@ model Candidate {
   updatedAt DateTime @updatedAt
 
   @@index([name])
+  @@index([benchStatus])
 }
 
 /// The pipeline stages an application moves through.

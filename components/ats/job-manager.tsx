@@ -12,6 +12,13 @@ type Row = { id: string; reference: string; title: string; client: string; statu
 type Errors = Record<string, string>;
 
 const STATUSES = ["DRAFT", "OPEN", "ON_HOLD", "FILLED", "CLOSED"];
+const JOB_STATUS_LABELS: Record<string, string> = {
+  DRAFT: "Draft",
+  OPEN: "Open",
+  ON_HOLD: "On Hold",
+  FILLED: "Filled",
+  CLOSED: "Closed",
+};
 
 export function JobManager({ jobs, clients, canManage }: {
   jobs: ReadonlyArray<Row>;
@@ -78,7 +85,7 @@ export function JobManager({ jobs, clients, canManage }: {
               <div className="row-actions">
                 <select className="row-select" value={job.status} disabled={busy}
                   onChange={(e) => call("/api/jobs", { method: "PATCH", body: JSON.stringify({ id: job.id, status: e.target.value }) })}>
-                  {STATUSES.map((s) => <option key={s} value={s}>{s.toLowerCase().replace(/_/g, " ")}</option>)}
+                  {STATUSES.map((s) => <option key={s} value={s}>{JOB_STATUS_LABELS[s] ?? s}</option>)}
                 </select>
                 <button type="button" className="row-action" disabled={busy}
                   onClick={() => call("/api/jobs", { method: "PATCH", body: JSON.stringify({ id: job.id, isPublished: !job.published }) })}>

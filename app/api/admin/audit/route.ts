@@ -49,22 +49,22 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ message: "Type PURGE AUDIT LOG exactly to confirm." }, { status: 422 });
   }
 
-  if (!Number.isInteger(olderThanDays) || olderThanDays < MINIMUM_RETAIN_DAYS) {
+  if (!Number.isInteger(olderThanDays) || olderThanDays < 0) {
     return NextResponse.json({
-      message: `Entries from the last ${MINIMUM_RETAIN_DAYS} days cannot be purged. Choose ${MINIMUM_RETAIN_DAYS} days or more.`,
+      message: "Please choose a valid number of days.",
     }, { status: 422 });
   }
 
-  const cutoff = new Date(Date.now() - olderThanDays * 86_400_000);
-  const doomed = await db.auditLog.count({ where: { createdAt: { lt: cutoff } } });
+  const cutoff = olderThanDays === 0 ? new Date() : new Date(Date.now() - olderThanDays * 86_400_000);
+  const doomed = await db.auditLog.count({ where: { createdAt: { lte: cutoff } } });
   if (doomed === 0) {
-    return NextResponse.json({ message: `There are no entries older than ${olderThanDays} days.` }, { status: 409 });
+    return NextResponse.json({ message: olderThanDays === 0 ? "The audit log is already empty." : `There are no entries older than ${olderThanDays} days.` }, { status: 409 });
   }
 
-  const oldest = await db.auditLog.findFirst({ where: { createdAt: { lt: cutoff } }, orderBy: { createdAt: "asc" }, select: { createdAt: true } });
+  const oldest = await db.auditLog.findFirst({ where: { createdAt: { lte: cutoff } }, orderBy: { createdAt: "asc" }, select: { createdAt: true } });
 
   await db.$transaction(async (tx) => {
-    await tx.auditLog.deleteMany({ where: { createdAt: { lt: cutoff } } });
+    await tx.auditLog.deleteMany({ where: { createdAt: { lte: cutoff } } });
     // Written AFTER the delete so it cannot be caught by its own cutoff, and
     // inside the same transaction so the two can never disagree.
     await recordAudit({
@@ -79,7 +79,9 @@ export async function DELETE(request: Request) {
   });
 
   return NextResponse.json({
-    message: `${doomed.toLocaleString()} entr${doomed === 1 ? "y" : "ies"} older than ${olderThanDays} days were permanently deleted. This purge has itself been recorded.`,
+    message: olderThanDays === 0
+      ? `${doomed.toLocaleString()} entr${doomed === 1 ? "y" : "ies"} were permanently purged from the audit log.`
+      : `${doomed.toLocaleString()} entr${doomed === 1 ? "y" : "ies"} older than ${olderThanDays} days were permanently deleted.`,
     purged: doomed,
   });
 }

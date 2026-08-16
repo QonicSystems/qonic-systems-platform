@@ -14,8 +14,9 @@ export function HolidayTable({ holidays, canManage }: {
   canManage: boolean;
 }) {
   const router = useRouter();
+  const currentYearStr = String(new Date().getFullYear());
   const [query, setQuery] = useState("");
-  const [selectedYear, setSelectedYear] = useState<string>("all");
+  const [selectedYear, setSelectedYear] = useState<string>(currentYearStr);
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [adding, setAdding] = useState(false);
   const [busy, setBusy] = useState(false);

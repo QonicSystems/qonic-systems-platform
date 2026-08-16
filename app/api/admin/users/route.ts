@@ -52,53 +52,54 @@ export async function POST(request: Request) {
     jobTitle: String(input.jobTitle ?? "").trim().slice(0, 200),
     roleId: String(input.roleId ?? "").trim(),
   };
+  const techStack = String(input.techStack ?? "").trim().slice(0, 500);
 
   const errors: CreateErrors = {};
-  if (data.name.length < 2) errors.name = "Please enter a name with at least 2 characters.";
-  if (!emailPattern.test(data.email)) errors.email = "Please enter a valid email address.";
-  if (data.phone && !/^[+\d][\d\s()-]{5,}$/.test(data.phone)) errors.phone = "Please enter a valid phone number.";
+  if (data.name.length < 2) errors.name = "Please enter the person's name.";
+  if (!emailPattern.test(data.email)) errors.email = "Please enter a valid work email.";
   if (!data.roleId) errors.roleId = "Please choose a role.";
 
-  const role = data.roleId ? await db.role.findUnique({ where: { id: data.roleId } }) : null;
-  if (data.roleId && !role) errors.roleId = "That role no longer exists.";
-
-  if (!errors.email) {
-    const clash = await db.user.findUnique({ where: { email: data.email } });
-    if (clash) errors.email = "Another account already uses that email address.";
+  // Pre-check duplicate email on create.
+  if (!errors.email && (await db.user.findUnique({ where: { email: data.email } }))) {
+    errors.email = "An account already exists with that email address.";
   }
 
   if (Object.keys(errors).length) return NextResponse.json({ message: "Please correct the highlighted fields.", errors }, { status: 422 });
 
-  // Without this, anyone with user.manage could create an account senior to
-  // themselves and sign in as it — the escalation canAssignRole exists to stop.
-  const assignable = canAssignRole(context, role!);
+  const role = await db.role.findUnique({ where: { id: data.roleId } });
+  if (!role) return NextResponse.json({ message: "Please correct the highlighted fields.", errors: { roleId: "That role no longer exists." } }, { status: 422 });
+
+  const assignable = canAssignRole(context, role);
   if (!assignable.ok) return NextResponse.json({ message: assignable.reason }, { status: assignable.status });
 
+  // A random 32-byte password is generated so the account cannot be logged into
+  // until the invite is accepted — no hardcoded "password123".
+  const passwordHash = await hashPassword(randomBytes(32).toString("hex"));
   const token = createResetToken();
-  // argon2 is deliberately slow. Hashing inside the transaction held it open for
-  // the whole computation, which can exceed Prisma's 5s interactive timeout
-  // (P2028) under load — and the value does not depend on anything in the
-  // transaction, so there is no reason for it to be there.
-  const passwordHash = await hashPassword(randomBytes(24).toString("base64url"));
+  const tokenHash = hashResetToken(token);
+  const expiresAt = new Date(Date.now() + INVITE_TTL_MS);
 
-  let created;
+  let created: { id: string; name: string; email: string };
   try {
     created = await db.$transaction(async (tx) => {
-    const user = await tx.user.create({
-      data: {
-        name: data.name, email: data.email, phone: data.phone || null, jobTitle: data.jobTitle || null,
-        roleId: role!.id, status: "ACTIVE", mustChangePassword: true,
-        // Random and never revealed to anyone, including the administrator.
-        passwordHash,
-      },
-    });
-    await tx.passwordResetToken.create({
-      data: { tokenHash: hashResetToken(token), userId: user.id, expiresAt: new Date(Date.now() + INVITE_TTL_MS) },
-    });
-    await recordAudit({
-      actorId: context.user.id, action: "user.create", entityType: "User", entityId: user.id,
-      after: { name: data.name, email: data.email, role: role!.key }, ipAddress: clientIp(request),
-    }, tx);
+      const user = await tx.user.create({
+        data: {
+          name: data.name,
+          email: data.email,
+          phone: data.phone || null,
+          jobTitle: data.jobTitle || null,
+          techStack: techStack || null,
+          roleId: role.id,
+          passwordHash,
+          mustChangePassword: true,
+          resetTokens: { create: { tokenHash, expiresAt } },
+        },
+        select: { id: true, name: true, email: true },
+      });
+      await recordAudit({
+        actorId: context.user.id, action: "user.create", entityType: "User", entityId: user.id,
+        after: { name: data.name, email: data.email, role: role.key, techStack }, ipAddress: clientIp(request),
+      }, tx);
       return user;
     });
   } catch (error) {

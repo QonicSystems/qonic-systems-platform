@@ -134,7 +134,7 @@ describe("visibility and editing", () => {
 
 describe("validateContractPayload", () => {
   const valid = {
-    jobTitle: "Senior Developer", employmentType: "Full-time", startDate: "2026-09-01",
+    jobTitle: "Senior Developer", employmentType: "Full-time Contract", startDate: "2026-09-01",
     annualSalary: "1800000", currency: "INR", location: "Bengaluru",
     reportingTo: "", noticePeriod: "60 days", additionalTerms: "",
   };

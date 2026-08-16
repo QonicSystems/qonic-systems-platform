@@ -2,8 +2,8 @@ import Link from "next/link";
 import { PageTabs } from "@/components/portal/page-tabs";
 import { can, requireAuth } from "@/lib/auth/guard";
 
-const APPROVAL_PERMISSIONS = ["timesheet.approve", "expense.approve", "leave.approve", "leave.manage"];
-const MY_WORK_PERMISSIONS = ["timesheet.submit", "leave.request", "expense.submit", "contract.view_own"];
+const APPROVAL_PERMISSIONS = ["timesheet.approve", "leave.approve", "leave.manage"];
+const MY_WORK_PERMISSIONS = ["timesheet.submit", "leave.request", "contract.view_own"];
 
 export default async function DashboardLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const context = await requireAuth();
@@ -26,19 +26,6 @@ export default async function DashboardLayout({ children }: Readonly<{ children:
             <p className="eyebrow">{context.role.label}</p>
             <h1 className="portal-title">Welcome back, {firstName}.</h1>
             <p className="portal-lead">Your work, your approvals, and what this account can reach.</p>
-          </div>
-
-          <div className="flex items-center gap-3">
-            {can(context, "timesheet.submit") && (
-              <Link href="/timesheets" className="button button-white text-xs sm:text-sm py-2 px-4 shadow-xs">
-                Record time
-              </Link>
-            )}
-            {can(context, "contract.generate") && (
-              <Link href="/contracts/new" className="button button-primary text-xs sm:text-sm py-2 px-4 shadow-sm">
-                New contract letter
-              </Link>
-            )}
           </div>
         </div>
 

@@ -167,7 +167,7 @@ describe("validateClient", () => {
 
 describe("validateProject", () => {
   const valid = {
-    name: "Website Rebuild", code: "WEB-01", clientId: "c1", status: "PLANNED", billing: "TIME_AND_MATERIALS",
+    name: "Website Rebuild", code: "WEB-01", clientId: "c1", status: "ACTIVE", billing: "TIME_AND_MATERIALS",
     budgetAmount: "250000", budgetCurrency: "INR", defaultRate: "3500", startDate: "", endDate: "", managerId: "", notes: "",
   };
 

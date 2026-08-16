@@ -66,13 +66,13 @@ export function PurgeAudit({ olderThanOptions, totalEntries }: {
         </p>
 
         <div className="contact-form mt-4">
-          <label htmlFor="purge-age">Delete entries older than</label>
+          <label htmlFor="purge-age">Delete entries</label>
           <select id="purge-age" value={days} onChange={(event) => setDays(Number(event.target.value))}>
             {olderThanOptions.map((option) => <option key={option.days} value={option.days}>
-              {option.days} days — {option.count.toLocaleString()} entr{option.count === 1 ? "y" : "ies"}
+              {option.days === 0 ? "All entries (Purge entire log)" : `Older than ${option.days} days`} — {option.count.toLocaleString()} entr{option.count === 1 ? "y" : "ies"}
             </option>)}
           </select>
-          <p className="field-hint">Entries from the last 30 days can never be purged.</p>
+          <p className="field-hint">The purge action itself will be recorded in the audit trail.</p>
 
           <div className="mt-5">
             <label htmlFor="purge-password">Confirm your password</label>

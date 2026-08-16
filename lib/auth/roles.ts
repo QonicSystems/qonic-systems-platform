@@ -9,9 +9,6 @@
 export const ROLE = {
   CEO: "ceo",
   CO_FOUNDER: "co_founder",
-  HR: "hr",
-  ACCOUNTS: "accounts",
-  PROJECTS: "projects",
   EMPLOYEE: "employee",
 } as const;
 
@@ -26,9 +23,6 @@ export const SEEDED_ROLES: ReadonlyArray<{
   rank: number;
 }> = [
   { key: ROLE.CEO, label: "CEO & Founder", description: "Full super-admin. Controls what every other role can do.", isSuperAdmin: true, rank: 0 },
-  { key: ROLE.CO_FOUNDER, label: "Co-Founder", description: "Leadership. Can release contract letters alongside the CEO.", isSuperAdmin: false, rank: 10 },
-  { key: ROLE.HR, label: "HR", description: "People operations. Drafts contract letters for leadership to release.", isSuperAdmin: false, rank: 20 },
-  { key: ROLE.ACCOUNTS, label: "Accounts", description: "Finance and billing.", isSuperAdmin: false, rank: 20 },
-  { key: ROLE.PROJECTS, label: "Projects", description: "Delivery and project management.", isSuperAdmin: false, rank: 20 },
-  { key: ROLE.EMPLOYEE, label: "Employee", description: "Standard staff access, e.g. developers.", isSuperAdmin: false, rank: 50 },
+  { key: ROLE.CO_FOUNDER, label: "Co-Founder", description: "Leadership & Executive. Full operational control across projects, clients, and contracts.", isSuperAdmin: false, rank: 10 },
+  { key: ROLE.EMPLOYEE, label: "Employee (Dev)", description: "Engineering and project delivery staff.", isSuperAdmin: false, rank: 50 },
 ];
