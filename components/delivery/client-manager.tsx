@@ -1,15 +1,31 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CLIENT_STATUSES, CLIENT_STATUS_LABELS } from "@/lib/delivery/validate";
+import { CLIENT_ARCHIVED_STATUS, CLIENT_STATUSES, CLIENT_STATUS_LABELS } from "@/lib/delivery/validate";
 import { EmptyState } from "@/components/portal/empty-state";
 import { StatusChip } from "@/components/status-chip";
 import { TableToolbar } from "@/components/portal/table-toolbar";
 import { useFilter } from "@/lib/ui/filter";
 
-type Row = { id: string; name: string; code: string; status: string; industry: string; owner: string; projectCount: number };
+type Row = {
+  id: string;
+  name: string;
+  code: string;
+  status: string;
+  industry: string;
+  website: string;
+  notes: string;
+  ownerId: string;
+  owner: string;
+  projectCount: number;
+  jobCount: number;
+  invoiceCount: number;
+};
 type Errors = Partial<Record<"name" | "code" | "status" | "website" | "ownerId", string>>;
+type Form = { name: string; code: string; status: string; industry: string; website: string; ownerId: string; notes: string };
+
+const blank: Form = { name: "", code: "", status: "ACTIVE", industry: "", website: "", ownerId: "", notes: "" };
 
 export function ClientManager({ clients, owners, canManage }: {
   clients: ReadonlyArray<Row>;
@@ -17,9 +33,24 @@ export function ClientManager({ clients, owners, canManage }: {
   canManage: boolean;
 }) {
   const router = useRouter();
-  const { query, setQuery, rows, isFiltered } = useFilter(clients, (client) => [client.name, client.code, client.industry, client.status, client.owner]);
+  const [statusFilter, setStatusFilter] = useState<"CURRENT" | "ARCHIVED" | "ALL">("CURRENT");
+
+  const counts = {
+    CURRENT: clients.filter((c) => c.status !== CLIENT_ARCHIVED_STATUS).length,
+    ARCHIVED: clients.filter((c) => c.status === CLIENT_ARCHIVED_STATUS).length,
+    ALL: clients.length,
+  };
+  const visible = useMemo(() => {
+    if (statusFilter === "ALL") return clients;
+    if (statusFilter === "ARCHIVED") return clients.filter((c) => c.status === CLIENT_ARCHIVED_STATUS);
+    return clients.filter((c) => c.status !== CLIENT_ARCHIVED_STATUS);
+  }, [clients, statusFilter]);
+
+  const { query, setQuery, rows, isFiltered } = useFilter(visible, (client) => [client.name, client.code, client.industry, client.status, client.owner]);
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ name: "", code: "", status: "ACTIVE", industry: "", website: "", ownerId: "", notes: "" });
+  const [editing, setEditing] = useState<Row | null>(null);
+  const [deleting, setDeleting] = useState<Row | null>(null);
+  const [form, setForm] = useState<Form>(blank);
   const [errors, setErrors] = useState<Errors>({});
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ tone: "success" | "error"; text: string } | null>(null);
@@ -28,43 +59,159 @@ export function ClientManager({ clients, owners, canManage }: {
     event.preventDefault();
     setBusy(true); setNotice(null); setErrors({});
     try {
-      const response = await fetch("/api/clients", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
+      const url = editing ? `/api/clients/${editing.id}` : "/api/clients";
+      const response = await fetch(url, {
+        method: editing ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
       const result = await response.json() as { message?: string; errors?: Errors };
       if (!response.ok) { setErrors(result.errors ?? {}); setNotice({ tone: "error", text: result.message ?? "Unable to save." }); return; }
-      setNotice({ tone: "success", text: result.message ?? "Added." });
-      setForm({ name: "", code: "", status: "ACTIVE", industry: "", website: "", ownerId: "", notes: "" });
+      setNotice({ tone: "success", text: result.message ?? "Saved." });
+      setForm(blank);
       setOpen(false);
+      setEditing(null);
       router.refresh();
     } catch { setNotice({ tone: "error", text: "Unable to reach the server." }); }
     finally { setBusy(false); }
   };
 
+  /** Status changes and deletes — one place that surfaces the server's reason. */
+  const act = async (url: string, init: RequestInit): Promise<boolean> => {
+    setBusy(true); setNotice(null);
+    try {
+      const response = await fetch(url, { headers: { "Content-Type": "application/json" }, ...init });
+      const result = await response.json().catch(() => ({})) as { message?: string };
+      if (!response.ok) {
+        setNotice({ tone: "error", text: result.message ?? "Unable to complete that request." });
+        if (response.status === 404 || response.status === 409) router.refresh();
+        return false;
+      }
+      setNotice({ tone: "success", text: result.message ?? "Updated." });
+      router.refresh();
+      return true;
+    } catch {
+      setNotice({ tone: "error", text: "Unable to reach the server." });
+      return false;
+    } finally { setBusy(false); }
+  };
+
+  const toggleArchive = (client: Row) =>
+    act(`/api/clients/${client.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ status: client.status === CLIENT_ARCHIVED_STATUS ? "ACTIVE" : CLIENT_ARCHIVED_STATUS }),
+    });
+
+  const remove = async (client: Row) => {
+    if (await act(`/api/clients/${client.id}`, { method: "DELETE" })) setDeleting(null);
+  };
+
+  const startEdit = (client: Row) => {
+    setEditing(client);
+    setForm({
+      name: client.name, code: client.code, status: client.status,
+      industry: client.industry, website: client.website,
+      ownerId: client.ownerId, notes: client.notes,
+    });
+    setErrors({});
+    setNotice(null);
+    setOpen(true);
+  };
+
+  const startAdd = () => {
+    setEditing(null);
+    setForm(blank);
+    setErrors({});
+    setNotice(null);
+    setOpen(true);
+  };
+
+  const closeDialog = () => { setOpen(false); setEditing(null); };
+
   return <div>
     {notice && <p className={`form-status form-status--${notice.tone}`} role="status">{notice.text}</p>}
+
+    <div className="filter-bar" role="group" aria-label="Filter by status">
+      <span className="filter-group__label">Status</span>
+      {(["CURRENT", "ARCHIVED", "ALL"] as const).map((key) => {
+        const selected = statusFilter === key;
+        return (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setStatusFilter(key)}
+            aria-pressed={selected}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              selected ? "bg-[#111111] text-white shadow-sm" : "bg-[#f8f7f3] text-[#4f4f4f] hover:bg-[#eeece4] border border-[#e7e4da]"
+            }`}
+          >
+            <span>{key === "CURRENT" ? "Current" : key === "ARCHIVED" ? "Archived" : "All"}</span>
+            <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono leading-none ${
+              selected ? "bg-[#ffd700] text-[#111111] font-bold" : "bg-black/10 text-[#6b6b6b]"
+            }`}>{counts[key]}</span>
+          </button>
+        );
+      })}
+    </div>
+
     <TableToolbar search={query} onSearch={setQuery} placeholder="Search clients…" label="Search clients">
-      {canManage && <button type="button" className="button button-primary" onClick={() => setOpen(true)}>Add a client</button>}
+      {canManage && <button type="button" className="button button-primary" onClick={startAdd}>Add a client</button>}
     </TableToolbar>
 
     {rows.length === 0
-      ? <EmptyState message="No clients yet." filteredMessage="Nothing matches that search." isFiltered={isFiltered} />
+      ? <EmptyState
+          message={statusFilter === "ARCHIVED" ? "No archived clients." : "No clients yet."}
+          filteredMessage="Nothing matches that search."
+          isFiltered={isFiltered || statusFilter !== "CURRENT"}
+        />
       : <div className="matrix-scroll">
       <table className="matrix matrix--people">
-        <thead><tr><th scope="col">Client</th><th scope="col">Industry</th><th scope="col">Owner</th><th scope="col">Projects</th><th scope="col">Status</th></tr></thead>
+        <thead><tr>
+          <th scope="col">Client</th><th scope="col">Industry</th><th scope="col">Owner</th>
+          <th scope="col">Projects</th><th scope="col">Status</th>
+          {canManage && <th scope="col">Actions</th>}
+        </tr></thead>
         <tbody>
-          {rows.map((client) => <tr key={client.id}>
+          {rows.map((client) => <tr key={client.id} className={client.status === CLIENT_ARCHIVED_STATUS ? "opacity-70" : undefined}>
             <th scope="row"><strong>{client.name}</strong><span>{client.code}</span></th>
             <td>{client.industry || "—"}</td>
             <td>{client.owner}</td>
             <td>{client.projectCount}</td>
-            <td><StatusChip status={client.status} /></td>
+            <td><StatusChip status={client.status} label={CLIENT_STATUS_LABELS[client.status]} /></td>
+            {canManage && <td>
+              <div className="row-actions flex flex-wrap gap-1">
+                <button type="button" className="row-action" onClick={() => startEdit(client)} disabled={busy}>Edit</button>
+                <button
+                  type="button"
+                  className="row-action"
+                  onClick={() => toggleArchive(client)}
+                  disabled={busy}
+                  title={client.status === CLIENT_ARCHIVED_STATUS
+                    ? "Return this client to the active list"
+                    : "Archive — keeps every project, job and invoice"}
+                >
+                  {client.status === CLIENT_ARCHIVED_STATUS ? "Restore" : "Archive"}
+                </button>
+                <button
+                  type="button"
+                  className="row-action row-action--danger"
+                  onClick={() => { setDeleting(client); setNotice(null); }}
+                  disabled={busy}
+                >
+                  Delete
+                </button>
+              </div>
+            </td>}
           </tr>)}
         </tbody>
       </table>
     </div>}
 
+    {deleting && <DeleteDialog client={deleting} busy={busy} onCancel={() => setDeleting(null)} onConfirm={() => remove(deleting)} />}
+
     {open && <div className="dialog-backdrop" role="dialog" aria-modal="true" aria-labelledby="client-title">
       <div className="dialog dialog--wide">
-        <h3 id="client-title" className="dialog-title">Add a client</h3>
+        <h3 id="client-title" className="dialog-title">{editing ? `Edit ${editing.name}` : "Add a client"}</h3>
         <form className="contact-form" noValidate onSubmit={submit}>
           <div className="grid gap-5 sm:grid-cols-2">
             <div>
@@ -81,6 +228,7 @@ export function ClientManager({ clients, owners, canManage }: {
               <label htmlFor="c-industry">Industry</label>
               <input id="c-industry" value={form.industry} onChange={(e) => setForm({ ...form, industry: e.target.value })} />
             </div>
+            <div>
               <label htmlFor="c-status">Status</label>
               <select id="c-status" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
                 {CLIENT_STATUSES.map((status) => (
@@ -89,6 +237,8 @@ export function ClientManager({ clients, owners, canManage }: {
                   </option>
                 ))}
               </select>
+              {errors.status && <p className="form-error">{errors.status}</p>}
+            </div>
             <div>
               <label htmlFor="c-website">Website</label>
               <input id="c-website" value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} aria-invalid={Boolean(errors.website)} placeholder="https://" />
@@ -103,11 +253,55 @@ export function ClientManager({ clients, owners, canManage }: {
             </div>
           </div>
           <div className="dialog-actions">
-            <button type="button" className="button button-outline" onClick={() => setOpen(false)} disabled={busy}>Cancel</button>
-            <button type="submit" className="button button-primary" disabled={busy}>{busy ? "Saving…" : "Add Client"}</button>
+            <button type="button" className="button button-outline" onClick={closeDialog} disabled={busy}>Cancel</button>
+            <button type="submit" className="button button-primary" disabled={busy}>
+              {busy ? "Saving…" : editing ? "Save Changes" : "Add Client"}
+            </button>
           </div>
         </form>
       </div>
     </div>}
+  </div>;
+}
+
+/**
+ * Names what would be destroyed. The counts come from the row rather than the
+ * failed request, so the warning is on screen before the delete is attempted
+ * instead of arriving as a 409 afterwards.
+ */
+function DeleteDialog({ client, busy, onCancel, onConfirm }: {
+  client: Row;
+  busy: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const blockers = [
+    client.projectCount > 0 ? `${client.projectCount} project${client.projectCount === 1 ? "" : "s"}` : null,
+    client.jobCount > 0 ? `${client.jobCount} job${client.jobCount === 1 ? "" : "s"}` : null,
+    client.invoiceCount > 0 ? `${client.invoiceCount} invoice${client.invoiceCount === 1 ? "" : "s"}` : null,
+  ].filter(Boolean);
+
+  return <div className="dialog-backdrop" role="dialog" aria-modal="true" aria-labelledby="client-del-title">
+    <div className="dialog">
+      <h3 id="client-del-title" className="dialog-title">Delete {client.name}?</h3>
+      {blockers.length > 0 ? <>
+        <p className="portal-note">
+          <strong>{client.name}</strong> has {blockers.join(", ")} on record, so it cannot be deleted —
+          those are commercial records and deleting the client would break them.
+        </p>
+        <p className="portal-note">Use <strong>Archive</strong> instead. It takes the client out of the current list and keeps everything intact.</p>
+      </> : <>
+        <p className="portal-note">
+          This permanently removes <strong>{client.name}</strong> and its contacts. Nothing else
+          references it, so no history is lost. It cannot be undone.
+        </p>
+      </>}
+      <div className="dialog-actions">
+        <button type="button" className="button button-outline" onClick={onCancel} disabled={busy}>Cancel</button>
+        <button type="button" className="button button-danger" onClick={onConfirm} disabled={busy || blockers.length > 0}>
+          {busy ? "Deleting…" : "Delete permanently"}
+        </button>
+      </div>
+    </div>
   </div>;
 }

@@ -3,20 +3,31 @@ import { emailPattern } from "@/lib/contact";
 export type ClientPayload = { name: string; code: string; status: string; industry: string; website: string; ownerId: string; notes: string };
 export type ClientErrors = Partial<Record<keyof ClientPayload, string>>;
 
-export const CLIENT_STATUSES = ["ACTIVE", "UPCOMING", "RESCHEDULED", "CANCELLED"] as const;
-export const PROJECT_STATUSES = ["ACTIVE", "COMPLETED"] as const;
+// ARCHIVED is the retirement state for a client that cannot be deleted because
+// it has projects, jobs, or invoices on record — the delete endpoint tells you
+// to use it, so the validator has to accept it. CANCELLED plays the same role
+// for a project.
+export const CLIENT_STATUSES = ["ACTIVE", "UPCOMING", "RESCHEDULED", "CANCELLED", "ARCHIVED"] as const;
+export const PROJECT_STATUSES = ["ACTIVE", "COMPLETED", "CANCELLED"] as const;
 export const BILLING_MODELS = ["TIME_AND_MATERIALS", "FIXED_PRICE", "RETAINER", "NON_BILLABLE"] as const;
+
+/** The client status that takes a record out of day-to-day lists. */
+export const CLIENT_ARCHIVED_STATUS = "ARCHIVED";
+/** The project equivalent — ProjectStatus has no ARCHIVED member. */
+export const PROJECT_ARCHIVED_STATUS = "CANCELLED";
 
 export const CLIENT_STATUS_LABELS: Record<string, string> = {
   ACTIVE: "Active",
   UPCOMING: "Upcoming",
   RESCHEDULED: "Rescheduled",
   CANCELLED: "Cancelled",
+  ARCHIVED: "Archived",
 };
 
 export const PROJECT_STATUS_LABELS: Record<string, string> = {
   ACTIVE: "Running",
   COMPLETED: "Completed",
+  CANCELLED: "Cancelled",
 };
 
 export const BILLING_LABELS: Record<string, string> = {
