@@ -98,7 +98,7 @@ export function LeaveManager({ types, mine, toDecide, canRequest }: {
             <label htmlFor="reason">Reason</label>
             <input id="reason" value={form.reason} onChange={(event) => update("reason", event.target.value)} placeholder="Optional — helps your approver decide" />
           </div>
-          <p className="field-hint mt-3">Weekends are excluded automatically. Public holidays are not yet, so check the calendar.</p>
+          <p className="field-hint mt-3">Weekends and public holidays are excluded automatically.</p>
           <button className="button button-primary mt-5" type="submit" disabled={busy || types.length === 0}>
             {busy ? "Submitting…" : "Submit Request"}
           </button>

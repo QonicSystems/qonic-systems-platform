@@ -11,11 +11,13 @@ export const metadata = { title: "Roles & Permissions" };
  * every time, never cached into a token.
  */
 export default async function PermissionsPage() {
-  await requirePermission("rbac.manage");
+  const context = await requirePermission("rbac.manage");
 
   const [roles, permissions] = await Promise.all([
     db.role.findMany({ orderBy: { rank: "asc" }, include: { permissions: true } }),
-    db.permission.findMany({ orderBy: [{ sortOrder: "asc" }] }),
+    // `group` first: sortOrder values collide across groups, so ordering by it
+    // alone made group order depend on which row happened to come back first.
+    db.permission.findMany({ orderBy: [{ group: "asc" }, { sortOrder: "asc" }] }),
   ]);
 
   const initial: Record<string, boolean> = {};
@@ -36,6 +38,7 @@ export default async function PermissionsPage() {
       permissions={permissions.map(({ key, group, label, description }) => ({ key, group, label, description: description ?? "" }))}
       initial={initial}
       superAdminOnly={[...SUPER_ADMIN_ONLY_PERMISSIONS]}
+      viewerIsSuperAdmin={context.role.isSuperAdmin}
     />
   </section>;
 }

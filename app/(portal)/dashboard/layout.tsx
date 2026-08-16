@@ -1,18 +1,7 @@
-import { Breadcrumbs } from "@/components/portal/breadcrumbs";
+import Link from "next/link";
 import { PageTabs } from "@/components/portal/page-tabs";
 import { can, requireAuth } from "@/lib/auth/guard";
 
-/**
- * Shared chrome for the dashboard tabs.
- *
- * `requireAuth`, never `requirePermission`: lib/auth/guard.ts sends every
- * permission failure to /dashboard?denied=1, so if this layout could 403 a
- * denied user would bounce between the two forever.
- *
- * A tab whose work the user cannot do is hidden rather than shown empty — the
- * same treatment lib/portal-nav.ts gives an empty nav group. Overview and
- * Access have no permission because everyone has an account to look at.
- */
 const APPROVAL_PERMISSIONS = ["timesheet.approve", "expense.approve", "leave.approve", "leave.manage"];
 const MY_WORK_PERMISSIONS = ["timesheet.submit", "leave.request", "expense.submit", "contract.view_own"];
 
@@ -27,14 +16,36 @@ export default async function DashboardLayout({ children }: Readonly<{ children:
     { label: "Access", href: "/dashboard/access", visible: true },
   ].filter((tab) => tab.visible);
 
-  return <div className="portal-page">
-    <Breadcrumbs items={[{ label: "Home", href: "/dashboard" }, { label: "Dashboard" }]} />
-    <header className="portal-page-head">
-      <p className="eyebrow">{context.role.label}</p>
-      <h1 className="portal-title">Welcome back, {context.user.name.split(" ")[0]}.</h1>
-      <p className="portal-lead">Your work, your approvals, and what this account can reach.</p>
-    </header>
-    <PageTabs tabs={tabs.map(({ label, href }) => ({ label, href }))} label="Dashboard sections" />
-    {children}
-  </div>;
+  const firstName = context.user.name.split(" ")[0] || "there";
+
+  return (
+    <div className="portal-page">
+      <div className="flex flex-col gap-5">
+        <div className="flex flex-wrap items-end justify-between gap-6">
+          <div className="min-w-0">
+            <p className="eyebrow">{context.role.label}</p>
+            <h1 className="portal-title">Welcome back, {firstName}.</h1>
+            <p className="portal-lead">Your work, your approvals, and what this account can reach.</p>
+          </div>
+
+          <div className="flex items-center gap-3">
+            {can(context, "timesheet.submit") && (
+              <Link href="/timesheets" className="button button-white text-xs sm:text-sm py-2 px-4 shadow-xs">
+                Record time
+              </Link>
+            )}
+            {can(context, "contract.generate") && (
+              <Link href="/contracts/new" className="button button-primary text-xs sm:text-sm py-2 px-4 shadow-sm">
+                New contract letter
+              </Link>
+            )}
+          </div>
+        </div>
+
+        <PageTabs tabs={tabs} label="Dashboard sections" />
+      </div>
+
+      {children}
+    </div>
+  );
 }

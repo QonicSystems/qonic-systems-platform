@@ -2,7 +2,10 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { EmptyState } from "@/components/portal/empty-state";
 import { StatusChip } from "@/components/status-chip";
+import { TableToolbar } from "@/components/portal/table-toolbar";
+import { useFilter } from "@/lib/ui/filter";
 
 export type PersonRow = {
   id: string;
@@ -14,45 +17,77 @@ export type PersonRow = {
   roleLabel: string;
   status: "ACTIVE" | "SUSPENDED" | "ARCHIVED";
   lastLoginAt: string | null;
-  /** Computed on the server from the viewer's seniority. */
+  mustChangePassword: boolean;
+  canResend: boolean;
+  /* Each action carries its OWN permission. These used to be one `canEdit`
+     derived from user.manage, which meant granting user.deactivate or
+     user.delete on their own did nothing at all — the row rendered "No access"
+     while the API would happily have authorised the call. */
   canEdit: boolean;
+  canDeactivate: boolean;
+  canRemove: boolean;
+  canExport: boolean;
   /** The viewer's own row: identity is editable, role and removal are not. */
   isSelf: boolean;
 };
 
 type RoleOption = { id: string; label: string; assignable: boolean };
+/** Success is explicit; `errors` is only ever present on a 422. */
+type ActResult = { ok: boolean; errors?: Errors; inviteUrl?: string };
 type Errors = Partial<Record<"name" | "email" | "phone" | "jobTitle" | "roleId", string>>;
 
-export function PeopleTable({ people, roles, canDeactivate, canDelete, canCreate }: {
+export function PeopleTable({ people, roles, canCreate }: {
   people: ReadonlyArray<PersonRow>;
   roles: ReadonlyArray<RoleOption>;
-  canDeactivate: boolean;
-  canDelete: boolean;
   canCreate: boolean;
 }) {
   const router = useRouter();
+  const { query, setQuery, rows, isFiltered } = useFilter(people, (person) => [person.name, person.email, person.roleLabel, person.jobTitle, person.status]);
   const [adding, setAdding] = useState(false);
   // Shown only when email could not be delivered, so the invite can still be
   // handed over. It is a bearer token, so it is never persisted anywhere.
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [editing, setEditing] = useState<PersonRow | null>(null);
   const [confirming, setConfirming] = useState<PersonRow | null>(null);
+  const [erasing, setErasing] = useState<PersonRow | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ tone: "success" | "error"; text: string } | null>(null);
 
-  const act = async (url: string, init: RequestInit) => {
+  /**
+   * Every mutation goes through here.
+   *
+   * `ok` is what callers branch on. Previously they inferred success from the
+   * absence of an `errors` key, which is only present on a 422 — so a 403, a
+   * 404, a 500 or a dropped connection all looked like success, closed the
+   * dialog, and threw away what the user had typed.
+   */
+  const act = async (url: string, init: RequestInit): Promise<ActResult> => {
     setBusy(true);
     try {
       const response = await fetch(url, { headers: { "Content-Type": "application/json" }, ...init });
-      const result = await response.json() as { message?: string; errors?: Errors; inviteUrl?: string };
-      if (!response.ok) { setNotice({ tone: "error", text: result.message ?? "Unable to complete that action." }); return result; }
+      // A framework 500 has no JSON body, so parsing is part of what can fail.
+      const result = await response.json().catch(() => ({})) as { message?: string; errors?: Errors; inviteUrl?: string };
+      if (!response.ok) {
+        setNotice({ tone: "error", text: result.message ?? "Unable to complete that action." });
+        // Refresh on 404/409 too: the row we acted on is out of date, and
+        // leaving a deleted person on screen invites a second failed attempt.
+        if (response.status === 404 || response.status === 409) router.refresh();
+        return { ok: false, errors: result.errors };
+      }
       setNotice({ tone: "success", text: result.message ?? "Done." });
       router.refresh();
-      return result;
+      return { ok: true, inviteUrl: result.inviteUrl };
     } catch {
       setNotice({ tone: "error", text: "Unable to reach the server." });
-      return {};
+      return { ok: false };
     } finally { setBusy(false); }
+  };
+
+  const resendInvite = async (person: PersonRow) => {
+    setNotice(null);
+    setInviteUrl(null);
+    const result = await act(`/api/admin/users/${person.id}/resend`, { method: "POST" });
+    if (result.ok && result.inviteUrl) setInviteUrl(result.inviteUrl);
   };
 
   const toggleStatus = async (person: PersonRow) => {
@@ -60,16 +95,23 @@ export function PeopleTable({ people, roles, canDeactivate, canDelete, canCreate
   };
 
   const remove = async (person: PersonRow) => {
-    await act(`/api/admin/users/${person.id}`, { method: "DELETE" });
-    setConfirming(null);
+    // Only close on success — a refusal ("has N contract letters") needs to stay
+    // visible with its context rather than vanishing behind a notice.
+    const result = await act(`/api/admin/users/${person.id}`, { method: "DELETE" });
+    if (result.ok) setConfirming(null);
+  };
+
+  const erase = async (person: PersonRow) => {
+    const result = await act(`/api/admin/users/${person.id}/data`, { method: "DELETE" });
+    if (result.ok) setErasing(null);
   };
 
   return <div>
-    {canCreate && <div className="action-bar">
-      <button type="button" className="button button-primary" onClick={() => { setAdding(true); setNotice(null); setInviteUrl(null); }} disabled={busy}>
+    <TableToolbar search={query} onSearch={setQuery} placeholder="Search name, email, or role…" label="Search people">
+      {canCreate && <button type="button" className="button button-primary" onClick={() => { setAdding(true); setNotice(null); setInviteUrl(null); }} disabled={busy}>
         Add Person
-      </button>
-    </div>}
+      </button>}
+    </TableToolbar>
 
     {notice && <p className={`form-status form-status--${notice.tone}`} role="status">{notice.text}</p>}
 
@@ -78,7 +120,9 @@ export function PeopleTable({ people, roles, canDeactivate, canDelete, canCreate
       <p className="mfa-secret">{inviteUrl}</p>
     </div>}
 
-    <div className="matrix-scroll">
+    {rows.length === 0
+      ? <EmptyState message="No accounts yet." filteredMessage="No accounts match that search." isFiltered={isFiltered} />
+      : <div className="matrix-scroll">
       <table className="matrix matrix--people">
         <thead>
           <tr>
@@ -87,24 +131,53 @@ export function PeopleTable({ people, roles, canDeactivate, canDelete, canCreate
           </tr>
         </thead>
         <tbody>
-          {people.map((person) => <tr key={person.id}>
-            <th scope="row"><strong>{person.name}</strong><span>{person.email}</span></th>
+          {rows.map((person) => <tr key={person.id}>
+            <th scope="row">
+              <strong>{person.name}</strong>
+              <span>{person.email}</span>
+            </th>
             <td>{person.roleLabel}</td>
-            <td><StatusChip status={person.status} /></td>
+            <td>
+              <div className="flex flex-col gap-1 items-start">
+                <StatusChip status={person.status} />
+                {person.mustChangePassword && person.status === "ACTIVE" && (
+                  <span className="text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
+                    Invite pending
+                  </span>
+                )}
+              </div>
+            </td>
             <td>{person.lastLoginAt ?? "Never"}</td>
             <td>
-              {person.canEdit ? <div className="row-actions">
-                <button type="button" className="row-action" onClick={() => { setEditing(person); setNotice(null); }} disabled={busy}>Edit</button>
-                {canDeactivate && !person.isSelf && <button type="button" className="row-action" onClick={() => toggleStatus(person)} disabled={busy}>
-                  {person.status === "ACTIVE" ? "Deactivate" : "Reactivate"}
-                </button>}
-                {canDelete && !person.isSelf && <button type="button" className="row-action row-action--danger" onClick={() => { setConfirming(person); setNotice(null); }} disabled={busy}>Remove</button>}
-              </div> : <span className="row-locked">No access</span>}
+              {person.canEdit || person.canResend || person.canDeactivate || person.canRemove || person.canExport
+                ? <div className="row-actions">
+                    {person.canResend && (
+                      <button
+                        type="button"
+                        className="row-action row-action--highlight"
+                        onClick={() => resendInvite(person)}
+                        disabled={busy}
+                        title="Resend invitation link"
+                      >
+                        Resend
+                      </button>
+                    )}
+                    {person.canEdit && <button type="button" className="row-action" onClick={() => { setEditing(person); setNotice(null); }} disabled={busy}>Edit</button>}
+                    {/* ARCHIVED is a GDPR erasure, not a suspension — bringing one
+                        back would resurrect an account whose data is already gone. */}
+                    {person.canDeactivate && person.status !== "ARCHIVED" && <button type="button" className="row-action" onClick={() => toggleStatus(person)} disabled={busy}>
+                      {person.status === "ACTIVE" ? "Deactivate" : "Reactivate"}
+                    </button>}
+                    {person.canExport && <a className="row-action" href={`/api/admin/users/${person.id}/data`} download>Export data</a>}
+                    {person.canRemove && <button type="button" className="row-action row-action--danger" onClick={() => { setErasing(person); setNotice(null); }} disabled={busy}>Erase</button>}
+                    {person.canRemove && <button type="button" className="row-action row-action--danger" onClick={() => { setConfirming(person); setNotice(null); }} disabled={busy}>Remove</button>}
+                  </div>
+                : <span className="row-locked">No access</span>}
             </td>
           </tr>)}
         </tbody>
       </table>
-    </div>
+    </div>}
 
     {editing && <EditDialog
       person={editing}
@@ -113,8 +186,8 @@ export function PeopleTable({ people, roles, canDeactivate, canDelete, canCreate
       onClose={() => setEditing(null)}
       onSave={async (payload) => {
         const result = await act(`/api/admin/users/${editing.id}`, { method: "PATCH", body: JSON.stringify(payload) });
-        if (!result?.errors) setEditing(null);
-        return result?.errors ?? {};
+        if (result.ok) setEditing(null);
+        return result.errors ?? {};
       }}
     />}
 
@@ -124,10 +197,28 @@ export function PeopleTable({ people, roles, canDeactivate, canDelete, canCreate
       onClose={() => setAdding(false)}
       onSave={async (payload) => {
         const result = await act("/api/admin/users", { method: "POST", body: JSON.stringify(payload) });
-        if (!result?.errors) { setAdding(false); setInviteUrl(result?.inviteUrl ?? null); }
-        return result?.errors ?? {};
+        if (result.ok) { setAdding(false); setInviteUrl(result.inviteUrl ?? null); }
+        return result.errors ?? {};
       }}
     />}
+
+    {erasing && <div className="dialog-backdrop" role="dialog" aria-modal="true" aria-labelledby="erase-title">
+      <div className="dialog">
+        <h3 id="erase-title" className="dialog-title">Erase {erasing.name}&apos;s personal data?</h3>
+        <p className="portal-note">
+          This anonymises the account and deletes their bank details, sessions and notifications.
+          Timesheets, invoices and contract letters are kept, because they are financial and legal
+          records — so unlike Remove, this always succeeds and never breaks the paperwork.
+          It cannot be undone.
+        </p>
+        <div className="dialog-actions">
+          <button type="button" className="button button-outline" onClick={() => setErasing(null)} disabled={busy}>Cancel</button>
+          <button type="button" className="button button-danger" onClick={() => erase(erasing)} disabled={busy}>
+            {busy ? "Erasing…" : "Erase personal data"}
+          </button>
+        </div>
+      </div>
+    </div>}
 
     {confirming && <div className="dialog-backdrop" role="dialog" aria-modal="true" aria-labelledby="remove-title">
       <div className="dialog">
@@ -184,7 +275,8 @@ function EditDialog({ person, roles, busy, onClose, onSave }: {
           </div>
           <div>
             <label htmlFor="edit-jobTitle">Job Title</label>
-            <input id="edit-jobTitle" value={data.jobTitle} onChange={(event) => update("jobTitle", event.target.value)} />
+            <input id="edit-jobTitle" value={data.jobTitle} onChange={(event) => update("jobTitle", event.target.value)} aria-invalid={Boolean(errors.jobTitle)} />
+            {errors.jobTitle && <p className="form-error">{errors.jobTitle}</p>}
           </div>
           <div className="sm:col-span-2">
             <label htmlFor="edit-role">Role <em>*</em></label>
@@ -250,7 +342,8 @@ function AddDialog({ roles, busy, onClose, onSave }: {
           </div>
           <div>
             <label htmlFor="add-jobTitle">Job Title</label>
-            <input id="add-jobTitle" value={data.jobTitle} onChange={(event) => update("jobTitle", event.target.value)} />
+            <input id="add-jobTitle" value={data.jobTitle} onChange={(event) => update("jobTitle", event.target.value)} aria-invalid={Boolean(errors.jobTitle)} />
+            {errors.jobTitle && <p className="form-error">{errors.jobTitle}</p>}
           </div>
           <div className="sm:col-span-2">
             <label htmlFor="add-role">Role <em>*</em></label>

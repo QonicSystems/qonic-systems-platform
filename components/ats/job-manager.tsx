@@ -3,7 +3,10 @@
 import { FormEvent, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { EmptyState } from "@/components/portal/empty-state";
 import { StatusChip } from "@/components/status-chip";
+import { TableToolbar } from "@/components/portal/table-toolbar";
+import { useFilter } from "@/lib/ui/filter";
 
 type Row = { id: string; reference: string; title: string; client: string; status: string; openings: number; applications: number; published: boolean; days: number; overSla: boolean; band: string };
 type Errors = Record<string, string>;
@@ -16,6 +19,7 @@ export function JobManager({ jobs, clients, canManage }: {
   canManage: boolean;
 }) {
   const router = useRouter();
+  const { query, setQuery, rows, isFiltered } = useFilter(jobs, (job) => [job.title, job.reference, job.client, job.status, job.band]);
   const [open, setOpen] = useState(false);
   const empty = { title: "", clientId: clients[0]?.id ?? "", status: "OPEN", openings: "1", location: "", employmentType: "Full-time", salaryMin: "", salaryMax: "", currency: "INR", feePercent: "", slaDays: "30", description: "", isPublished: false };
   const [form, setForm] = useState(empty);
@@ -44,14 +48,20 @@ export function JobManager({ jobs, clients, canManage }: {
 
   return <div>
     {notice && <p className={`form-status form-status--${notice.tone}`} role="status">{notice.text}</p>}
-    {canManage && <p><button type="button" className="button button-primary" onClick={() => setOpen(true)} disabled={clients.length === 0}>Raise a job</button>
-      {clients.length === 0 && <span className="field-hint"> Add a client first.</span>}</p>}
+    <TableToolbar search={query} onSearch={setQuery} placeholder="Search jobs…" label="Search jobs">
+      {canManage && <>
+        <button type="button" className="button button-primary" onClick={() => setOpen(true)} disabled={clients.length === 0}>Raise a job</button>
+        {clients.length === 0 && <span className="field-hint"> Add a client first.</span>}
+      </>}
+    </TableToolbar>
 
-    {jobs.length === 0 ? <p className="portal-note">No jobs yet.</p> : <div className="matrix-scroll">
+    {rows.length === 0
+      ? <EmptyState message="No jobs yet." filteredMessage="Nothing matches that search." isFiltered={isFiltered} />
+      : <div className="matrix-scroll">
       <table className="matrix matrix--people">
         <thead><tr><th scope="col">Job</th><th scope="col">Client</th><th scope="col">Band</th><th scope="col">Pipeline</th><th scope="col">Open</th><th scope="col">Status</th>{canManage && <th scope="col">Actions</th>}</tr></thead>
         <tbody>
-          {jobs.map((job) => <tr key={job.id}>
+          {rows.map((job) => <tr key={job.id}>
             <th scope="row">
               <Link className="text-link" href={`/jobs/${job.id}`}>{job.title}</Link>
               <span>{job.reference} · {job.openings} opening{job.openings === 1 ? "" : "s"}</span>

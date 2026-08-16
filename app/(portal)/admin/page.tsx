@@ -27,9 +27,17 @@ export default async function AdminPeoplePage() {
     roleLabel: user.role.label,
     status: user.status,
     lastLoginAt: user.lastLoginAt ? user.lastLoginAt.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : null,
+    mustChangePassword: user.mustChangePassword,
+    canResend: mayEdit && user.mustChangePassword && canAdminister(context, { id: user.id, role: user.role }).ok,
+    // Each action is gated on the permission its own endpoint checks, so
+    // granting user.deactivate or user.delete alone actually does something.
     // Editing yourself is allowed for identity fields only; the role select is
     // disabled for your own row and the API refuses a self role change anyway.
     canEdit: mayEdit && canEditIdentity(context, { id: user.id, role: user.role }).ok,
+    canDeactivate: can(context, "user.deactivate") && user.id !== context.user.id && canAdminister(context, { id: user.id, role: user.role }).ok,
+    canRemove: can(context, "user.delete") && user.id !== context.user.id && canAdminister(context, { id: user.id, role: user.role }).ok,
+    // The export route allows viewing your own record, hence no self exclusion.
+    canExport: can(context, "user.view") && (user.id === context.user.id || canAdminister(context, { id: user.id, role: user.role }).ok),
     isSelf: user.id === context.user.id,
   }));
 
@@ -48,8 +56,6 @@ export default async function AdminPeoplePage() {
     <PeopleTable
       people={people}
       roles={roleOptions}
-      canDeactivate={can(context, "user.deactivate")}
-      canDelete={can(context, "user.delete")}
       // Same permission as editing — user.manage is described as "Create
       // accounts and edit their details". Whether any given role can actually
       // be assigned is decided per role by canAssignRole below.

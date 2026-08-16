@@ -18,7 +18,10 @@ export type PageTab = { label: string; href: string };
  */
 export function PageTabs({ tabs, label }: { tabs: ReadonlyArray<PageTab>; label: string }) {
   const pathname = usePathname();
-  if (tabs.length < 2) return null;
+  // Renders even for a single tab. Hiding it below two was wrong for a
+  // permission-filtered set: HR's seeded permissions leave exactly one visible
+  // tab, so the entire admin section appeared to have no navigation.
+  if (tabs.length === 0) return null;
 
   return <nav className="page-tabs" aria-label={label}>
     {tabs.map((tab) => {

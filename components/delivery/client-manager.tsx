@@ -3,7 +3,10 @@
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CLIENT_STATUSES } from "@/lib/delivery/validate";
+import { EmptyState } from "@/components/portal/empty-state";
 import { StatusChip } from "@/components/status-chip";
+import { TableToolbar } from "@/components/portal/table-toolbar";
+import { useFilter } from "@/lib/ui/filter";
 
 type Row = { id: string; name: string; code: string; status: string; industry: string; owner: string; projectCount: number };
 type Errors = Partial<Record<"name" | "code" | "status" | "website" | "ownerId", string>>;
@@ -14,6 +17,7 @@ export function ClientManager({ clients, owners, canManage }: {
   canManage: boolean;
 }) {
   const router = useRouter();
+  const { query, setQuery, rows, isFiltered } = useFilter(clients, (client) => [client.name, client.code, client.industry, client.status, client.owner]);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ name: "", code: "", status: "ACTIVE", industry: "", website: "", ownerId: "", notes: "" });
   const [errors, setErrors] = useState<Errors>({});
@@ -37,13 +41,17 @@ export function ClientManager({ clients, owners, canManage }: {
 
   return <div>
     {notice && <p className={`form-status form-status--${notice.tone}`} role="status">{notice.text}</p>}
-    {canManage && <p><button type="button" className="button button-primary" onClick={() => setOpen(true)}>Add a client</button></p>}
+    <TableToolbar search={query} onSearch={setQuery} placeholder="Search clients…" label="Search clients">
+      {canManage && <button type="button" className="button button-primary" onClick={() => setOpen(true)}>Add a client</button>}
+    </TableToolbar>
 
-    {clients.length === 0 ? <p className="portal-note">No clients yet.</p> : <div className="matrix-scroll">
+    {rows.length === 0
+      ? <EmptyState message="No clients yet." filteredMessage="Nothing matches that search." isFiltered={isFiltered} />
+      : <div className="matrix-scroll">
       <table className="matrix matrix--people">
         <thead><tr><th scope="col">Client</th><th scope="col">Industry</th><th scope="col">Owner</th><th scope="col">Projects</th><th scope="col">Status</th></tr></thead>
         <tbody>
-          {clients.map((client) => <tr key={client.id}>
+          {rows.map((client) => <tr key={client.id}>
             <th scope="row"><strong>{client.name}</strong><span>{client.code}</span></th>
             <td>{client.industry || "—"}</td>
             <td>{client.owner}</td>
