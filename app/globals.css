@@ -818,15 +818,15 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
   -webkit-backdrop-filter: blur(16px);
 }
 .portal-bar-inner {
-  display: flex; width: min(100% - 1.5rem, var(--shell-max-portal));
+  display: flex; width: min(100% - 1.5rem, 96rem);
   margin-inline: auto; height: 60px; min-height: 60px;
   align-items: center; justify-content: space-between; gap: 0.75rem;
 }
 @media (min-width: 640px) {
   .portal-bar-inner {
-    width: min(100% - 2rem, var(--shell-max-portal));
+    width: min(100% - 2.5rem, 96rem);
     height: 64px; min-height: 64px;
-    gap: 1rem;
+    gap: 1.25rem;
   }
 }
 .portal-bar-left {
@@ -1472,55 +1472,87 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 .meter span.is-over { background: linear-gradient(90deg, #f59e0b, #dc2626); }
 .text-over { color: #dc2626; font-weight: 700; }
 
-/* --- Global Search in Portal Header --- */
-.global-search { position: relative; display: block; flex: 0 0 auto; }
-.global-search-input {
-  width: 7.25rem; max-width: 12rem; border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 0.65rem;
-  background: rgba(255, 255, 255, 0.08); padding: 0.38rem 1.9rem 0.38rem 1.8rem; font-size: 0.8rem;
-  color: #ffffff; box-shadow: none; font-weight: 500;
-  transition: width 0.25s var(--ease), border-color 0.2s, background 0.2s, box-shadow 0.2s;
+/* --- Global Search Spotlight Command Palette --- */
+.global-search-trigger {
+  display: inline-flex; align-items: center; gap: 0.45rem;
+  border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 0.6rem;
+  background: rgba(255, 255, 255, 0.08); padding: 0.38rem 0.55rem;
+  color: #e2e8f0; font-size: 0.8rem; font-weight: 500;
+  cursor: pointer; flex-shrink: 0;
+  transition: background 0.18s, border-color 0.18s, color 0.18s, transform 0.15s;
 }
-@media (min-width: 1440px) {
-  .global-search-input {
-    width: 9rem;
-    font-size: 0.82rem;
-    padding: 0.4rem 2.2rem 0.4rem 2rem;
-  }
+.global-search-trigger:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 215, 0, 0.6);
+  color: #ffffff;
 }
-.global-search-input::placeholder { color: rgba(255, 255, 255, 0.65); }
-.global-search-input:focus {
-  width: 11.5rem; border-color: #ffd700; background: rgba(255, 255, 255, 0.14);
-  box-shadow: 0 0 0 3px rgba(255, 215, 0, 0.28); outline: none;
+.global-search-trigger-text {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.78rem;
 }
-.global-search-input::-webkit-search-decoration,
-.global-search-input::-webkit-search-cancel-button,
-.global-search-input::-webkit-search-results-button,
-.global-search-input::-webkit-search-results-decoration {
-  display: none;
-  -webkit-appearance: none;
+.global-search-trigger-kbd {
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 0.68rem; font-weight: 700; font-family: inherit;
+  color: rgba(255, 255, 255, 0.75); background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 0.35rem;
+  padding: 0.12rem 0.35rem; line-height: 1; letter-spacing: 0.04em;
 }
-.global-search-results {
-  position: absolute; right: 0; top: calc(100% + 0.5rem);
-  z-index: 55; width: 25rem; max-height: 23rem; overflow-y: auto;
-  border: 1px solid var(--line); border-radius: 1.15rem;
-  background: #ffffff; box-shadow: var(--shadow-xl);
-  animation: fade-up 0.18s var(--ease);
+
+/* Spotlight Modal Backdrop & Dialog */
+.global-search-backdrop {
+  position: fixed; inset: 0; z-index: 100;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex; align-items: flex-start; justify-content: center;
+  padding: 5rem 1rem 2rem;
+  animation: fade-in 0.18s var(--ease);
 }
-.global-search-hit {
-  display: flex; gap: 0.95rem; align-items: flex-start;
-  padding: 0.85rem 1.15rem; text-decoration: none;
-  transition: background 0.18s; border-bottom: 1px solid var(--line-subtle);
+.global-search-modal {
+  width: 100%; max-width: 40rem;
+  background: #18181b;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 1.25rem;
+  box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 215, 0, 0.2);
+  overflow: hidden;
+  animation: scale-up 0.2s var(--ease);
 }
-.global-search-hit:last-child { border-bottom: 0; }
-.global-search-hit:hover { background: var(--canvas-sub); }
-.global-search-kind {
-  flex: 0 0 5.5rem; color: var(--faint); font-size: 0.72rem;
-  font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
-  padding-top: 0.15rem;
+.global-search-input-wrapper {
+  display: flex; align-items: center; gap: 0.75rem;
+  padding: 0.95rem 1.25rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
 }
-.global-search-hit strong { display: block; color: var(--ink); font-size: 0.92rem; font-weight: 700; }
-.global-search-hit span span { color: var(--faint); font-size: 0.82rem; }
-.global-search-empty { margin: 0; padding: 1.35rem; color: var(--faint); font-size: 0.9rem; text-align: center; }
+.global-search-modal-input {
+  flex: 1 1 auto; background: transparent; border: none; outline: none;
+  color: #ffffff; font-size: 1.05rem; font-weight: 500;
+}
+.global-search-modal-input::placeholder { color: rgba(255, 255, 255, 0.45); }
+.global-search-esc-badge {
+  font-size: 0.7rem; font-weight: 700; color: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 0.35rem; padding: 0.2rem 0.45rem; cursor: pointer;
+}
+.global-search-esc-badge:hover { color: #ffffff; background: rgba(255, 255, 255, 0.15); }
+.global-search-results-list {
+  max-height: 24rem; overflow-y: auto;
+}
+.global-search-modal-hit {
+  display: flex; align-items: center; gap: 1rem;
+  padding: 0.85rem 1.25rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  text-decoration: none; transition: background 0.15s;
+}
+.global-search-modal-hit:last-child { border-bottom: 0; }
+.global-search-modal-hit:hover,
+.global-search-modal-hit.is-selected {
+  background: rgba(255, 215, 0, 0.12);
+}
+.global-search-modal-kind {
+  flex: 0 0 5.5rem; font-size: 0.7rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.06em;
+  color: #fbbf24;
+}
 
 .portal-bell {
   position: relative; display: grid; width: 2.25rem; height: 2.25rem;
