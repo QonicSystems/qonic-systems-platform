@@ -647,6 +647,13 @@ model Job {
   @@index([clientId])
 }
 
+/// Whether a candidate is still in play. Deactivating archives them rather than
+/// deleting: the record, its name, and its pipeline history all stay intact.
+enum CandidateStatus {
+  ACTIVE
+  ARCHIVED
+}
+
 model Candidate {
   id             String    @id @default(cuid())
   name           String
@@ -677,6 +684,10 @@ model Candidate {
   /// Recorded when the candidate agreed to us holding their data.
   consentAt DateTime?
 
+  /// ARCHIVED candidates keep their real name and history — nothing is scrubbed.
+  status     CandidateStatus @default(ACTIVE)
+  archivedAt DateTime?
+
   applications Application[]
 
   createdAt DateTime @default(now())
@@ -684,6 +695,7 @@ model Candidate {
 
   @@index([name])
   @@index([benchStatus])
+  @@index([status])
 }
 
 /// The pipeline stages an application moves through.

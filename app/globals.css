@@ -1099,6 +1099,11 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 .matrix tbody th { max-width: 22rem; }
 .matrix tbody th strong { display: block; color: var(--ink); font-weight: 700; }
 .matrix tbody th span { display: block; margin-top: 0.15rem; color: var(--faint); font-size: 0.8rem; font-weight: 400; line-height: 1.45; }
+/* Badges inside a row header. The rule above makes every span a block, which
+   stretched each tag across the whole column; this puts them back on one
+   wrapping line at their natural width. */
+.matrix tbody th .matrix-tags { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.4rem; }
+.matrix tbody th .matrix-tags > * { display: inline-flex; margin-top: 0; }
 .matrix tbody td { text-align: left; }
 .matrix--people tbody td { text-align: left; }
 
@@ -1277,6 +1282,103 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
   gap: 1rem; margin-bottom: 1.15rem;
 }
 .action-bar--split > :last-child { margin-left: auto; }
+
+/* --- Filter chip groups (candidate tables) ---
+   Status and resource type are two independent filters sharing one row, so both
+   always have a chip selected. Without a label and a divider the row reads as a
+   single tab strip with two tabs active at once. */
+.filter-bar {
+  display: flex; flex-wrap: wrap; align-items: center;
+  gap: 0.6rem 1rem; margin-bottom: 1.15rem;
+}
+.filter-group { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; }
+.filter-group__label {
+  margin-right: 0.15rem; color: var(--faint);
+  font-size: 0.68rem; font-weight: 700;
+  letter-spacing: 0.09em; text-transform: uppercase;
+}
+.filter-bar__divider {
+  align-self: stretch; width: 1px; min-height: 1.5rem;
+  background: var(--line);
+}
+@media (max-width: 720px) {
+  /* Stacked groups already read as separate controls; the rule between them
+     would sit across the row rather than between the two. */
+  .filter-bar__divider { display: none; }
+  .filter-bar { gap: 0.55rem 0.75rem; }
+  .filter-group { flex-basis: 100%; }
+}
+
+/* --- AI tech match bar (candidate pool) ---
+   A full-width band under the toolbar rather than a cramped input beside the
+   primary button: the field is the widest thing on the row, so the placeholder
+   can explain itself, and the result line sits directly beneath it. */
+.ai-match {
+  margin: 0 0 1.15rem;
+  border: 1px solid var(--line);
+  border-radius: 0.9rem;
+  background: linear-gradient(180deg, var(--canvas) 0%, var(--canvas-sub) 100%);
+  box-shadow: var(--shadow-xs);
+  padding: 0.75rem 0.95rem;
+  transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+}
+.ai-match[data-active="true"] {
+  border-color: var(--accent-soft);
+  background: linear-gradient(180deg, var(--accent-tint) 0%, var(--canvas) 100%);
+  box-shadow: var(--shadow-sm);
+}
+.ai-match:focus-within {
+  border-color: var(--accent-dark);
+  box-shadow: 0 0 0 3.5px rgba(255, 215, 0, 0.18);
+}
+.ai-match__field { display: flex; align-items: center; gap: 0.75rem; }
+.ai-match__spark {
+  display: grid; place-items: center; flex: none;
+  width: 2.1rem; height: 2.1rem; border-radius: 0.65rem;
+  background: var(--ink); color: var(--accent);
+}
+.ai-match__spark svg { width: 1.05rem; height: 1.05rem; }
+.ai-match__body { flex: 1 1 auto; min-width: 0; }
+.ai-match__label {
+  display: block; color: var(--ink);
+  font-size: 0.7rem; font-weight: 700;
+  letter-spacing: 0.08em; text-transform: uppercase;
+}
+.ai-match__input {
+  width: 100%; border: 0; background: transparent; padding: 0.15rem 0 0;
+  color: var(--ink); font-size: 0.92rem; outline: none;
+}
+.ai-match__input::placeholder { color: var(--subtle); font-size: 0.86rem; }
+.ai-match__clear {
+  flex: none; border: 1px solid var(--line-strong); border-radius: 0.5rem;
+  background: var(--canvas); padding: 0.35rem 0.7rem;
+  color: var(--body); font-size: 0.76rem; font-weight: 600; cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.ai-match__clear:hover { background: var(--ink); border-color: var(--ink); color: #ffffff; }
+.ai-match__hint,
+.ai-match__result {
+  margin: 0.55rem 0 0; padding-top: 0.55rem;
+  border-top: 1px dashed var(--line);
+  font-size: 0.78rem; color: var(--faint);
+}
+.ai-match__result {
+  display: flex; flex-wrap: wrap; align-items: center;
+  justify-content: space-between; gap: 0.5rem;
+}
+.ai-match__summary { color: var(--body); }
+.ai-match__summary strong { color: var(--ink); font-weight: 700; }
+.ai-match__tokens { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.ai-match__token {
+  border: 1px solid var(--accent-soft); border-radius: 999px;
+  background: var(--accent-tint); padding: 0.1rem 0.5rem;
+  color: var(--accent-dark); font-size: 0.7rem; font-weight: 700;
+}
+
+@media (max-width: 640px) {
+  .ai-match__field { flex-wrap: wrap; }
+  .ai-match__body { flex-basis: 100%; order: 3; }
+}
 
 /* Audit log */
 .audit-filters {

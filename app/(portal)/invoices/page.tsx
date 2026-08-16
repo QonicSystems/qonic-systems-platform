@@ -13,7 +13,10 @@ export default async function InvoicesPage() {
     db.invoice.findMany({ include: { client: { select: { name: true } }, project: { select: { name: true } } }, orderBy: { issueDate: "desc" } }),
     db.client.findMany({ where: { status: { in: ["ACTIVE", "PROSPECT"] } }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
     db.project.findMany({ where: { status: { in: ["ACTIVE", "COMPLETED"] } }, select: { id: true, name: true, clientId: true }, orderBy: { name: "asc" } }),
-    db.candidate.findMany({ where: { source: "Global Visa Resource" }, take: 10 }),
+    // Archived candidates must not accrue commission. `source` is canonicalised
+    // by migration, so the exact match now also catches records that were
+    // stored as GLOBAL_VISA_RESOURCE.
+    db.candidate.findMany({ where: { source: "Global Visa Resource", status: "ACTIVE" }, take: 10 }),
   ]);
 
   // Derive commission items from invoices and global candidates

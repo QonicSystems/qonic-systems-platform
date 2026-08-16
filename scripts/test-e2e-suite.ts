@@ -605,23 +605,15 @@ async function runFullE2ETestSuite() {
     };
     assert(!!sarPayload.profile && sarPayload.contractsCount > 0, "GDPR Article 15: SAR Data Export generated accurately");
 
-    // 9.4 GDPR Article 17: Right to Erasure (Anonymisation)
-    await db.$transaction(async (tx) => {
-      await tx.user.update({
-        where: { id: testEmployee.id },
-        data: {
-          name: "Erased User",
-          email: `erased-${testEmployee.id.slice(0, 8)}@erased.invalid`,
-          phone: null,
-          photoUrl: null,
-          techStack: null,
-          status: "ARCHIVED",
-        },
-      });
-    });
-    const erasedUser = await db.user.findUnique({ where: { id: testEmployee.id } });
-    assert(erasedUser?.name === "Erased User", "GDPR Article 17: User identity anonymized to 'Erased User'");
-    assert(Boolean(erasedUser?.email.endsWith("@erased.invalid")), "GDPR Article 17: Email scrubbed to '@erased.invalid'");
+    // 9.4 Archived accounts stay identifiable.
+    //
+    // The anonymise-in-place action was removed: an archived record exists so the
+    // business can still say who a contract letter or timesheet belonged to, and
+    // overwriting the name to "Erased User" destroyed exactly that. Archiving
+    // revokes access and keeps the identity.
+    assert(archivedUser?.name === testEmployee.name, "Archived user keeps their real name");
+    assert(archivedUser?.email === testEmployee.email, "Archived user keeps their real email address");
+    assert(!archivedUser?.email.endsWith("@erased.invalid"), "Archived user is not anonymised");
 
     // 9.5 Audit Log Purging
     const auditCountBefore = await db.auditLog.count();

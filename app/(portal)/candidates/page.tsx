@@ -1,6 +1,7 @@
 import { CandidateManager } from "@/components/ats/candidate-manager";
 import { can, requirePermission } from "@/lib/auth/guard";
 import { STAGE_LABELS } from "@/lib/ats/pipeline";
+import { resourceTypeOf } from "@/lib/ats/resource-type";
 import { db } from "@/lib/db";
 
 export const metadata = { title: "Candidate Pool" };
@@ -17,17 +18,24 @@ export default async function CandidatesPage() {
         include: { job: { select: { title: true, reference: true } } },
       },
     },
-    orderBy: { createdAt: "desc" },
+    // Active first, then most recently added — archived records stay reachable
+    // through the filter without crowding the top of the pool.
+    orderBy: [{ status: "asc" }, { createdAt: "desc" }],
     take: 300,
   });
+
+  const activeCount = candidates.filter((candidate) => candidate.status === "ACTIVE").length;
+  const archivedCount = candidates.length - activeCount;
 
   return (
     <div className="portal-page">
       <header className="portal-page-head">
-        <p className="eyebrow">Talent & Delivery</p>
+        <p className="eyebrow">Talent &amp; Delivery</p>
         <h1 className="portal-title">Candidate Pool</h1>
         <p className="portal-lead">
-          {candidates.length} candidate{candidates.length === 1 ? "" : "s"} across active bench, project allocations, and recruitment pipelines.
+          {activeCount} active candidate{activeCount === 1 ? "" : "s"} across bench, project
+          allocations, and recruitment pipelines
+          {archivedCount > 0 ? ` · ${archivedCount} archived` : ""}.
         </p>
       </header>
 
@@ -46,6 +54,8 @@ export default async function CandidatesPage() {
           ssn: candidate.ssn ? `•••-••-${candidate.ssn.slice(-4)}` : "—",
           benchStatus: candidate.benchStatus ?? "Available / On Bench",
           source: candidate.source,
+          resourceType: resourceTypeOf(candidate.source),
+          status: candidate.status,
           resumeUrl: candidate.resumeUrl,
           hasConsent: candidate.consentAt !== null,
           applications: candidate.applications.map((a) => `${a.job.title} (${STAGE_LABELS[a.stage]})`),

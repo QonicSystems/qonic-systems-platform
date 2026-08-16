@@ -56,8 +56,86 @@ async function main() {
   }
   console.log(`✔ ${created} role→permission rows created (existing toggles left untouched)`);
 
+  await pruneRetiredRoles();
+  await restoreErasedIdentities();
   await seedLeaveTypes();
   await bootstrapCeo();
+}
+
+/**
+ * Deletes system roles the code no longer defines.
+ *
+ * Roles were only ever upserted, so the HR / Accounts / Projects rows seeded
+ * before the platform refactor stayed in every database that had run the old
+ * seed — which is why a deployed environment showed four extra columns in the
+ * permission matrix that a freshly seeded one did not.
+ *
+ * Roles created by hand through the admin console are `isSystem: false` and are
+ * never touched. Anyone still holding a retired role is moved to Employee first,
+ * so the delete can never orphan an account.
+ */
+async function pruneRetiredRoles() {
+  const current = new Set<string>(SEEDED_ROLES.map((role) => role.key));
+  const retired = (await db.role.findMany({ where: { isSystem: true } })).filter(
+    (role) => !current.has(role.key)
+  );
+  if (retired.length === 0) return;
+
+  const employee = await db.role.findUniqueOrThrow({ where: { key: ROLE.EMPLOYEE } });
+
+  for (const role of retired) {
+    const moved = await db.user.updateMany({ where: { roleId: role.id }, data: { roleId: employee.id } });
+    if (moved.count > 0) {
+      console.log(`  → moved ${moved.count} account(s) from retired role "${role.key}" to Employee`);
+    }
+    // RolePermission and UserPermissionOverride rows cascade with the role.
+    await db.role.delete({ where: { id: role.id } });
+  }
+  console.log(`✔ ${retired.length} retired role(s) removed: ${retired.map((r) => r.key).join(", ")}`);
+}
+
+/**
+ * Puts real names back on accounts the removed "erase personal data" action had
+ * anonymised to "Erased User".
+ *
+ * Archiving exists to keep a readable record of who someone was; overwriting the
+ * name defeated that. The original name and email were captured in the audit log
+ * at the time, so they can be restored — the account stays ARCHIVED either way.
+ */
+async function restoreErasedIdentities() {
+  const anonymised = await db.user.findMany({
+    where: { OR: [{ email: { endsWith: "@erased.invalid" } }, { name: "Erased User" }] },
+    select: { id: true, name: true, email: true },
+  });
+  if (anonymised.length === 0) return;
+
+  let restored = 0;
+  for (const user of anonymised) {
+    const entry = await db.auditLog.findFirst({
+      where: { action: "gdpr.erase", entityType: "User", entityId: user.id },
+      orderBy: { createdAt: "desc" },
+      select: { before: true },
+    });
+
+    const before = entry?.before as { name?: unknown; email?: unknown } | null;
+    const name = typeof before?.name === "string" ? before.name.trim() : "";
+    const email = typeof before?.email === "string" ? before.email.trim().toLowerCase() : "";
+    if (!name || !email) {
+      console.log(`  • ${user.email}: no pre-erasure record in the audit log — name cannot be recovered`);
+      continue;
+    }
+
+    // Someone may have re-created the account under the same address since.
+    const clash = await db.user.findUnique({ where: { email } });
+    if (clash && clash.id !== user.id) {
+      await db.user.update({ where: { id: user.id }, data: { name } });
+      console.log(`  • restored name for ${user.id} but kept ${user.email}: ${email} is in use`);
+    } else {
+      await db.user.update({ where: { id: user.id }, data: { name, email } });
+    }
+    restored += 1;
+  }
+  if (restored > 0) console.log(`✔ ${restored} anonymised account(s) restored to their real identity`);
 }
 
 /** Starting leave categories. More can be added later without a migration. */

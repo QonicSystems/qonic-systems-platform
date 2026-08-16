@@ -1,5 +1,6 @@
 import { GlobalCandidatesTable, type GlobalCandidateRow } from "@/components/admin/global-candidates-table";
 import { can, requirePermission } from "@/lib/auth/guard";
+import { resourceTypeOf } from "@/lib/ats/resource-type";
 import { db } from "@/lib/db";
 
 export const metadata = { title: "Global Candidates — Admin" };
@@ -9,7 +10,7 @@ export default async function AdminGlobalCandidatesPage() {
   const canManage = can(context, "candidate.manage");
 
   const candidates = await db.candidate.findMany({
-    orderBy: { createdAt: "desc" },
+    orderBy: [{ status: "asc" }, { createdAt: "desc" }],
   });
 
   const rows: GlobalCandidateRow[] = candidates.map((c) => ({
@@ -26,8 +27,12 @@ export default async function AdminGlobalCandidatesPage() {
     commissionPaid: c.commissionPaid ?? 0,
     techStack: c.techStack ?? c.skills ?? "",
     benchStatus: c.benchStatus ?? "Available / On Bench",
+    resourceType: resourceTypeOf(c.source),
+    status: c.status,
     canEdit: canManage,
   }));
+
+  const activeCount = rows.filter((row) => row.status === "ACTIVE").length;
 
   return (
     <section className="portal-section">
@@ -35,7 +40,8 @@ export default async function AdminGlobalCandidatesPage() {
         <div>
           <h2 className="portal-section-title">Global Candidates</h2>
           <p className="portal-note">
-            Full talent database records including visa status, SSN details, and commission history ({rows.length} records).
+            Full talent database records including visa status, SSN details, and commission history
+            ({activeCount} active of {rows.length} records).
           </p>
         </div>
       </div>
