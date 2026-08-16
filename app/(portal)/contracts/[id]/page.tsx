@@ -4,7 +4,7 @@ import { ContractForm } from "@/components/contracts/contract-form";
 import { TransitionActions, type Action } from "@/components/contracts/transition-actions";
 import { requireAuth } from "@/lib/auth/guard";
 import { formatDate, formatSalary, type ContractPayload } from "@/lib/contracts/payload";
-import { availableTransitions, canEditContent, canViewLetter, describeStatus } from "@/lib/contracts/workflow";
+import { availableTransitions, canDeleteLetter, canEditContent, canViewLetter, describeStatus } from "@/lib/contracts/workflow";
 import { db } from "@/lib/db";
 import { StatusChip } from "@/components/status-chip";
 
@@ -45,7 +45,7 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
       </p>
     </header>
 
-    <TransitionActions letterId={letter.id} actions={actions} />
+    <TransitionActions letterId={letter.id} actions={actions} canDelete={canDeleteLetter(context, letter)} />
 
     <ContractDispatch
       letterId={letter.id}

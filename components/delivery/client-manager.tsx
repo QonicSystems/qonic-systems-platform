@@ -283,22 +283,24 @@ function DeleteDialog({ client, busy, onCancel, onConfirm }: {
 
   return <div className="dialog-backdrop" role="dialog" aria-modal="true" aria-labelledby="client-del-title">
     <div className="dialog">
-      <h3 id="client-del-title" className="dialog-title">Delete {client.name}?</h3>
-      {blockers.length > 0 ? <>
+      <h3 id="client-del-title" className="dialog-title">Permanently delete {client.name}?</h3>
+      {blockers.length > 0 ? (
+        <>
+          <p className="portal-note">
+            <strong>{client.name}</strong> currently has <strong>{blockers.join(", ")}</strong> attached.
+          </p>
+          <p className="portal-note text-amber-900 font-medium bg-amber-50 p-2.5 rounded-lg border border-amber-200">
+            Deleting this client will permanently erase the client organization and cleanly remove its associated records. This action cannot be undone.
+          </p>
+        </>
+      ) : (
         <p className="portal-note">
-          <strong>{client.name}</strong> has {blockers.join(", ")} on record, so it cannot be deleted —
-          those are commercial records and deleting the client would break them.
+          This permanently removes <strong>{client.name}</strong> and its contacts. It cannot be undone.
         </p>
-        <p className="portal-note">Use <strong>Archive</strong> instead. It takes the client out of the current list and keeps everything intact.</p>
-      </> : <>
-        <p className="portal-note">
-          This permanently removes <strong>{client.name}</strong> and its contacts. Nothing else
-          references it, so no history is lost. It cannot be undone.
-        </p>
-      </>}
+      )}
       <div className="dialog-actions">
         <button type="button" className="button button-outline" onClick={onCancel} disabled={busy}>Cancel</button>
-        <button type="button" className="button button-danger" onClick={onConfirm} disabled={busy || blockers.length > 0}>
+        <button type="button" className="button button-danger" onClick={onConfirm} disabled={busy}>
           {busy ? "Deleting…" : "Delete permanently"}
         </button>
       </div>

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { clientIp, recordAudit } from "@/lib/audit";
 import { guardRoute } from "@/lib/auth/guard";
 import { validateContractPayload } from "@/lib/contracts/payload";
-import { canEditContent, canViewLetter } from "@/lib/contracts/workflow";
+import { canDeleteLetter, canEditContent, canViewLetter } from "@/lib/contracts/workflow";
 import { db } from "@/lib/db";
 
 export const runtime = "nodejs";
@@ -36,4 +36,34 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   });
 
   return NextResponse.json({ message: "Draft saved." });
+}
+
+/** Permanently delete a contract letter if it is in REVOKED or DRAFT status. */
+export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { context, response } = await guardRoute("contract.generate");
+  if (response) return response;
+
+  const { id } = await params;
+  const letter = await db.contractLetter.findUnique({ where: { id } });
+  if (!letter) {
+    return NextResponse.json({ message: "That contract letter could not be found." }, { status: 404 });
+  }
+  if (!canDeleteLetter(context, letter)) {
+    return NextResponse.json({ message: "Only draft or revoked contract letters can be deleted." }, { status: 403 });
+  }
+
+  await db.$transaction(async (tx) => {
+    await tx.contractLetterEvent.deleteMany({ where: { letterId: id } });
+    await recordAudit({
+      actorId: context.user.id,
+      action: "contract.delete",
+      entityType: "ContractLetter",
+      entityId: id,
+      before: { reference: letter.reference, status: letter.status },
+      ipAddress: clientIp(request),
+    }, tx);
+    await tx.contractLetter.delete({ where: { id } });
+  });
+
+  return NextResponse.json({ message: `Contract letter ${letter.reference} deleted.` });
 }
