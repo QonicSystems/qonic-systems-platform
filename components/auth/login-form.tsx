@@ -3,6 +3,7 @@
 import { FormEvent, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { PasswordField } from "@/components/auth/password-field";
 import type { LoginErrors, LoginPayload } from "@/lib/auth/login";
 
 const emptyPayload: LoginPayload = { email: "", password: "" };
@@ -68,11 +69,14 @@ export function LoginForm() {
     </div>
 
     <div className="mt-5">
-      <label htmlFor="password">Password</label>
-      <input id="password" name="password" type="password" autoComplete="current-password" value={data.password}
-        onChange={(event) => update("password", event.target.value)}
-        aria-invalid={Boolean(errors.password)} aria-describedby={errors.password ? "password-error" : undefined} />
-      {errors.password && <p id="password-error" className="form-error">{errors.password}</p>}
+      <PasswordField
+        id="password"
+        label="Password"
+        autoComplete="current-password"
+        value={data.password}
+        onChange={(value) => update("password", value)}
+        error={errors.password}
+      />
     </div>
 
     {mfaRequired && <div className="mt-5">

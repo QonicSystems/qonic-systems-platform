@@ -8,7 +8,12 @@ export default async function ClientsPage() {
   const context = await requirePermission("client.view");
 
   const [clients, owners] = await Promise.all([
-    db.client.findMany({ include: { owner: { select: { name: true } }, _count: { select: { projects: true } } }, orderBy: { name: "asc" } }),
+    // Jobs and invoices are counted too: they decide whether a client can be
+    // deleted, so the confirm dialog can say what is blocking it up front.
+    db.client.findMany({
+      include: { owner: { select: { name: true } }, _count: { select: { projects: true, jobs: true, invoices: true } } },
+      orderBy: { name: "asc" },
+    }),
     db.user.findMany({ where: { status: "ACTIVE" }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
   ]);
 
@@ -22,7 +27,11 @@ export default async function ClientsPage() {
     <ClientManager
       clients={clients.map((client) => ({
         id: client.id, name: client.name, code: client.code, status: client.status,
-        industry: client.industry ?? "", owner: client.owner?.name ?? "—", projectCount: client._count.projects,
+        industry: client.industry ?? "", website: client.website ?? "", notes: client.notes ?? "",
+        ownerId: client.ownerId ?? "", owner: client.owner?.name ?? "—",
+        projectCount: client._count.projects,
+        jobCount: client._count.jobs,
+        invoiceCount: client._count.invoices,
       }))}
       owners={owners}
       canManage={can(context, "client.manage")}

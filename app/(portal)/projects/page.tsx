@@ -13,15 +13,17 @@ export default async function ProjectsPage() {
   const context = await requirePermission("project.view");
 
   const [projects, clients, leadershipPeople] = await Promise.all([
+    // Every status is loaded and the table filters client-side. Fetching only
+    // ACTIVE would make a cancelled project vanish the moment it was cancelled,
+    // with no way back to it.
     db.project.findMany({
-      where: { status: "ACTIVE" },
       include: {
         client: true,
         manager: { select: { name: true } },
-        _count: { select: { assignments: true } },
+        _count: { select: { assignments: true, timeEntries: true, invoices: true, expenses: true } },
         timeEntries: { select: { minutes: true, billable: true } },
       },
-      orderBy: { name: "asc" },
+      orderBy: [{ status: "asc" }, { name: "asc" }],
     }),
     db.client.findMany({
       where: { status: { in: ["ACTIVE", "UPCOMING", "RESCHEDULED", "CANCELLED"] } },
@@ -39,13 +41,16 @@ export default async function ProjectsPage() {
     }),
   ]);
 
+  const activeCount = projects.filter((project) => project.status === "ACTIVE").length;
+
   return (
     <div className="portal-page">
       <header className="portal-page-head">
         <p className="eyebrow">Delivery</p>
-        <h1 className="portal-title">Active Projects</h1>
+        <h1 className="portal-title">Projects</h1>
         <p className="portal-lead">
-          {projects.length} active running project{projects.length === 1 ? "" : "s"} across all clients.
+          {activeCount} running project{activeCount === 1 ? "" : "s"} across all clients
+          {projects.length > activeCount ? ` · ${projects.length - activeCount} completed or cancelled` : ""}.
         </p>
       </header>
 
@@ -65,6 +70,9 @@ export default async function ProjectsPage() {
             hours: (minutes / 60).toFixed(1),
             negotiationCompleted: project.negotiationCompleted,
             completedReason: project.completedReason ?? "",
+            timeEntryCount: project._count.timeEntries,
+            invoiceCount: project._count.invoices,
+            expenseCount: project._count.expenses,
           };
         })}
         clients={clients}

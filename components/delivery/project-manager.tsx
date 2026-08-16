@@ -1,8 +1,14 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { BILLING_LABELS, BILLING_MODELS, PROJECT_STATUS_LABELS, PROJECT_STATUSES } from "@/lib/delivery/validate";
+import {
+  BILLING_LABELS,
+  BILLING_MODELS,
+  PROJECT_ARCHIVED_STATUS,
+  PROJECT_STATUS_LABELS,
+  PROJECT_STATUSES,
+} from "@/lib/delivery/validate";
 import { EmptyState } from "@/components/portal/empty-state";
 import { StatusChip } from "@/components/status-chip";
 import { TableToolbar } from "@/components/portal/table-toolbar";
@@ -21,6 +27,10 @@ type Row = {
   hours: string;
   negotiationCompleted?: boolean;
   completedReason?: string;
+  /** Drive the delete guard's warning without waiting for a 409. */
+  timeEntryCount: number;
+  invoiceCount: number;
+  expenseCount: number;
 };
 type Errors = Partial<
   Record<
@@ -50,7 +60,20 @@ export function ProjectManager({
   canManage: boolean;
 }) {
   const router = useRouter();
-  const { query, setQuery, rows, isFiltered } = useFilter(projects, (project) => [
+  const [statusFilter, setStatusFilter] = useState<"ACTIVE" | "COMPLETED" | "CANCELLED" | "ALL">("ACTIVE");
+
+  const counts = {
+    ACTIVE: projects.filter((p) => p.status === "ACTIVE").length,
+    COMPLETED: projects.filter((p) => p.status === "COMPLETED").length,
+    CANCELLED: projects.filter((p) => p.status === PROJECT_ARCHIVED_STATUS).length,
+    ALL: projects.length,
+  };
+  const visible = useMemo(
+    () => (statusFilter === "ALL" ? projects : projects.filter((p) => p.status === statusFilter)),
+    [projects, statusFilter]
+  );
+
+  const { query, setQuery, rows, isFiltered } = useFilter(visible, (project) => [
     project.name,
     project.code,
     project.client,
@@ -58,6 +81,7 @@ export function ProjectManager({
     project.manager,
   ]);
   const [open, setOpen] = useState(false);
+  const [deleting, setDeleting] = useState<Row | null>(null);
   const empty = {
     name: "",
     code: "",
@@ -107,6 +131,39 @@ export function ProjectManager({
     }
   };
 
+  /** Cancel / reinstate / delete — one place that surfaces the server's reason. */
+  const act = async (url: string, init: RequestInit): Promise<boolean> => {
+    setBusy(true);
+    setNotice(null);
+    try {
+      const response = await fetch(url, { headers: { "Content-Type": "application/json" }, ...init });
+      const result = (await response.json().catch(() => ({}))) as { message?: string };
+      if (!response.ok) {
+        setNotice({ tone: "error", text: result.message ?? "Unable to complete that request." });
+        if (response.status === 404 || response.status === 409) router.refresh();
+        return false;
+      }
+      setNotice({ tone: "success", text: result.message ?? "Updated." });
+      router.refresh();
+      return true;
+    } catch {
+      setNotice({ tone: "error", text: "Unable to reach the server." });
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const toggleCancelled = (project: Row) =>
+    act(`/api/projects/${project.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ status: project.status === PROJECT_ARCHIVED_STATUS ? "ACTIVE" : PROJECT_ARCHIVED_STATUS }),
+    });
+
+  const remove = async (project: Row) => {
+    if (await act(`/api/projects/${project.id}`, { method: "DELETE" })) setDeleting(null);
+  };
+
   const selectedClient = clients.find((client) => client.id === form.clientId);
 
   return (
@@ -116,11 +173,34 @@ export function ProjectManager({
           {notice.text}
         </p>
       )}
+      <div className="filter-bar" role="group" aria-label="Filter by status">
+        <span className="filter-group__label">Status</span>
+        {(["ACTIVE", "COMPLETED", "CANCELLED", "ALL"] as const).map((key) => {
+          const selected = statusFilter === key;
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setStatusFilter(key)}
+              aria-pressed={selected}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                selected ? "bg-[#111111] text-white shadow-sm" : "bg-[#f8f7f3] text-[#4f4f4f] hover:bg-[#eeece4] border border-[#e7e4da]"
+              }`}
+            >
+              <span>{key === "ALL" ? "All" : PROJECT_STATUS_LABELS[key] ?? key}</span>
+              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono leading-none ${
+                selected ? "bg-[#ffd700] text-[#111111] font-bold" : "bg-black/10 text-[#6b6b6b]"
+              }`}>{counts[key]}</span>
+            </button>
+          );
+        })}
+      </div>
+
       {canManage && (
         <TableToolbar
           search={query}
           onSearch={setQuery}
-          placeholder="Search active projects, client, code, manager…"
+          placeholder="Search projects, client, code, manager…"
           label="Search projects"
         >
           <>
@@ -139,9 +219,15 @@ export function ProjectManager({
 
       {rows.length === 0 ? (
         <EmptyState
-          message="No active projects yet."
+          message={
+            statusFilter === "CANCELLED"
+              ? "No cancelled projects."
+              : statusFilter === "COMPLETED"
+              ? "No completed projects."
+              : "No active projects yet."
+          }
           filteredMessage="Nothing matches that search."
-          isFiltered={isFiltered}
+          isFiltered={isFiltered || statusFilter !== "ACTIVE"}
         />
       ) : (
         <div className="matrix-scroll">
@@ -156,11 +242,12 @@ export function ProjectManager({
                 <th scope="col">Negotiation Completed</th>
                 <th scope="col">Hours</th>
                 <th scope="col">Status</th>
+                {canManage && <th scope="col">Actions</th>}
               </tr>
             </thead>
             <tbody>
               {rows.map((project) => (
-                <tr key={project.id}>
+                <tr key={project.id} className={project.status === PROJECT_ARCHIVED_STATUS ? "opacity-70" : undefined}>
                   <th scope="row">
                     <strong>{project.name}</strong>
                     <span>{project.code}</span>
@@ -182,13 +269,52 @@ export function ProjectManager({
                   </td>
                   <td>{project.hours} hrs</td>
                   <td>
-                    <StatusChip status={project.status} />
+                    <StatusChip status={project.status} label={PROJECT_STATUS_LABELS[project.status]} />
                   </td>
+                  {canManage && (
+                    <td>
+                      <div className="row-actions flex flex-wrap gap-1">
+                        <button
+                          type="button"
+                          className="row-action"
+                          onClick={() => toggleCancelled(project)}
+                          disabled={busy}
+                          title={
+                            project.status === PROJECT_ARCHIVED_STATUS
+                              ? "Put this project back into delivery"
+                              : "Cancel — keeps time, invoices and expenses on record"
+                          }
+                        >
+                          {project.status === PROJECT_ARCHIVED_STATUS ? "Reinstate" : "Cancel"}
+                        </button>
+                        <button
+                          type="button"
+                          className="row-action row-action--danger"
+                          onClick={() => {
+                            setDeleting(project);
+                            setNotice(null);
+                          }}
+                          disabled={busy}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+      )}
+
+      {deleting && (
+        <ProjectDeleteDialog
+          project={deleting}
+          busy={busy}
+          onCancel={() => setDeleting(null)}
+          onConfirm={() => remove(deleting)}
+        />
       )}
 
       {open && (
@@ -402,6 +528,62 @@ export function ProjectManager({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Names what blocks the delete before it is attempted. Time entries, invoices
+ * and expenses are the three that matter: the first would be refused by the
+ * database, and the other two would silently lose their project reference.
+ */
+function ProjectDeleteDialog({ project, busy, onCancel, onConfirm }: {
+  project: Row;
+  busy: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const blockers = [
+    project.timeEntryCount > 0
+      ? `${project.timeEntryCount} time ${project.timeEntryCount === 1 ? "entry" : "entries"}`
+      : null,
+    project.invoiceCount > 0 ? `${project.invoiceCount} invoice${project.invoiceCount === 1 ? "" : "s"}` : null,
+    project.expenseCount > 0 ? `${project.expenseCount} expense${project.expenseCount === 1 ? "" : "s"}` : null,
+  ].filter(Boolean);
+
+  return (
+    <div className="dialog-backdrop" role="dialog" aria-modal="true" aria-labelledby="project-del-title">
+      <div className="dialog">
+        <h3 id="project-del-title" className="dialog-title">Delete {project.name}?</h3>
+        {blockers.length > 0 ? (
+          <>
+            <p className="portal-note">
+              <strong>{project.name}</strong> has {blockers.join(", ")} booked against it, so it cannot be
+              deleted — that is billable and financial history.
+            </p>
+            <p className="portal-note">
+              Use <strong>Cancel</strong> instead. It takes the project out of delivery and keeps every record attached to it.
+            </p>
+          </>
+        ) : (
+          <p className="portal-note">
+            This permanently removes <strong>{project.name}</strong> along with its team assignments,
+            tasks and milestones. No time, invoices or expenses are attached, so no financial history
+            is lost. It cannot be undone.
+          </p>
+        )}
+        <div className="dialog-actions">
+          <button type="button" className="button button-outline" onClick={onCancel} disabled={busy}>Cancel</button>
+          <button
+            type="button"
+            className="button button-danger"
+            onClick={onConfirm}
+            disabled={busy || blockers.length > 0}
+          >
+            {busy ? "Deleting…" : "Delete permanently"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

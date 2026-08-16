@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { clientIp, recordAudit } from "@/lib/audit";
 import { guardRoute } from "@/lib/auth/guard";
-import { toMinorUnits, validateProject } from "@/lib/delivery/validate";
+import { PROJECT_STATUSES, toMinorUnits, validateProject } from "@/lib/delivery/validate";
 import { db } from "@/lib/db";
 
 export const runtime = "nodejs";
@@ -29,6 +29,26 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       await recordAudit({ actorId: context.user.id, action: "project.health", entityType: "Project", entityId: id, before: { health: existing.health }, after: { health }, ipAddress: clientIp(request) }, tx);
     });
     return NextResponse.json({ message: `${existing.name} marked ${health.toLowerCase().replace(/_/g, " ")}.` });
+  }
+
+  // Cancelling and reinstating change one field, so they take the same shortcut
+  // as `health` — a row action has no full project payload to resend.
+  if (Object.keys(input).length === 1 && typeof input.status === "string") {
+    const status = input.status;
+    if (!PROJECT_STATUSES.includes(status as typeof PROJECT_STATUSES[number])) {
+      return NextResponse.json({ message: "That is not a valid project status." }, { status: 400 });
+    }
+    if (existing.status === status) {
+      return NextResponse.json({ message: `${existing.name} is already ${status.toLowerCase()}.` }, { status: 409 });
+    }
+    await db.$transaction(async (tx) => {
+      await tx.project.update({ where: { id }, data: { status: status as never } });
+      await recordAudit({
+        actorId: context.user.id, action: "project.status", entityType: "Project", entityId: id,
+        before: { status: existing.status }, after: { status }, ipAddress: clientIp(request),
+      }, tx);
+    });
+    return NextResponse.json({ message: `${existing.name} is now ${status.toLowerCase()}.` });
   }
 
   const { data, errors } = validateProject({ ...input, clientId: existing.clientId });
@@ -71,4 +91,50 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   });
 
   return NextResponse.json({ message: `${data.name} updated.` });
+}
+
+/**
+ * Delete a project. Requires project.manage.
+ *
+ * Only ever succeeds for a project nobody has booked time, billed, or claimed
+ * against. Those three carry the delete rules that matter: TimeEntry.projectId
+ * is Restrict, so the database would refuse anyway, while Invoice and Expense
+ * are SetNull — deleting would quietly strip the project off a financial record
+ * rather than fail, which is worse. Anything with history is cancelled instead.
+ */
+export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { context, response } = await guardRoute("project.manage");
+  if (response) return response;
+
+  const { id } = await params;
+  const existing = await db.project.findUnique({
+    where: { id },
+    include: { _count: { select: { timeEntries: true, invoices: true, expenses: true } } },
+  });
+  if (!existing) return NextResponse.json({ message: "That project no longer exists." }, { status: 404 });
+
+  const { timeEntries, invoices, expenses } = existing._count;
+  if (timeEntries + invoices + expenses > 0) {
+    const blockers = [
+      timeEntries > 0 ? `${timeEntries} time ${timeEntries === 1 ? "entry" : "entries"}` : null,
+      invoices > 0 ? `${invoices} invoice${invoices === 1 ? "" : "s"}` : null,
+      expenses > 0 ? `${expenses} expense${expenses === 1 ? "" : "s"}` : null,
+    ].filter(Boolean);
+    return NextResponse.json({
+      message: `${existing.name} has ${blockers.join(", ")} on record and cannot be deleted. Cancel the project instead — the history stays intact.`,
+      blockers: { timeEntries, invoices, expenses },
+    }, { status: 409 });
+  }
+
+  await db.$transaction(async (tx) => {
+    await recordAudit({
+      actorId: context.user.id, action: "project.delete", entityType: "Project", entityId: id,
+      before: { name: existing.name, code: existing.code, status: existing.status },
+      ipAddress: clientIp(request),
+    }, tx);
+    // Assignments, tasks and milestones cascade with the row.
+    await tx.project.delete({ where: { id } });
+  });
+
+  return NextResponse.json({ message: `${existing.name} deleted.` });
 }

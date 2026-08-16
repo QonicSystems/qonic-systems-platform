@@ -11,7 +11,7 @@ const portalNav = (page: import("@playwright/test").Page) =>
 async function signIn(page: import("@playwright/test").Page, email: string) {
   await page.goto("/login");
   await page.getByLabel("Work Email").fill(email);
-  await page.getByLabel("Password").fill(DEMO_PASSWORD);
+  await page.getByLabel("Password", { exact: true }).fill(DEMO_PASSWORD);
   await page.getByRole("button", { name: "Sign In" }).click();
   await page.waitForURL("**/dashboard");
 }
@@ -45,7 +45,7 @@ test.describe("authentication", () => {
     await expect(page).toHaveURL(/\/login\?next=%2Fdashboard/);
 
     await page.getByLabel("Work Email").fill(EMPLOYEE);
-    await page.getByLabel("Password").fill(DEMO_PASSWORD);
+    await page.getByLabel("Password", { exact: true }).fill(DEMO_PASSWORD);
     await page.getByRole("button", { name: "Sign In" }).click();
 
     await expect(page).toHaveURL(/\/dashboard/);
@@ -55,7 +55,7 @@ test.describe("authentication", () => {
   test("rejects a wrong password without revealing whether the account exists", async ({ page }) => {
     await page.goto("/login");
     await page.getByLabel("Work Email").fill(EMPLOYEE);
-    await page.getByLabel("Password").fill("definitely-not-the-password");
+    await page.getByLabel("Password", { exact: true }).fill("definitely-not-the-password");
     await page.getByRole("button", { name: "Sign In" }).click();
 
     await expect(page.locator("form").getByRole("alert")).toHaveText("Email or password is incorrect.");
@@ -65,7 +65,7 @@ test.describe("authentication", () => {
   test("gives an unknown email the exact same message as a wrong password", async ({ page }) => {
     await page.goto("/login");
     await page.getByLabel("Work Email").fill("does-not-exist@qonicsystems.com");
-    await page.getByLabel("Password").fill("definitely-not-the-password");
+    await page.getByLabel("Password", { exact: true }).fill("definitely-not-the-password");
     await page.getByRole("button", { name: "Sign In" }).click();
 
     await expect(page.locator("form").getByRole("alert")).toHaveText("Email or password is incorrect.");
@@ -74,7 +74,7 @@ test.describe("authentication", () => {
   test("refuses to redirect off-site after login", async ({ page }) => {
     await page.goto("/login?next=https://evil.example.com");
     await page.getByLabel("Work Email").fill(EMPLOYEE);
-    await page.getByLabel("Password").fill(DEMO_PASSWORD);
+    await page.getByLabel("Password", { exact: true }).fill(DEMO_PASSWORD);
     await page.getByRole("button", { name: "Sign In" }).click();
 
     await expect(page).toHaveURL(/127\.0\.0\.1:3008\/dashboard/);

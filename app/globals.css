@@ -714,6 +714,31 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
   cursor: not-allowed;
 }
 
+/* --- Password reveal toggle ---
+   The button sits inside the field's padding box, so the input reserves room on
+   the right for it and long passwords never run underneath the icon. */
+.password-field { position: relative; display: block; }
+.password-field input { padding-right: 3rem; }
+.password-field__toggle {
+  position: absolute; top: 50%; right: 0.4rem; transform: translateY(-50%);
+  display: grid; place-items: center;
+  width: 2.25rem; height: 2.25rem; padding: 0;
+  border: 0; border-radius: 0.55rem; background: transparent;
+  color: var(--faint); cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+.password-field__toggle svg { width: 1.15rem; height: 1.15rem; }
+.password-field__toggle:hover { background: var(--canvas-muted); color: var(--ink); }
+.password-field__toggle:focus-visible {
+  outline: none; color: var(--ink);
+  box-shadow: 0 0 0 2px var(--accent-dark);
+}
+/* Chromium and Safari add their own reveal control; two would sit on top of
+   each other and only one of them would match the button's state. */
+.password-field input::-ms-reveal,
+.password-field input::-ms-clear { display: none; }
+.password-field input::-webkit-credentials-auto-fill-button { margin-right: 2.25rem; }
+
 .contact-form [aria-invalid="true"] { border-color: #ef4444; }
 .contact-form [aria-invalid="true"]:focus { box-shadow: 0 0 0 3.5px rgba(239, 68, 68, 0.18); }
 

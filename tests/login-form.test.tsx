@@ -5,6 +5,10 @@ import { LoginForm } from "@/components/auth/login-form";
 
 const { replace, refresh } = vi.hoisted(() => ({ replace: vi.fn(), refresh: vi.fn() }));
 
+// The password field is queried by its exact label. A loose /password/i also
+// matches the reveal toggle's accessible name ("Show password"), which is a
+// second labelled element in the same form.
+
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace, refresh }),
   useSearchParams: () => new URLSearchParams(""),
@@ -20,7 +24,7 @@ describe("LoginForm", () => {
 
     render(<LoginForm />);
     await userEvent.type(screen.getByLabelText(/work email/i), "hr@qonicsystems.com");
-    await userEvent.type(screen.getByLabelText(/password/i), "Demo-Passw0rd");
+    await userEvent.type(screen.getByLabelText("Password"), "Demo-Passw0rd");
     await userEvent.click(screen.getByRole("button", { name: /sign in/i }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
@@ -35,7 +39,7 @@ describe("LoginForm", () => {
 
     render(<LoginForm />);
     await userEvent.type(screen.getByLabelText(/work email/i), "hr@qonicsystems.com");
-    await userEvent.type(screen.getByLabelText(/password/i), "wrong");
+    await userEvent.type(screen.getByLabelText("Password"), "wrong");
     await userEvent.click(screen.getByRole("button", { name: /sign in/i }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Email or password is incorrect.");
@@ -50,7 +54,7 @@ describe("LoginForm", () => {
 
     render(<LoginForm />);
     await userEvent.type(screen.getByLabelText(/work email/i), "bad");
-    await userEvent.type(screen.getByLabelText(/password/i), "something");
+    await userEvent.type(screen.getByLabelText("Password"), "something");
     await userEvent.click(screen.getByRole("button", { name: /sign in/i }));
 
     const field = await screen.findByLabelText(/work email/i);
@@ -58,12 +62,34 @@ describe("LoginForm", () => {
     expect(screen.getByText("Please enter a valid email address.")).toBeInTheDocument();
   });
 
+  it("reveals and re-hides the password without submitting the form", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<LoginForm />);
+    const field = screen.getByLabelText("Password");
+    await userEvent.type(field, "Demo-Passw0rd");
+    expect(field).toHaveAttribute("type", "password");
+
+    await userEvent.click(screen.getByRole("button", { name: "Show password" }));
+    expect(field).toHaveAttribute("type", "text");
+    // The value must survive the swap — re-rendering a different input type has
+    // to keep what was typed, or revealing would wipe the field.
+    expect(field).toHaveValue("Demo-Passw0rd");
+
+    await userEvent.click(screen.getByRole("button", { name: "Hide password" }));
+    expect(field).toHaveAttribute("type", "password");
+
+    // The toggle sits inside the form, so a missing type="button" would submit it.
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("reports a network failure instead of hanging on 'Signing in…'", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
 
     render(<LoginForm />);
     await userEvent.type(screen.getByLabelText(/work email/i), "hr@qonicsystems.com");
-    await userEvent.type(screen.getByLabelText(/password/i), "Demo-Passw0rd");
+    await userEvent.type(screen.getByLabelText("Password"), "Demo-Passw0rd");
     await userEvent.click(screen.getByRole("button", { name: /sign in/i }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(/unable to reach the server/i);
