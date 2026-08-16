@@ -113,7 +113,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   return NextResponse.json({ message: roleChanged ? `${data.name} updated and signed out to re-authenticate.` : `${data.name} updated.` });
 }
 
-/** Permanently remove an account. Requires user.delete — super admin only by default. */
+/** Remove an account by archiving it. Requires user.delete — super admin only by default. */
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { context, response } = await guardRoute("user.delete");
   if (response) return response;
@@ -125,42 +125,40 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   const authority = canAdminister(context, target);
   if (!authority.ok) return NextResponse.json({ message: authority.reason }, { status: authority.status });
 
-  // Contract letters are legal records naming this person. Deleting the account
-  // would break that history, so removal is refused and deactivation suggested.
-  const contracts = await db.contractLetter.count({ where: { OR: [{ subjectUserId: target.id }, { authorUserId: target.id }] } });
-  if (contracts > 0) {
-    return NextResponse.json({
-      message: `${target.name} has ${contracts} contract letter${contracts === 1 ? "" : "s"} on record and cannot be removed. Deactivate the account instead to preserve the paperwork.`,
-    }, { status: 409 });
-  }
-
   try {
     await db.$transaction(async (tx) => {
-      // Audit first: the row survives the delete because AuditLog.actor is SetNull
-      // and we record the subject in `before` rather than as a relation.
+      // 1. Invalidate all active sessions and pending reset tokens immediately
+      await tx.session.deleteMany({ where: { userId: target.id } });
+      await tx.passwordResetToken.deleteMany({ where: { userId: target.id } });
+
+      // 2. Archive user, revoke portal access, and record departure date while preserving all history
+      await tx.user.update({
+        where: { id: target.id },
+        data: {
+          status: "ARCHIVED",
+          leftOn: target.leftOn ?? new Date(),
+          failedLoginCount: 0,
+          lockedUntil: null,
+        },
+      });
+
+      // 3. Record audit log
       await recordAudit({
         actorId: context.user.id,
-        action: "user.delete",
+        action: "user.archive",
         entityType: "User",
         entityId: target.id,
-        before: { name: target.name, email: target.email, role: target.role.key },
+        before: { name: target.name, email: target.email, role: target.role.key, status: target.status },
+        after: { status: "ARCHIVED" },
         ipAddress: clientIp(request),
       }, tx);
-      await tx.user.delete({ where: { id: target.id } }); // sessions/overrides cascade
     });
   } catch (error) {
-    // The count above is a separate read, so a letter created in between still
-    // trips the FK Restrict. Same refusal, rather than a 500.
-    if (isForeignKeyViolation(error)) {
-      return NextResponse.json({
-        message: `${target.name} now has paperwork on record and cannot be removed. Deactivate the account instead.`,
-      }, { status: 409 });
-    }
     if (isRecordNotFound(error)) {
       return NextResponse.json({ message: "That account no longer exists." }, { status: 404 });
     }
     throw error;
   }
 
-  return NextResponse.json({ message: `${target.name} has been removed.` });
+  return NextResponse.json({ message: `${target.name} has been moved to Archived with all history preserved.` });
 }
