@@ -23,6 +23,7 @@ export default async function AdminPeoplePage() {
     email: user.email,
     phone: user.phone ?? "",
     jobTitle: user.jobTitle ?? "",
+    techStack: user.techStack ?? "",
     roleId: user.roleId,
     roleLabel: user.role.label,
     status: user.status,

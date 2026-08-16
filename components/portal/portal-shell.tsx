@@ -106,11 +106,11 @@ export function PortalShell({ user, links, unreadCount, children }: {
             ? <div key={entry.label} className="portal-drawer-group">
                 <p className="portal-drawer-heading">{entry.label}</p>
                 {entry.items.map((item) => <Link key={item.href} href={item.href}
-                  className={`portal-drawer-link ${isActive(item.href, pathname) ? "is-active" : ""}`}
+                  className={`portal-drawer-link ${isItemActive(item.href, pathname, entry.items.map((i) => i.href)) ? "is-active" : ""}`}
                   onClick={closeMenu}>{item.label}</Link>)}
               </div>
             : <Link key={entry.href} href={entry.href}
-                className={`portal-drawer-link ${isActive(entry.href, pathname) ? "is-active" : ""}`}
+                className={`portal-drawer-link ${isItemActive(entry.href, pathname) ? "is-active" : ""}`}
                 onClick={closeMenu}>{entry.label}</Link>)}
         </div>
       </div>
@@ -125,12 +125,19 @@ export function PortalShell({ user, links, unreadCount, children }: {
   </div>;
 }
 
-function isActive(href: string, pathname: string): boolean {
-  return pathname === href || pathname.startsWith(`${href}/`);
+function isItemActive(href: string, pathname: string, siblingHrefs: readonly string[] = []): boolean {
+  if (pathname === href) return true;
+  if (pathname.startsWith(`${href}/`)) {
+    const hasMoreSpecificSibling = siblingHrefs.some(
+      (s) => s !== href && s.startsWith(href) && (pathname === s || pathname.startsWith(`${s}/`))
+    );
+    return !hasMoreSpecificSibling;
+  }
+  return false;
 }
 
 function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
-  const active = isActive(item.href, pathname);
+  const active = isItemActive(item.href, pathname);
   return <Link href={item.href} className={`portal-link ${active ? "is-active" : ""}`} aria-current={active ? "page" : undefined}>{item.label}</Link>;
 }
 
@@ -145,7 +152,8 @@ function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
 function NavDropdown({ group, pathname }: { group: NavGroup; pathname: string }) {
   const [open, setOpen] = useState(false);
   const container = useRef<HTMLDivElement>(null);
-  const active = group.items.some((item) => isActive(item.href, pathname));
+  const siblingHrefs = group.items.map((i) => i.href);
+  const active = group.items.some((item) => isItemActive(item.href, pathname, siblingHrefs));
 
   useEffect(() => {
     if (!open) return;
@@ -179,7 +187,7 @@ function NavDropdown({ group, pathname }: { group: NavGroup; pathname: string })
         key={item.href}
         href={item.href}
         role="menuitem"
-        className={`portal-dropdown-item ${isActive(item.href, pathname) ? "is-active" : ""}`}
+        className={`portal-dropdown-item ${isItemActive(item.href, pathname, siblingHrefs) ? "is-active" : ""}`}
         onClick={() => setOpen(false)}
       >{item.label}</Link>)}
     </div>}

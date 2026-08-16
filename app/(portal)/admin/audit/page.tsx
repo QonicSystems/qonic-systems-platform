@@ -44,9 +44,12 @@ export default async function AuditPage({ searchParams }: {
   ]);
 
   const now = new Date().getTime();
-  const counts = await Promise.all([30, 90, 180, 365].map((days) =>
-    db.auditLog.count({ where: { createdAt: { lt: new Date(now - days * 86_400_000) } } })));
-  const olderThanOptions = [30, 90, 180, 365].map((days, index) => ({ days, count: counts[index] }));
+  const dayOptions = [0, 7, 14, 30, 90, 180, 365];
+  const counts = await Promise.all(dayOptions.map((days) =>
+    days === 0
+      ? db.auditLog.count()
+      : db.auditLog.count({ where: { createdAt: { lt: new Date(now - days * 86_400_000) } } })));
+  const olderThanOptions = dayOptions.map((days, index) => ({ days, count: counts[index] }));
 
   return <section className="portal-section">
     <h2 className="portal-section-title">Audit log</h2>

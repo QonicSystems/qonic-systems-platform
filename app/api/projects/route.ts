@@ -36,6 +36,8 @@ export async function POST(request: Request) {
         endDate: data.endDate ? new Date(`${data.endDate}T00:00:00.000Z`) : null,
         managerId: data.managerId || null,
         notes: data.notes || null,
+        negotiationCompleted: data.negotiationCompleted,
+        completedReason: data.completedReason || null,
       },
     });
     // Every project gets a default task so time can be booked immediately.

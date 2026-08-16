@@ -16,12 +16,12 @@ export type NavGroup = { label: string; items: ReadonlyArray<NavItem> };
 
 export const portalNavigation: ReadonlyArray<NavItem | NavGroup> = [
   { label: "Dashboard", href: "/dashboard", permission: null },
+  { label: "Candidate Pool", href: "/candidates", permission: "candidate.view" },
   {
     label: "My Work",
     items: [
       { label: "Timesheets", href: "/timesheets", permission: "timesheet.submit" },
       { label: "Leave", href: "/leave", permission: "leave.request" },
-      { label: "Expenses", href: "/expenses", permission: "expense.submit" },
       { label: "Contract Letters", href: "/contracts", permission: "contract.view_own" },
     ],
   },
@@ -36,14 +36,12 @@ export const portalNavigation: ReadonlyArray<NavItem | NavGroup> = [
     label: "Recruitment",
     items: [
       { label: "Jobs", href: "/jobs", permission: "job.view" },
-      { label: "Candidates", href: "/candidates", permission: "candidate.view" },
     ],
   },
   {
     label: "Finance",
     items: [
       { label: "Invoices", href: "/invoices", permission: "invoice.view" },
-      { label: "Expense Claims", href: "/expenses/approvals", permission: "expense.approve" },
     ],
   },
   {

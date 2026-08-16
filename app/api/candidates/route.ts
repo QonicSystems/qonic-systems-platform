@@ -53,7 +53,15 @@ export async function POST(request: Request) {
         linkedinUrl: linkedinUrl || null,
         location: String(input.location ?? "").trim() || null,
         headline: String(input.headline ?? "").trim() || null,
-        skills: String(input.skills ?? "").trim() || null,
+        skills: String(input.skills ?? input.techStack ?? "").trim() || null,
+        techStack: String(input.techStack ?? input.skills ?? "").trim() || null,
+        visaType: String(input.visaType ?? "").trim() || null,
+        visaStatus: String(input.visaStatus ?? "Valid").trim() || null,
+        visaExpiry: input.visaExpiry ? new Date(String(input.visaExpiry)) : null,
+        ssn: String(input.ssn ?? "").trim() || null,
+        address: String(input.address ?? "").trim() || null,
+        commissionPaid: input.commissionPaid ? toMinor(String(input.commissionPaid)) : null,
+        benchStatus: String(input.benchStatus ?? "Available / On Bench").trim() || "Available / On Bench",
         source: String(input.source ?? "Direct").trim() || "Direct",
         noticePeriod: String(input.noticePeriod ?? "").trim() || null,
         notes: String(input.notes ?? "").trim() || null,
@@ -62,7 +70,7 @@ export async function POST(request: Request) {
         consentAt: input.consent === true ? new Date() : null,
       },
     });
-    await recordAudit({ actorId: context.user.id, action: "candidate.create", entityType: "Candidate", entityId: candidate.id, after: { name, email }, ipAddress: clientIp(request) }, tx);
+    await recordAudit({ actorId: context.user.id, action: "candidate.create", entityType: "Candidate", entityId: candidate.id, after: { name, email, visaType: candidate.visaType, source: candidate.source }, ipAddress: clientIp(request) }, tx);
     return candidate;
   });
 

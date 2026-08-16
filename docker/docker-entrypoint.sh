@@ -11,8 +11,8 @@
 # app, so the orchestrator restarts it and the failure is visible.
 set -e
 
-echo "→ Applying database migrations..."
-npx prisma migrate deploy
+echo "→ Applying database migrations and schema sync..."
+npx prisma migrate deploy || npx prisma db push --accept-data-loss
 
 echo "→ Seeding roles, permissions, and bootstrap CEO (idempotent)..."
 npx tsx prisma/seed.ts

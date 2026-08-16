@@ -103,9 +103,16 @@ async function bootstrapCeo() {
 
   const ceo = await db.role.findUniqueOrThrow({ where: { key: ROLE.CEO } });
   await db.user.create({
-    data: { email, name, passwordHash: await hashPassword(password), roleId: ceo.id, jobTitle: "CEO & Founder", mustChangePassword: true },
+    data: {
+      email,
+      name,
+      passwordHash: await hashPassword(password),
+      roleId: ceo.id,
+      jobTitle: "CEO & Founder",
+      mustChangePassword: process.env.BOOTSTRAP_CEO_MUST_CHANGE === "true",
+    },
   });
-  console.log(`✔ CEO account created for ${email} (must change password at first login)`);
+  console.log(`✔ CEO account created for ${email}`);
 }
 
 main()

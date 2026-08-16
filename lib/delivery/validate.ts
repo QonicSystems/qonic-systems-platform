@@ -3,9 +3,21 @@ import { emailPattern } from "@/lib/contact";
 export type ClientPayload = { name: string; code: string; status: string; industry: string; website: string; ownerId: string; notes: string };
 export type ClientErrors = Partial<Record<keyof ClientPayload, string>>;
 
-export const CLIENT_STATUSES = ["PROSPECT", "ACTIVE", "DORMANT", "ARCHIVED"] as const;
-export const PROJECT_STATUSES = ["PLANNED", "ACTIVE", "ON_HOLD", "COMPLETED", "CANCELLED"] as const;
+export const CLIENT_STATUSES = ["ACTIVE", "UPCOMING", "RESCHEDULED", "CANCELLED"] as const;
+export const PROJECT_STATUSES = ["ACTIVE", "COMPLETED"] as const;
 export const BILLING_MODELS = ["TIME_AND_MATERIALS", "FIXED_PRICE", "RETAINER", "NON_BILLABLE"] as const;
+
+export const CLIENT_STATUS_LABELS: Record<string, string> = {
+  ACTIVE: "Active",
+  UPCOMING: "Upcoming",
+  RESCHEDULED: "Rescheduled",
+  CANCELLED: "Cancelled",
+};
+
+export const PROJECT_STATUS_LABELS: Record<string, string> = {
+  ACTIVE: "Running",
+  COMPLETED: "Completed",
+};
 
 export const BILLING_LABELS: Record<string, string> = {
   TIME_AND_MATERIALS: "Time & materials",
@@ -42,6 +54,7 @@ export type ProjectPayload = {
   name: string; code: string; clientId: string; status: string; billing: string;
   budgetAmount: string; budgetCurrency: string; defaultRate: string;
   startDate: string; endDate: string; managerId: string; notes: string;
+  negotiationCompleted: boolean; completedReason?: string;
 };
 export type ProjectErrors = Partial<Record<keyof ProjectPayload, string>>;
 
@@ -60,7 +73,7 @@ export function validateProject(value: unknown): { data?: ProjectPayload; errors
     name: String(input.name ?? "").trim(),
     code: String(input.code ?? "").trim().toUpperCase(),
     clientId: String(input.clientId ?? "").trim(),
-    status: String(input.status ?? "PLANNED").trim(),
+    status: String(input.status ?? "ACTIVE").trim(),
     billing: String(input.billing ?? "TIME_AND_MATERIALS").trim(),
     budgetAmount: String(input.budgetAmount ?? "").trim(),
     budgetCurrency: String(input.budgetCurrency ?? "INR").trim(),
@@ -69,6 +82,8 @@ export function validateProject(value: unknown): { data?: ProjectPayload; errors
     endDate: String(input.endDate ?? "").trim(),
     managerId: String(input.managerId ?? "").trim(),
     notes: String(input.notes ?? "").trim(),
+    negotiationCompleted: Boolean(input.negotiationCompleted),
+    completedReason: input.completedReason ? String(input.completedReason).trim() : undefined,
   };
   const errors: ProjectErrors = {};
 
@@ -76,6 +91,7 @@ export function validateProject(value: unknown): { data?: ProjectPayload; errors
   if (!CODE.test(data.code)) errors.code = "Use 2–10 uppercase letters or digits, e.g. WEB-01.";
   if (!data.clientId) errors.clientId = "Please choose a client.";
   if (!PROJECT_STATUSES.includes(data.status as typeof PROJECT_STATUSES[number])) errors.status = "Please choose a status.";
+  if (data.status === "COMPLETED" && !data.completedReason) errors.completedReason = "Please provide a completion reason.";
   if (!BILLING_MODELS.includes(data.billing as typeof BILLING_MODELS[number])) errors.billing = "Please choose a billing model.";
   if (Number.isNaN(toMinorUnits(data.budgetAmount))) errors.budgetAmount = "Enter the budget as a number, e.g. 250000.";
   if (Number.isNaN(toMinorUnits(data.defaultRate))) errors.defaultRate = "Enter the rate as a number, e.g. 3500.";

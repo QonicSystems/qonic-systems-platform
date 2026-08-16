@@ -78,25 +78,17 @@ export type PermissionKey = (typeof PERMISSIONS)[number]["key"];
 export const DEFAULT_ROLE_PERMISSIONS: Readonly<Record<Exclude<RoleKey, "ceo">, ReadonlyArray<PermissionKey>>> = {
   [ROLE.CO_FOUNDER]: [
     "portal.access", "directory.view",
-    "contract.view_own", "contract.view_all", "contract.release",
+    "contract.view_own", "contract.view_all", "contract.generate", "contract.submit", "contract.release", "contract.revoke",
     "client.view", "client.manage", "project.view", "project.manage",
     "timesheet.submit", "timesheet.approve", "report.utilization",
     "job.view", "job.manage", "candidate.view", "candidate.manage", "placement.manage",
-    "invoice.view", "invoice.manage", "payment.record", "expense.submit", "expense.approve", "report.finance",
+    "invoice.view", "invoice.manage", "payment.record", "report.finance",
     "leave.request", "leave.approve", "leave.manage",
-    "admin.access", "user.view", "audit.view",
+    "admin.access", "user.view", "user.manage", "user.deactivate", "audit.view",
   ],
-  [ROLE.HR]: [
-    "portal.access", "directory.view",
-    "contract.view_own", "contract.view_all", "contract.generate", "contract.submit",
-    "client.view", "project.view", "timesheet.submit", "report.utilization",
-    "job.view", "candidate.view", "expense.submit",
-    "leave.request", "leave.approve", "leave.manage",
-    "admin.access", "user.view", "user.manage",
+  [ROLE.EMPLOYEE]: [
+    "portal.access", "directory.view", "contract.view_own", "leave.request", "timesheet.submit",
   ],
-  [ROLE.ACCOUNTS]: ["portal.access", "directory.view", "contract.view_own", "leave.request", "client.view", "project.view", "timesheet.submit", "report.utilization", "invoice.view", "invoice.manage", "payment.record", "expense.submit", "expense.approve", "report.finance"],
-  [ROLE.PROJECTS]: ["portal.access", "directory.view", "contract.view_own", "leave.request", "leave.approve", "client.view", "client.manage", "project.view", "project.manage", "timesheet.submit", "timesheet.approve", "report.utilization", "job.view", "job.manage", "candidate.view", "candidate.manage", "placement.manage", "invoice.view", "expense.submit"],
-  [ROLE.EMPLOYEE]: ["portal.access", "directory.view", "contract.view_own", "leave.request", "timesheet.submit", "expense.submit"],
 };
 
 /** Granting this is equivalent to granting everything, so it stays CEO-only. */

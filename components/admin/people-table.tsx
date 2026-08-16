@@ -13,6 +13,7 @@ export type PersonRow = {
   email: string;
   phone: string;
   jobTitle: string;
+  techStack: string;
   roleId: string;
   roleLabel: string;
   status: "ACTIVE" | "SUSPENDED" | "ARCHIVED";
@@ -34,7 +35,7 @@ export type PersonRow = {
 type RoleOption = { id: string; label: string; assignable: boolean };
 /** Success is explicit; `errors` is only ever present on a 422. */
 type ActResult = { ok: boolean; errors?: Errors; inviteUrl?: string };
-type Errors = Partial<Record<"name" | "email" | "phone" | "jobTitle" | "roleId", string>>;
+type Errors = Partial<Record<"name" | "email" | "phone" | "jobTitle" | "techStack" | "roleId", string>>;
 
 export function PeopleTable({ people, roles, canCreate }: {
   people: ReadonlyArray<PersonRow>;
@@ -42,7 +43,7 @@ export function PeopleTable({ people, roles, canCreate }: {
   canCreate: boolean;
 }) {
   const router = useRouter();
-  const { query, setQuery, rows, isFiltered } = useFilter(people, (person) => [person.name, person.email, person.roleLabel, person.jobTitle, person.status]);
+  const { query, setQuery, rows, isFiltered } = useFilter(people, (person) => [person.name, person.email, person.roleLabel, person.jobTitle, person.techStack, person.status]);
   const [adding, setAdding] = useState(false);
   // Shown only when email could not be delivered, so the invite can still be
   // handed over. It is a bearer token, so it is never persisted anywhere.
@@ -68,13 +69,13 @@ export function PeopleTable({ people, roles, canCreate }: {
       // A framework 500 has no JSON body, so parsing is part of what can fail.
       const result = await response.json().catch(() => ({})) as { message?: string; errors?: Errors; inviteUrl?: string };
       if (!response.ok) {
-        setNotice({ tone: "error", text: result.message ?? "Unable to complete that action." });
+        setNotice({ tone: "error", text: result.message ?? "Unable to complete request." });
         // Refresh on 404/409 too: the row we acted on is out of date, and
         // leaving a deleted person on screen invites a second failed attempt.
         if (response.status === 404 || response.status === 409) router.refresh();
         return { ok: false, errors: result.errors };
       }
-      setNotice({ tone: "success", text: result.message ?? "Done." });
+      setNotice({ tone: "success", text: result.message ?? "Updated." });
       router.refresh();
       return { ok: true, inviteUrl: result.inviteUrl };
     } catch {
@@ -107,16 +108,17 @@ export function PeopleTable({ people, roles, canCreate }: {
   };
 
   return <div>
-    <TableToolbar search={query} onSearch={setQuery} placeholder="Search name, email, or role…" label="Search people">
+    <TableToolbar search={query} onSearch={setQuery} placeholder="Search name, email, role, or tech stack…" label="Search accounts">
       {canCreate && <button type="button" className="button button-primary" onClick={() => { setAdding(true); setNotice(null); setInviteUrl(null); }} disabled={busy}>
-        Add Person
+        Add a person
       </button>}
     </TableToolbar>
 
     {notice && <p className={`form-status form-status--${notice.tone}`} role="status">{notice.text}</p>}
 
-    {inviteUrl && <div className="portal-panel">
-      <p className="portal-note">Send them this link so they can choose a password. It expires in seven days.</p>
+    {inviteUrl && <div className="portal-panel mt-4 mb-6">
+      <p className="font-semibold text-emerald-800">New invite link generated:</p>
+      <p className="portal-note">Email is not configured in this environment. Send this link directly to the person:</p>
       <p className="mfa-secret">{inviteUrl}</p>
     </div>}
 
@@ -126,7 +128,7 @@ export function PeopleTable({ people, roles, canCreate }: {
       <table className="matrix matrix--people">
         <thead>
           <tr>
-            <th scope="col">Name</th><th scope="col">Role</th><th scope="col">Status</th>
+            <th scope="col">Name</th><th scope="col">Role & Tech Stack</th><th scope="col">Status</th>
             <th scope="col">Last signed in</th><th scope="col">Actions</th>
           </tr>
         </thead>
@@ -136,7 +138,17 @@ export function PeopleTable({ people, roles, canCreate }: {
               <strong>{person.name}</strong>
               <span>{person.email}</span>
             </th>
-            <td>{person.roleLabel}</td>
+            <td>
+              <div>
+                <strong className="text-slate-900">{person.roleLabel}</strong>
+                {person.jobTitle && <span className="text-slate-500 block text-xs">{person.jobTitle}</span>}
+                {person.techStack && (
+                  <span className="inline-block mt-0.5 text-[11px] font-mono font-medium text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+                    {person.techStack}
+                  </span>
+                )}
+              </div>
+            </td>
             <td>
               <div className="flex flex-col gap-1 items-start">
                 <StatusChip status={person.status} />
@@ -245,7 +257,14 @@ function EditDialog({ person, roles, busy, onClose, onSave }: {
   onClose: () => void;
   onSave: (payload: Record<string, string>) => Promise<Errors>;
 }) {
-  const [data, setData] = useState({ name: person.name, email: person.email, phone: person.phone, jobTitle: person.jobTitle, roleId: person.roleId });
+  const [data, setData] = useState({
+    name: person.name,
+    email: person.email,
+    phone: person.phone,
+    jobTitle: person.jobTitle,
+    techStack: person.techStack,
+    roleId: person.roleId,
+  });
   const [errors, setErrors] = useState<Errors>({});
 
   const update = (key: keyof typeof data, value: string) => {
@@ -277,6 +296,15 @@ function EditDialog({ person, roles, busy, onClose, onSave }: {
             <label htmlFor="edit-jobTitle">Job Title</label>
             <input id="edit-jobTitle" value={data.jobTitle} onChange={(event) => update("jobTitle", event.target.value)} aria-invalid={Boolean(errors.jobTitle)} />
             {errors.jobTitle && <p className="form-error">{errors.jobTitle}</p>}
+          </div>
+          <div className="sm:col-span-2">
+            <label htmlFor="edit-techStack">Tech Stack & Skills</label>
+            <input
+              id="edit-techStack"
+              value={data.techStack}
+              onChange={(event) => update("techStack", event.target.value)}
+              placeholder="e.g. Next.js, Node.js, Python, AWS, PostgreSQL"
+            />
           </div>
           <div className="sm:col-span-2">
             <label htmlFor="edit-role">Role <em>*</em></label>
@@ -312,7 +340,7 @@ function AddDialog({ roles, busy, onClose, onSave }: {
   onSave: (payload: Record<string, string>) => Promise<Errors>;
 }) {
   const assignable = roles.filter((role) => role.assignable);
-  const [data, setData] = useState({ name: "", email: "", phone: "", jobTitle: "", roleId: assignable[0]?.id ?? "" });
+  const [data, setData] = useState({ name: "", email: "", phone: "", jobTitle: "", techStack: "", roleId: assignable[0]?.id ?? "" });
   const [errors, setErrors] = useState<Errors>({});
 
   const update = (key: keyof typeof data, value: string) => {
@@ -344,6 +372,15 @@ function AddDialog({ roles, busy, onClose, onSave }: {
             <label htmlFor="add-jobTitle">Job Title</label>
             <input id="add-jobTitle" value={data.jobTitle} onChange={(event) => update("jobTitle", event.target.value)} aria-invalid={Boolean(errors.jobTitle)} />
             {errors.jobTitle && <p className="form-error">{errors.jobTitle}</p>}
+          </div>
+          <div className="sm:col-span-2">
+            <label htmlFor="add-techStack">Tech Stack & Skills</label>
+            <input
+              id="add-techStack"
+              value={data.techStack}
+              onChange={(event) => update("techStack", event.target.value)}
+              placeholder="e.g. React, Next.js, Node.js, Python, AWS"
+            />
           </div>
           <div className="sm:col-span-2">
             <label htmlFor="add-role">Role <em>*</em></label>

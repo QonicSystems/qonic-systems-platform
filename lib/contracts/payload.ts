@@ -1,8 +1,8 @@
-/** Template variables for a contract letter, plus validation shared by the API and UI. */
 export type ContractPayload = {
   jobTitle: string;
   employmentType: string;
   startDate: string;
+  endDate?: string;
   annualSalary: string;
   currency: string;
   location: string;
@@ -13,12 +13,20 @@ export type ContractPayload = {
 
 export type ContractPayloadErrors = Partial<Record<keyof ContractPayload | "subjectUserId" | "templateKey", string>>;
 
-export const EMPLOYMENT_TYPES = ["Full-time", "Part-time", "Fixed-term", "Contract", "Consultant"] as const;
+export const EMPLOYMENT_TYPES = ["Full-time Contract", "Part-time Contract"] as const;
 export const CURRENCIES = ["INR", "USD", "GBP", "EUR", "AED"] as const;
 
 export const emptyContractPayload: ContractPayload = {
-  jobTitle: "", employmentType: "Full-time", startDate: "", annualSalary: "",
-  currency: "INR", location: "", reportingTo: "", noticePeriod: "30 days", additionalTerms: "",
+  jobTitle: "",
+  employmentType: "Full-time Contract",
+  startDate: "",
+  endDate: "Till project is running",
+  annualSalary: "",
+  currency: "INR",
+  location: "",
+  reportingTo: "Founder & Co-Founder",
+  noticePeriod: "30 days",
+  additionalTerms: "",
 };
 
 /**
@@ -44,10 +52,11 @@ export function validateContractPayload(value: unknown): { data?: ContractPayloa
     jobTitle: String(input.jobTitle ?? "").trim(),
     employmentType: String(input.employmentType ?? "").trim(),
     startDate: String(input.startDate ?? "").trim(),
+    endDate: String(input.endDate ?? "Till project is running").trim(),
     annualSalary: String(input.annualSalary ?? "").trim(),
     currency: String(input.currency ?? "").trim(),
     location: String(input.location ?? "").trim(),
-    reportingTo: String(input.reportingTo ?? "").trim(),
+    reportingTo: String(input.reportingTo ?? "Founder & Co-Founder").trim(),
     noticePeriod: String(input.noticePeriod ?? "").trim(),
     additionalTerms: String(input.additionalTerms ?? "").trim(),
   };
