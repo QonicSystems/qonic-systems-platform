@@ -17,6 +17,8 @@ export type PersonRow = {
   roleLabel: string;
   status: "ACTIVE" | "SUSPENDED" | "ARCHIVED";
   lastLoginAt: string | null;
+  mustChangePassword: boolean;
+  canResend: boolean;
   /* Each action carries its OWN permission. These used to be one `canEdit`
      derived from user.manage, which meant granting user.deactivate or
      user.delete on their own did nothing at all — the row rendered "No access"
@@ -81,6 +83,13 @@ export function PeopleTable({ people, roles, canCreate }: {
     } finally { setBusy(false); }
   };
 
+  const resendInvite = async (person: PersonRow) => {
+    setNotice(null);
+    setInviteUrl(null);
+    const result = await act(`/api/admin/users/${person.id}/resend`, { method: "POST" });
+    if (result.ok && result.inviteUrl) setInviteUrl(result.inviteUrl);
+  };
+
   const toggleStatus = async (person: PersonRow) => {
     await act(`/api/admin/users/${person.id}/status`, { method: "POST", body: JSON.stringify({ active: person.status !== "ACTIVE" }) });
   };
@@ -123,13 +132,36 @@ export function PeopleTable({ people, roles, canCreate }: {
         </thead>
         <tbody>
           {rows.map((person) => <tr key={person.id}>
-            <th scope="row"><strong>{person.name}</strong><span>{person.email}</span></th>
+            <th scope="row">
+              <strong>{person.name}</strong>
+              <span>{person.email}</span>
+            </th>
             <td>{person.roleLabel}</td>
-            <td><StatusChip status={person.status} /></td>
+            <td>
+              <div className="flex flex-col gap-1 items-start">
+                <StatusChip status={person.status} />
+                {person.mustChangePassword && person.status === "ACTIVE" && (
+                  <span className="text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
+                    Invite pending
+                  </span>
+                )}
+              </div>
+            </td>
             <td>{person.lastLoginAt ?? "Never"}</td>
             <td>
-              {person.canEdit || person.canDeactivate || person.canRemove || person.canExport
+              {person.canEdit || person.canResend || person.canDeactivate || person.canRemove || person.canExport
                 ? <div className="row-actions">
+                    {person.canResend && (
+                      <button
+                        type="button"
+                        className="row-action row-action--highlight"
+                        onClick={() => resendInvite(person)}
+                        disabled={busy}
+                        title="Resend invitation link"
+                      >
+                        Resend
+                      </button>
+                    )}
                     {person.canEdit && <button type="button" className="row-action" onClick={() => { setEditing(person); setNotice(null); }} disabled={busy}>Edit</button>}
                     {/* ARCHIVED is a GDPR erasure, not a suspension — bringing one
                         back would resurrect an account whose data is already gone. */}

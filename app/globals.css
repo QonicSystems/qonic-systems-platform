@@ -1213,9 +1213,16 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 .row-action--danger:hover:not(:disabled) {
   border-color: #fecaca; background: #fef2f2; color: #b91c1c;
 }
-.row-action--primary {
-  border-color: rgba(255, 215, 0, 0.4);
+.row-action--primary,
+.row-action--highlight {
+  border-color: rgba(255, 215, 0, 0.45);
   background: var(--accent-tint); color: var(--accent-dark);
+  font-weight: 700;
+}
+.row-action--highlight:hover:not(:disabled) {
+  border-color: #ffd700;
+  background: #fef08a;
+  color: #000000;
 }
 .row-locked { color: var(--faint); font-size: 0.8rem; }
 .row-select {

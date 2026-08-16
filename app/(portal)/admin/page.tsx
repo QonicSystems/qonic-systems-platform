@@ -27,6 +27,8 @@ export default async function AdminPeoplePage() {
     roleLabel: user.role.label,
     status: user.status,
     lastLoginAt: user.lastLoginAt ? user.lastLoginAt.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : null,
+    mustChangePassword: user.mustChangePassword,
+    canResend: mayEdit && user.mustChangePassword && canAdminister(context, { id: user.id, role: user.role }).ok,
     // Each action is gated on the permission its own endpoint checks, so
     // granting user.deactivate or user.delete alone actually does something.
     // Editing yourself is allowed for identity fields only; the role select is
