@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { BrandLockup } from "@/components/brand";
 import { Avatar } from "@/components/portal/avatar";
 import { GlobalSearch } from "@/components/portal/global-search";
+import { Breadcrumbs } from "@/components/portal/breadcrumbs";
 import { isGroup, type NavGroup, type NavItem } from "@/lib/portal-nav";
 
 export type PortalUser = { name: string; email: string; roleLabel: string; photoUrl: string | null };
@@ -38,15 +39,39 @@ export function PortalShell({ user, links, unreadCount, children }: {
   return <div className="portal">
     <header className="portal-bar">
       <div className="portal-bar-inner">
-        <Link href="/dashboard" className="brand"><BrandLockup /></Link>
+        <div className="portal-bar-left">
+          <Link href="/dashboard" className="brand"><BrandLockup /></Link>
 
-        <nav className="portal-nav" aria-label="Portal navigation">
-          {links.map((entry) => isGroup(entry)
-            ? <NavDropdown key={entry.label} group={entry} pathname={pathname} />
-            : <NavLink key={entry.href} item={entry} pathname={pathname} />)}
-        </nav>
+          <nav className="portal-nav" aria-label="Portal navigation">
+            {links.map((entry) => isGroup(entry)
+              ? <NavDropdown key={entry.label} group={entry} pathname={pathname} />
+              : <NavLink key={entry.href} item={entry} pathname={pathname} />)}
+          </nav>
+        </div>
 
         <div className="portal-account">
+          <div className="hidden md:block">
+            <GlobalSearch />
+          </div>
+          <Link href="/notifications" className="portal-bell" aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : "Notifications"}>
+            <svg
+              className="w-4 h-4 text-slate-200"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+              <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+            </svg>
+            {unreadCount > 0 && <span className="portal-badge">{unreadCount > 9 ? "9+" : unreadCount}</span>}
+          </Link>
+          <button type="button" className="portal-avatar-button" onClick={() => setOpen((value) => !value)} aria-expanded={open} aria-haspopup="menu" aria-label="Account menu">
+            <Avatar name={user.name} photoUrl={user.photoUrl} size={36} />
+          </button>
           <button
             type="button"
             className={`portal-burger ${menuOpen ? "is-open" : ""}`}
@@ -55,14 +80,6 @@ export function PortalShell({ user, links, unreadCount, children }: {
             aria-label="Toggle navigation menu"
             onClick={() => setMenuOpen((value) => !value)}
           ><span /><span /><span /></button>
-          <GlobalSearch />
-          <Link href="/notifications" className="portal-bell" aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : "Notifications"}>
-            <span aria-hidden="true">🔔</span>
-            {unreadCount > 0 && <span className="portal-badge">{unreadCount > 9 ? "9+" : unreadCount}</span>}
-          </Link>
-          <button type="button" className="portal-avatar-button" onClick={() => setOpen((value) => !value)} aria-expanded={open} aria-haspopup="menu" aria-label="Account menu">
-            <Avatar name={user.name} photoUrl={user.photoUrl} size={40} />
-          </button>
           {open && <div className="portal-menu" role="menu">
             <div className="portal-menu-head">
               <strong>{user.name}</strong>
@@ -82,6 +99,9 @@ export function PortalShell({ user, links, unreadCount, children }: {
           the ONLY way to reach the rest of the portal on a narrow screen. */}
       <div id="portal-menu" className={`portal-drawer ${menuOpen ? "is-open" : ""}`}>
         <div className="portal-drawer-inner">
+          <div className="md:hidden pb-3 border-b border-white/10 mb-2">
+            <GlobalSearch />
+          </div>
           {links.map((entry) => isGroup(entry)
             ? <div key={entry.label} className="portal-drawer-group">
                 <p className="portal-drawer-heading">{entry.label}</p>
@@ -96,7 +116,12 @@ export function PortalShell({ user, links, unreadCount, children }: {
       </div>
     </header>
 
-    <main id="main-content" className="portal-main">{children}</main>
+    <main id="main-content" className="portal-main">
+      <div className="portal-breadcrumbs-bar mb-5">
+        <Breadcrumbs />
+      </div>
+      {children}
+    </main>
   </div>;
 }
 
