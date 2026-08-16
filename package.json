@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit",
     "check:services": "tsx scripts/check-services.ts",
     "test": "vitest run",
+    "test:features": "tsx scripts/test-e2e-suite.ts",
     "test:e2e": "playwright test",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",

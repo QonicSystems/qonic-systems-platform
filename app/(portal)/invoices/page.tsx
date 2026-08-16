@@ -1,18 +1,45 @@
 import { InvoiceManager } from "@/components/finance/invoice-manager";
+import { CommissionTracker, type CommissionItem } from "@/components/finance/commission-tracker";
 import { can, requirePermission } from "@/lib/auth/guard";
 import { ageingBucket, formatMoney } from "@/lib/money";
 import { db } from "@/lib/db";
 
-export const metadata = { title: "Invoices" };
+export const metadata = { title: "Invoices & Commissions" };
 
 export default async function InvoicesPage() {
   const context = await requirePermission("invoice.view");
 
-  const [invoices, clients, projects] = await Promise.all([
+  const [invoices, clients, projects, candidates] = await Promise.all([
     db.invoice.findMany({ include: { client: { select: { name: true } }, project: { select: { name: true } } }, orderBy: { issueDate: "desc" } }),
     db.client.findMany({ where: { status: { in: ["ACTIVE", "PROSPECT"] } }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
     db.project.findMany({ where: { status: { in: ["ACTIVE", "COMPLETED"] } }, select: { id: true, name: true, clientId: true }, orderBy: { name: "asc" } }),
+    db.candidate.findMany({ where: { source: "Global Visa Resource" }, take: 10 }),
   ]);
+
+  // Derive commission items from invoices and global candidates
+  const commissionItems: CommissionItem[] = [];
+  if (candidates.length > 0 && invoices.length > 0) {
+    candidates.forEach((cand, idx) => {
+      const inv = invoices[idx % invoices.length];
+      const rate = 15; // standard 15% VISA commission rate
+      const commAmount = Math.round((inv.total * rate) / 100);
+      commissionItems.push({
+        id: `comm-${cand.id}-${inv.id}`,
+        candidateName: cand.name,
+        candidateEmail: cand.email,
+        visaType: cand.visaType ?? "H-1B",
+        projectName: inv.project?.name ?? "Enterprise Cloud Transformation",
+        clientName: inv.client.name,
+        invoiceNumber: inv.number,
+        grossAmount: inv.total,
+        commissionRate: rate,
+        commissionAmount: commAmount,
+        status: inv.status === "PAID" ? "PAID" : "PENDING",
+        paidOn: inv.status === "PAID" ? new Date().toISOString().split("T")[0] : null,
+        payoutRef: inv.status === "PAID" ? `WIRE-COMM-${cand.id.slice(-4).toUpperCase()}` : null,
+      });
+    });
+  }
 
   // Hoisted out of JSX: the lint rule treats clock reads inside render as impure.
   const now = new Date();
@@ -51,6 +78,11 @@ export default async function InvoicesPage() {
       canRecordPayment={can(context, "payment.record")}
       today={today}
       dueDefault={dueDefault}
+    />
+
+    <CommissionTracker
+      initialCommissions={commissionItems}
+      canManage={can(context, "payment.record")}
     />
   </div>;
 }

@@ -50,7 +50,6 @@ export function LoginForm() {
         setStatus("error");
         return;
       }
-      // Refresh so the server components pick up the new session cookie.
       router.replace(result.redirectTo ?? "/dashboard");
       router.refresh();
     } catch {

@@ -32,10 +32,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const active = input.active;
   const status = active ? "ACTIVE" : "SUSPENDED";
 
-  // ARCHIVED is the result of a GDPR erasure, not a suspension: the personal
-  // data is already gone, so "reactivating" would revive a hollow account and
-  // let it sign in again. Erasure is deliberately one-way.
-  if (target.status === "ARCHIVED") {
+  // If an account was GDPR-erased, it is permanently anonymised and cannot be revived.
+  if (target.status === "ARCHIVED" && (target.email.includes("@erased.invalid") || target.name === "Erased User")) {
     return NextResponse.json({ message: `${target.name}'s data has been erased, so the account cannot be reactivated.` }, { status: 409 });
   }
 

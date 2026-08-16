@@ -1,4 +1,4 @@
-import { Document, Page, StyleSheet, Text, View, renderToBuffer } from "@react-pdf/renderer";
+import { Document, Link, Page, StyleSheet, Text, View, renderToBuffer } from "@react-pdf/renderer";
 import { PdfLockup, PdfParentMark } from "@/lib/pdf-brand";
 import { formatMoney, formatQuantity } from "@/lib/money";
 
@@ -18,40 +18,46 @@ export type InvoiceContext = {
   total: number;
   paidAmount: number;
   notes?: string | null;
+  paymentUrl?: string | null;
 };
 
 const styles = StyleSheet.create({
-  page: { paddingTop: 48, paddingBottom: 56, paddingHorizontal: 52, fontSize: 9.5, lineHeight: 1.5, color: "#2b2b2b" },
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", borderBottomWidth: 2, borderBottomColor: "#FFD700", paddingBottom: 10, marginBottom: 18 },
-  meta: { fontSize: 8.5, color: "#8a8a8a", textAlign: "right" },
-  title: { fontSize: 20, fontWeight: 700, color: "#111111", marginBottom: 2, textAlign: "right" },
-  /// The reference is how this document is identified in correspondence, so it
-  /// needs real contrast rather than the muted grey used for supporting text.
-  number: { fontSize: 10, fontWeight: 700, color: "#6b5206", textAlign: "right" },
-  billTo: { flexDirection: "row", justifyContent: "space-between", marginBottom: 18 },
-  label: { fontSize: 7.5, color: "#8a8a8a", textTransform: "uppercase", letterSpacing: 1, marginBottom: 3 },
-  strong: { fontSize: 10.5, fontWeight: 700, color: "#111111" },
-  tableHead: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: "#111111", paddingBottom: 5, marginBottom: 2 },
-  row: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: "#e7e4da", paddingVertical: 5 },
+  page: { paddingTop: 40, paddingBottom: 50, paddingHorizontal: 48, fontSize: 9, lineHeight: 1.45, color: "#2b2b2b" },
+  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", borderBottomWidth: 2, borderBottomColor: "#FFD700", paddingBottom: 10, marginBottom: 14 },
+  meta: { fontSize: 8, color: "#8a8a8a", textAlign: "right" },
+  title: { fontSize: 18, fontWeight: 700, color: "#111111", marginBottom: 2, textAlign: "right" },
+  number: { fontSize: 10, fontWeight: 700, color: "#8a6a08", textAlign: "right" },
+  billTo: { flexDirection: "row", justifyContent: "space-between", marginBottom: 14 },
+  label: { fontSize: 7, color: "#8a8a8a", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 2 },
+  strong: { fontSize: 10, fontWeight: 700, color: "#111111" },
+  tableHead: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: "#111111", paddingBottom: 4, marginBottom: 2 },
+  row: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: "#e7e4da", paddingVertical: 4 },
   cDesc: { width: "52%" },
   cQty: { width: "12%", textAlign: "right" },
   cRate: { width: "18%", textAlign: "right" },
   cAmt: { width: "18%", textAlign: "right" },
-  headCell: { fontSize: 8, fontWeight: 700, color: "#111111" },
-  totals: { marginTop: 12, marginLeft: "auto", width: "48%" },
-  totalRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 3 },
-  grand: { flexDirection: "row", justifyContent: "space-between", borderTopWidth: 2, borderTopColor: "#111111", marginTop: 4, paddingTop: 6 },
-  grandText: { fontSize: 12, fontWeight: 700, color: "#111111" },
-  paid: { marginTop: 14, borderWidth: 1, borderColor: "#cfe3d6", backgroundColor: "#f0f7f2", padding: 8, color: "#1f5c3d", fontSize: 9, fontWeight: 700 },
-  void: { marginBottom: 14, borderWidth: 1, borderColor: "#fecaca", backgroundColor: "#fef2f2", padding: 8, color: "#b91c1c", fontSize: 10, fontWeight: 700 },
-  notes: { marginTop: 18, fontSize: 8.5, color: "#4f4f4f" },
-  footer: { position: "absolute", bottom: 30, left: 52, right: 52, borderTopWidth: 1, borderTopColor: "#e7e4da", paddingTop: 8, fontSize: 7.5, color: "#8a8a8a", flexDirection: "row", justifyContent: "space-between" },
+  headCell: { fontSize: 7.5, fontWeight: 700, color: "#111111" },
+  summaryRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 10, alignItems: "flex-start" },
+  paymentBox: { width: "48%", backgroundColor: "#0b0c10", borderRadius: 6, padding: 8, borderWidth: 1, borderColor: "#272a37" },
+  paymentTitle: { fontSize: 8, fontWeight: 700, color: "#ffd700", marginBottom: 3, letterSpacing: 0.5 },
+  paymentText: { fontSize: 7, color: "#cbd5e1", marginBottom: 2 },
+  payLink: { fontSize: 7.5, fontWeight: 700, color: "#ffd700", textDecoration: "underline", marginTop: 3 },
+  totals: { width: "46%" },
+  totalRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 2.5 },
+  grand: { flexDirection: "row", justifyContent: "space-between", borderTopWidth: 1.5, borderTopColor: "#111111", marginTop: 3, paddingTop: 4 },
+  grandText: { fontSize: 11, fontWeight: 700, color: "#111111" },
+  paid: { marginTop: 10, borderWidth: 1, borderColor: "#cfe3d6", backgroundColor: "#f0f7f2", padding: 6, color: "#1f5c3d", fontSize: 8.5, fontWeight: 700, textAlign: "center", borderRadius: 4 },
+  void: { marginBottom: 10, borderWidth: 1, borderColor: "#fecaca", backgroundColor: "#fef2f2", padding: 6, color: "#b91c1c", fontSize: 9, fontWeight: 700, textAlign: "center", borderRadius: 4 },
+  notes: { marginTop: 12, fontSize: 8, color: "#4f4f4f" },
+  footer: { position: "absolute", bottom: 24, left: 48, right: 48, borderTopWidth: 1, borderTopColor: "#e7e4da", paddingTop: 6, fontSize: 7, color: "#8a8a8a", flexDirection: "row", justifyContent: "space-between" },
 });
 
 const day = (date: Date) => date.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
 
 function InvoiceDocument({ context }: { context: InvoiceContext }) {
   const outstanding = context.total - context.paidAmount;
+  const payUrl = context.paymentUrl || `https://consulting.qonicsystems.com/invoices/${context.number}`;
+
   return <Document title={`Invoice ${context.number}`} author="QONIC consulting">
     <Page size="A4" style={styles.page}>
       <View style={styles.header}>
@@ -61,7 +67,7 @@ function InvoiceDocument({ context }: { context: InvoiceContext }) {
         </View>
         <View style={{ alignItems: "flex-end" }}>
           <PdfParentMark />
-          <Text style={[styles.title, { marginTop: 8 }]}>INVOICE</Text>
+          <Text style={[styles.title, { marginTop: 6 }]}>INVOICE</Text>
           <Text style={styles.number}>{context.number}</Text>
         </View>
       </View>
@@ -98,24 +104,40 @@ function InvoiceDocument({ context }: { context: InvoiceContext }) {
         <Text style={styles.cAmt}>{formatMoney(line.amount, context.currency)}</Text>
       </View>)}
 
-      <View style={styles.totals}>
-        <View style={styles.totalRow}><Text>Subtotal</Text><Text>{formatMoney(context.subtotal, context.currency)}</Text></View>
-        {context.taxPercent > 0 ? <View style={styles.totalRow}>
-          <Text>Tax ({context.taxPercent}%)</Text><Text>{formatMoney(context.taxAmount, context.currency)}</Text>
-        </View> : null}
-        <View style={styles.grand}>
-          <Text style={styles.grandText}>Total</Text>
-          <Text style={styles.grandText}>{formatMoney(context.total, context.currency)}</Text>
+      <View style={styles.summaryRow}>
+        {/* ── Payment Gateway & Wire Transfer Instructions ──────── */}
+        <View style={styles.paymentBox}>
+          <Text style={styles.paymentTitle}>⚡ PAYMENT GATEWAY &amp; WIRE TRANSFER</Text>
+          <Text style={styles.paymentText}>Bank: JPMorgan Chase / HDFC Global Commercial</Text>
+          <Text style={styles.paymentText}>Beneficiary: Qonic Systems Inc.</Text>
+          <Text style={styles.paymentText}>SWIFT / BIC: QONICUS33XXX · Ref: {context.number}</Text>
+          {outstanding > 0 && context.status !== "VOID" && (
+            <Link src={payUrl} style={styles.payLink}>
+              👉 Click here to Pay Online with Card / Wire / Stripe
+            </Link>
+          )}
         </View>
-        {context.paidAmount > 0 ? <View style={styles.totalRow}>
-          <Text>Paid</Text><Text>{formatMoney(context.paidAmount, context.currency)}</Text>
-        </View> : null}
-        {outstanding > 0 && context.paidAmount > 0 ? <View style={styles.totalRow}>
-          <Text>Outstanding</Text><Text>{formatMoney(outstanding, context.currency)}</Text>
-        </View> : null}
+
+        {/* ── Totals ────────────────────────────────────────────── */}
+        <View style={styles.totals}>
+          <View style={styles.totalRow}><Text>Subtotal</Text><Text>{formatMoney(context.subtotal, context.currency)}</Text></View>
+          {context.taxPercent > 0 ? <View style={styles.totalRow}>
+            <Text>Tax ({context.taxPercent}%)</Text><Text>{formatMoney(context.taxAmount, context.currency)}</Text>
+          </View> : null}
+          <View style={styles.grand}>
+            <Text style={styles.grandText}>Total</Text>
+            <Text style={styles.grandText}>{formatMoney(context.total, context.currency)}</Text>
+          </View>
+          {context.paidAmount > 0 ? <View style={styles.totalRow}>
+            <Text>Paid</Text><Text>{formatMoney(context.paidAmount, context.currency)}</Text>
+          </View> : null}
+          {outstanding > 0 && context.paidAmount > 0 ? <View style={styles.totalRow}>
+            <Text>Outstanding</Text><Text>{formatMoney(outstanding, context.currency)}</Text>
+          </View> : null}
+        </View>
       </View>
 
-      {outstanding <= 0 && context.status !== "VOID" ? <Text style={styles.paid}>PAID IN FULL — thank you.</Text> : null}
+      {outstanding <= 0 && context.status !== "VOID" ? <Text style={styles.paid}>PAID IN FULL — THANK YOU</Text> : null}
       {context.notes ? <Text style={styles.notes}>{context.notes}</Text> : null}
 
       <View style={styles.footer} fixed>

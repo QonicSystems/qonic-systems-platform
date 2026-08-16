@@ -43,7 +43,22 @@ export function PeopleTable({ people, roles, canCreate }: {
   canCreate: boolean;
 }) {
   const router = useRouter();
-  const { query, setQuery, rows, isFiltered } = useFilter(people, (person) => [person.name, person.email, person.roleLabel, person.jobTitle, person.techStack, person.status]);
+  const [statusFilter, setStatusFilter] = useState<"ALL" | "ACTIVE" | "SUSPENDED" | "ARCHIVED">("ALL");
+
+  const statusCounts = {
+    ALL: people.length,
+    ACTIVE: people.filter((p) => p.status === "ACTIVE").length,
+    SUSPENDED: people.filter((p) => p.status === "SUSPENDED").length,
+    ARCHIVED: people.filter((p) => p.status === "ARCHIVED").length,
+  };
+
+  const statusFilteredPeople = statusFilter === "ALL"
+    ? people
+    : people.filter((p) => p.status === statusFilter);
+
+  const { query, setQuery, rows, isFiltered } = useFilter(statusFilteredPeople, (person) => [
+    person.name, person.email, person.roleLabel, person.jobTitle, person.techStack, person.status
+  ]);
   const [adding, setAdding] = useState(false);
   // Shown only when email could not be delivered, so the invite can still be
   // handed over. It is a bearer token, so it is never persisted anywhere.
@@ -96,8 +111,7 @@ export function PeopleTable({ people, roles, canCreate }: {
   };
 
   const remove = async (person: PersonRow) => {
-    // Only close on success — a refusal ("has N contract letters") needs to stay
-    // visible with its context rather than vanishing behind a notice.
+    // Moves user to ARCHIVED status with all history preserved
     const result = await act(`/api/admin/users/${person.id}`, { method: "DELETE" });
     if (result.ok) setConfirming(null);
   };
@@ -108,6 +122,35 @@ export function PeopleTable({ people, roles, canCreate }: {
   };
 
   return <div>
+    {/* ── Status Filter Tabs ────────────────────────────────────────── */}
+    <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-1">
+      {(["ALL", "ACTIVE", "SUSPENDED", "ARCHIVED"] as const).map((tabKey) => {
+        const isSelected = statusFilter === tabKey;
+        const label = tabKey === "ALL" ? "All Accounts" : tabKey.charAt(0) + tabKey.slice(1).toLowerCase();
+        const count = statusCounts[tabKey];
+
+        return (
+          <button
+            key={tabKey}
+            type="button"
+            onClick={() => setStatusFilter(tabKey)}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              isSelected
+                ? "bg-[#111111] text-white shadow-sm"
+                : "bg-[#f8f7f3] text-[#4f4f4f] hover:bg-[#eeece4] border border-[#e7e4da]"
+            }`}
+          >
+            <span>{label}</span>
+            <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono leading-none ${
+              isSelected ? "bg-[#ffd700] text-[#111111] font-bold" : "bg-black/10 text-[#6b6b6b]"
+            }`}>
+              {count}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+
     <TableToolbar search={query} onSearch={setQuery} placeholder="Search name, email, role, or tech stack…" label="Search accounts">
       {canCreate && <button type="button" className="button button-primary" onClick={() => { setAdding(true); setNotice(null); setInviteUrl(null); }} disabled={busy}>
         Add a person
@@ -175,14 +218,18 @@ export function PeopleTable({ people, roles, canCreate }: {
                       </button>
                     )}
                     {person.canEdit && <button type="button" className="row-action" onClick={() => { setEditing(person); setNotice(null); }} disabled={busy}>Edit</button>}
-                    {/* ARCHIVED is a GDPR erasure, not a suspension — bringing one
-                        back would resurrect an account whose data is already gone. */}
-                    {person.canDeactivate && person.status !== "ARCHIVED" && <button type="button" className="row-action" onClick={() => toggleStatus(person)} disabled={busy}>
-                      {person.status === "ACTIVE" ? "Deactivate" : "Reactivate"}
-                    </button>}
+                    {person.canDeactivate && person.name !== "Erased User" && (
+                      <button type="button" className="row-action" onClick={() => toggleStatus(person)} disabled={busy}>
+                        {person.status === "ACTIVE" ? "Deactivate" : "Reactivate"}
+                      </button>
+                    )}
                     {person.canExport && <a className="row-action" href={`/api/admin/users/${person.id}/data`} download>Export data</a>}
                     {person.canRemove && <button type="button" className="row-action row-action--danger" onClick={() => { setErasing(person); setNotice(null); }} disabled={busy}>Erase</button>}
-                    {person.canRemove && <button type="button" className="row-action row-action--danger" onClick={() => { setConfirming(person); setNotice(null); }} disabled={busy}>Remove</button>}
+                    {person.canRemove && person.status !== "ARCHIVED" && (
+                      <button type="button" className="row-action row-action--danger" onClick={() => { setConfirming(person); setNotice(null); }} disabled={busy}>
+                        Remove
+                      </button>
+                    )}
                   </div>
                 : <span className="row-locked">No access</span>}
             </td>
@@ -234,15 +281,14 @@ export function PeopleTable({ people, roles, canCreate }: {
 
     {confirming && <div className="dialog-backdrop" role="dialog" aria-modal="true" aria-labelledby="remove-title">
       <div className="dialog">
-        <h3 id="remove-title" className="dialog-title">Remove {confirming.name}?</h3>
+        <h3 id="remove-title" className="dialog-title">Remove &amp; Archive {confirming.name}?</h3>
         <p className="portal-note">
-          This permanently deletes the account and signs them out. It cannot be undone.
-          If they have contract letters on record the removal will be refused — deactivate them instead.
+          This will move <strong>{confirming.name}</strong> to Archived status and sign them out immediately. All historical records (including contract letters, timesheets, and assignments) will be safely preserved.
         </p>
         <div className="dialog-actions">
           <button type="button" className="button button-outline" onClick={() => setConfirming(null)} disabled={busy}>Cancel</button>
           <button type="button" className="button button-danger" onClick={() => remove(confirming)} disabled={busy}>
-            {busy ? "Removing…" : "Remove permanently"}
+            {busy ? "Archiving…" : "Archive account"}
           </button>
         </div>
       </div>

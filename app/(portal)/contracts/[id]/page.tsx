@@ -8,6 +8,8 @@ import { availableTransitions, canEditContent, canViewLetter, describeStatus } f
 import { db } from "@/lib/db";
 import { StatusChip } from "@/components/status-chip";
 
+import { ContractDispatch } from "@/components/contracts/contract-dispatch";
+
 export const metadata = { title: "Contract Letter" };
 
 const TONES: Record<string, Action["tone"]> = { RELEASED: "primary", PENDING_RELEASE: "primary", ACKNOWLEDGED: "primary", CHANGES_REQUESTED: "outline", REVOKED: "danger" };
@@ -45,7 +47,16 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
 
     <TransitionActions letterId={letter.id} actions={actions} />
 
-    {letter.status === "RELEASED" || letter.status === "ACKNOWLEDGED" ? <p>
+    <ContractDispatch
+      letterId={letter.id}
+      reference={letter.reference}
+      subjectName={letter.subject.name}
+      subjectPhone={letter.subject.phone}
+      subjectEmail={letter.subject.email}
+      status={letter.status}
+    />
+
+    {letter.status === "RELEASED" || letter.status === "ACKNOWLEDGED" ? <p className="mb-4">
       {/* A plain link, not fetch: the route either streams the PDF or 302s to a
           short-lived presigned URL. */}
       <a className="button button-outline" href={`/api/contracts/${letter.id}/pdf`}>Download the signed PDF</a>
