@@ -1,11 +1,13 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { EmptyState } from "@/components/portal/empty-state";
+import { StatusChip } from "@/components/status-chip";
 import { TableToolbar } from "@/components/portal/table-toolbar";
 import { useFilter } from "@/lib/ui/filter";
 import { formatMoney } from "@/lib/money";
+import { RESOURCE_TYPE_CLASS, RESOURCE_TYPE_LABEL, type ResourceType } from "@/lib/ats/resource-type";
 
 export type GlobalCandidateRow = {
   id: string;
@@ -21,6 +23,8 @@ export type GlobalCandidateRow = {
   commissionPaid: number;
   techStack: string;
   benchStatus: string;
+  resourceType: ResourceType;
+  status: "ACTIVE" | "ARCHIVED";
   canEdit: boolean;
 };
 
@@ -34,7 +38,18 @@ export function GlobalCandidatesTable({
   canManage: boolean;
 }) {
   const router = useRouter();
-  const { query, setQuery, rows, isFiltered } = useFilter(candidates, (c) => [
+  const [statusFilter, setStatusFilter] = useState<"ACTIVE" | "ARCHIVED" | "ALL">("ACTIVE");
+  const statusCounts = {
+    ACTIVE: candidates.filter((c) => c.status === "ACTIVE").length,
+    ARCHIVED: candidates.filter((c) => c.status === "ARCHIVED").length,
+    ALL: candidates.length,
+  };
+  const visible = useMemo(
+    () => (statusFilter === "ALL" ? candidates : candidates.filter((c) => c.status === statusFilter)),
+    [candidates, statusFilter]
+  );
+
+  const { query, setQuery, rows, isFiltered } = useFilter(visible, (c) => [
     c.name,
     c.email,
     c.phone,
@@ -42,10 +57,12 @@ export function GlobalCandidatesTable({
     c.location,
     c.techStack,
     c.benchStatus,
+    RESOURCE_TYPE_LABEL[c.resourceType],
   ]);
 
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<GlobalCandidateRow | null>(null);
+  const [deleting, setDeleting] = useState<GlobalCandidateRow | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ tone: "success" | "error"; text: string } | null>(null);
 
@@ -98,6 +115,39 @@ export function GlobalCandidatesTable({
     }
   };
 
+  /** Status changes and deletes: one place that surfaces the server's message. */
+  const act = async (url: string, init: RequestInit): Promise<boolean> => {
+    setBusy(true);
+    setNotice(null);
+    try {
+      const res = await fetch(url, { headers: { "Content-Type": "application/json" }, ...init });
+      const result = (await res.json().catch(() => ({}))) as { message?: string };
+      if (!res.ok) {
+        setNotice({ tone: "error", text: result.message ?? "Unable to complete that request." });
+        if (res.status === 404 || res.status === 409) router.refresh();
+        return false;
+      }
+      setNotice({ tone: "success", text: result.message ?? "Updated." });
+      router.refresh();
+      return true;
+    } catch {
+      setNotice({ tone: "error", text: "Unable to reach the server." });
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const toggleStatus = (c: GlobalCandidateRow) =>
+    act(`/api/admin/candidates/${c.id}/status`, {
+      method: "POST",
+      body: JSON.stringify({ active: c.status !== "ACTIVE" }),
+    });
+
+  const remove = async (c: GlobalCandidateRow) => {
+    if (await act(`/api/admin/candidates/${c.id}`, { method: "DELETE" })) setDeleting(null);
+  };
+
   const startEdit = (c: GlobalCandidateRow) => {
     setEditing(c);
     setForm({
@@ -125,6 +175,35 @@ export function GlobalCandidatesTable({
         </p>
       )}
 
+      <div className="filter-bar" role="group" aria-label="Filter by status">
+        <span className="filter-group__label">Status</span>
+        {(["ACTIVE", "ARCHIVED", "ALL"] as const).map((key) => {
+          const selected = statusFilter === key;
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setStatusFilter(key)}
+              aria-pressed={selected}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                selected
+                  ? "bg-[#111111] text-white shadow-sm"
+                  : "bg-[#f8f7f3] text-[#4f4f4f] hover:bg-[#eeece4] border border-[#e7e4da]"
+              }`}
+            >
+              <span>{key === "ALL" ? "All" : key.charAt(0) + key.slice(1).toLowerCase()}</span>
+              <span
+                className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono leading-none ${
+                  selected ? "bg-[#ffd700] text-[#111111] font-bold" : "bg-black/10 text-[#6b6b6b]"
+                }`}
+              >
+                {statusCounts[key]}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
       <TableToolbar search={query} onSearch={setQuery} placeholder="Search candidate, tech stack, visa, location…" label="Search global candidates">
         {canManage && (
           <button
@@ -143,9 +222,9 @@ export function GlobalCandidatesTable({
 
       {rows.length === 0 ? (
         <EmptyState
-          message="No global candidates recorded yet."
+          message={statusFilter === "ARCHIVED" ? "No archived candidates." : "No global candidates recorded yet."}
           filteredMessage="No candidates match that search."
-          isFiltered={isFiltered}
+          isFiltered={isFiltered || statusFilter !== "ACTIVE"}
         />
       ) : (
         <div className="matrix-scroll">
@@ -164,10 +243,18 @@ export function GlobalCandidatesTable({
             </thead>
             <tbody>
               {rows.map((c) => (
-                <tr key={c.id}>
+                <tr key={c.id} className={c.status === "ARCHIVED" ? "opacity-70" : undefined}>
                   <th scope="row">
                     <strong>{c.name}</strong>
                     <span>{c.email} {c.phone && `· ${c.phone}`}</span>
+                    <span className="matrix-tags">
+                      <span
+                        className={`items-center px-2 py-0.5 rounded text-[11px] font-semibold border ${RESOURCE_TYPE_CLASS[c.resourceType]}`}
+                      >
+                        {RESOURCE_TYPE_LABEL[c.resourceType]}
+                      </span>
+                      <StatusChip status={c.status} />
+                    </span>
                   </th>
                   <td>
                     <span className="font-semibold text-slate-900">{c.techStack || "—"}</span>
@@ -204,7 +291,7 @@ export function GlobalCandidatesTable({
                   </td>
                   <td>
                     {c.canEdit && (
-                      <div className="row-actions">
+                      <div className="row-actions flex flex-wrap gap-1">
                         <button
                           type="button"
                           className="row-action"
@@ -213,6 +300,30 @@ export function GlobalCandidatesTable({
                         >
                           Edit
                         </button>
+                        <button
+                          type="button"
+                          className="row-action"
+                          onClick={() => toggleStatus(c)}
+                          disabled={busy}
+                          title={
+                            c.status === "ACTIVE"
+                              ? "Archive — keeps the record, name and history"
+                              : "Return this candidate to the active pool"
+                          }
+                        >
+                          {c.status === "ACTIVE" ? "Deactivate" : "Reactivate"}
+                        </button>
+                        <button
+                          type="button"
+                          className="row-action row-action--danger"
+                          onClick={() => {
+                            setDeleting(c);
+                            setNotice(null);
+                          }}
+                          disabled={busy}
+                        >
+                          Delete
+                        </button>
                       </div>
                     )}
                   </td>
@@ -220,6 +331,32 @@ export function GlobalCandidatesTable({
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {deleting && (
+        <div className="dialog-backdrop" role="dialog" aria-modal="true" aria-labelledby="gc-del-title">
+          <div className="dialog">
+            <h3 id="gc-del-title" className="dialog-title">
+              Delete {deleting.name} permanently?
+            </h3>
+            <p className="portal-note">
+              This removes the full talent record — visa details, SSN, commission history — and any
+              pipeline applications attached to it. It cannot be undone.
+            </p>
+            <p className="portal-note">
+              To take them out of the active pool while keeping the record and their name, use{" "}
+              <strong>Deactivate</strong> instead.
+            </p>
+            <div className="dialog-actions">
+              <button type="button" className="button button-outline" onClick={() => setDeleting(null)} disabled={busy}>
+                Cancel
+              </button>
+              <button type="button" className="button button-danger" onClick={() => remove(deleting)} disabled={busy}>
+                {busy ? "Deleting…" : "Delete permanently"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

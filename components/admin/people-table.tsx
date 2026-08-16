@@ -65,7 +65,6 @@ export function PeopleTable({ people, roles, canCreate }: {
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [editing, setEditing] = useState<PersonRow | null>(null);
   const [confirming, setConfirming] = useState<PersonRow | null>(null);
-  const [erasing, setErasing] = useState<PersonRow | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ tone: "success" | "error"; text: string } | null>(null);
 
@@ -111,14 +110,11 @@ export function PeopleTable({ people, roles, canCreate }: {
   };
 
   const remove = async (person: PersonRow) => {
-    // Moves user to ARCHIVED status with all history preserved
+    // Moves user to ARCHIVED status with all history preserved — including
+    // their real name. There is deliberately no anonymise/erase action: an
+    // archived record that cannot say who it belongs to is of no use to anyone.
     const result = await act(`/api/admin/users/${person.id}`, { method: "DELETE" });
     if (result.ok) setConfirming(null);
-  };
-
-  const erase = async (person: PersonRow) => {
-    const result = await act(`/api/admin/users/${person.id}/data`, { method: "DELETE" });
-    if (result.ok) setErasing(null);
   };
 
   return <div>
@@ -218,13 +214,12 @@ export function PeopleTable({ people, roles, canCreate }: {
                       </button>
                     )}
                     {person.canEdit && <button type="button" className="row-action" onClick={() => { setEditing(person); setNotice(null); }} disabled={busy}>Edit</button>}
-                    {person.canDeactivate && person.name !== "Erased User" && (
+                    {person.canDeactivate && (
                       <button type="button" className="row-action" onClick={() => toggleStatus(person)} disabled={busy}>
                         {person.status === "ACTIVE" ? "Deactivate" : "Reactivate"}
                       </button>
                     )}
                     {person.canExport && <a className="row-action" href={`/api/admin/users/${person.id}/data`} download>Export data</a>}
-                    {person.canRemove && <button type="button" className="row-action row-action--danger" onClick={() => { setErasing(person); setNotice(null); }} disabled={busy}>Erase</button>}
                     {person.canRemove && person.status !== "ARCHIVED" && (
                       <button type="button" className="row-action row-action--danger" onClick={() => { setConfirming(person); setNotice(null); }} disabled={busy}>
                         Remove
@@ -260,24 +255,6 @@ export function PeopleTable({ people, roles, canCreate }: {
         return result.errors ?? {};
       }}
     />}
-
-    {erasing && <div className="dialog-backdrop" role="dialog" aria-modal="true" aria-labelledby="erase-title">
-      <div className="dialog">
-        <h3 id="erase-title" className="dialog-title">Erase {erasing.name}&apos;s personal data?</h3>
-        <p className="portal-note">
-          This anonymises the account and deletes their bank details, sessions and notifications.
-          Timesheets, invoices and contract letters are kept, because they are financial and legal
-          records — so unlike Remove, this always succeeds and never breaks the paperwork.
-          It cannot be undone.
-        </p>
-        <div className="dialog-actions">
-          <button type="button" className="button button-outline" onClick={() => setErasing(null)} disabled={busy}>Cancel</button>
-          <button type="button" className="button button-danger" onClick={() => erase(erasing)} disabled={busy}>
-            {busy ? "Erasing…" : "Erase personal data"}
-          </button>
-        </div>
-      </div>
-    </div>}
 
     {confirming && <div className="dialog-backdrop" role="dialog" aria-modal="true" aria-labelledby="remove-title">
       <div className="dialog">

@@ -32,11 +32,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const active = input.active;
   const status = active ? "ACTIVE" : "SUSPENDED";
 
-  // If an account was GDPR-erased, it is permanently anonymised and cannot be revived.
-  if (target.status === "ARCHIVED" && (target.email.includes("@erased.invalid") || target.name === "Erased User")) {
-    return NextResponse.json({ message: `${target.name}'s data has been erased, so the account cannot be reactivated.` }, { status: 409 });
-  }
-
   // A no-op is a conflict, not a success. Returning 200 here painted a green
   // "already active" notice, which is exactly what a stale row produces — so
   // the one case that needed a correction looked like it had worked.
