@@ -88,6 +88,13 @@ export function canViewLetter(actor: AuthContext, letter: LetterFacts): boolean 
   return actor.permissions.has("contract.view_all");
 }
 
+export function canDeleteLetter(actor: AuthContext, letter: LetterFacts): boolean {
+  if (letter.status !== "REVOKED" && letter.status !== "DRAFT") return false;
+  if (actor.role.isSuperAdmin) return true;
+  if (letter.authorUserId === actor.user.id && actor.permissions.has("contract.generate")) return true;
+  return actor.permissions.has("contract.revoke") || actor.permissions.has("contract.generate");
+}
+
 export function describeStatus(status: ContractStatus): string {
   return {
     DRAFT: "draft",
