@@ -3,6 +3,7 @@ import { clientIp, recordAudit } from "@/lib/audit";
 import { guardRoute } from "@/lib/auth/guard";
 import { emailPattern } from "@/lib/contact";
 import { toMinor } from "@/lib/money";
+import { resourceTypeOf, RESOURCE_TYPE } from "@/lib/ats/resource-type";
 import { db } from "@/lib/db";
 
 export const runtime = "nodejs";
@@ -45,6 +46,9 @@ export async function POST(request: Request) {
   if (Object.keys(errors).length) return NextResponse.json({ message: "Please correct the highlighted fields.", errors }, { status: 422 });
 
   const created = await db.$transaction(async (tx) => {
+    const rawSource = String(input.source ?? "Direct").trim() || "Direct";
+    const isGlobal = resourceTypeOf(rawSource) === RESOURCE_TYPE.GLOBAL;
+
     const candidate = await tx.candidate.create({
       data: {
         name, email,
@@ -55,14 +59,14 @@ export async function POST(request: Request) {
         headline: String(input.headline ?? "").trim() || null,
         skills: String(input.skills ?? input.techStack ?? "").trim() || null,
         techStack: String(input.techStack ?? input.skills ?? "").trim() || null,
-        visaType: String(input.visaType ?? "").trim() || null,
-        visaStatus: String(input.visaStatus ?? "Valid").trim() || null,
-        visaExpiry: input.visaExpiry ? new Date(String(input.visaExpiry)) : null,
-        ssn: String(input.ssn ?? "").trim() || null,
-        address: String(input.address ?? "").trim() || null,
-        commissionPaid: input.commissionPaid ? toMinor(String(input.commissionPaid)) : null,
-        benchStatus: String(input.benchStatus ?? "Available / On Bench").trim() || "Available / On Bench",
-        source: String(input.source ?? "Direct").trim() || "Direct",
+        visaType: isGlobal ? (String(input.visaType ?? "").trim() || null) : null,
+        visaStatus: isGlobal ? (String(input.visaStatus ?? "Valid").trim() || null) : null,
+        visaExpiry: isGlobal && input.visaExpiry ? new Date(String(input.visaExpiry)) : null,
+        ssn: isGlobal ? (String(input.ssn ?? "").trim() || null) : null,
+        address: isGlobal ? (String(input.address ?? "").trim() || null) : null,
+        commissionPaid: isGlobal && input.commissionPaid ? toMinor(String(input.commissionPaid)) : null,
+        benchStatus: isGlobal ? (String(input.benchStatus ?? "Available / On Bench").trim() || "Available / On Bench") : "Direct",
+        source: rawSource,
         noticePeriod: String(input.noticePeriod ?? "").trim() || null,
         notes: String(input.notes ?? "").trim() || null,
         currentSalary, expectedSalary,

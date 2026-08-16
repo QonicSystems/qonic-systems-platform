@@ -104,13 +104,13 @@ export function CandidateManager({
     headline: "",
     location: "",
     techStack: "",
-    visaType: "H-1B",
-    visaStatus: "Valid",
+    visaType: "",
+    visaStatus: "",
     ssn: "",
     commissionPaid: "",
     address: "",
-    benchStatus: "Available / On Bench",
-    source: "Global Visa Resource",
+    benchStatus: "Direct",
+    source: "Direct / LinkedIn",
     resumeUrl: "",
     linkedinUrl: "",
     noticePeriod: "",
@@ -124,16 +124,41 @@ export function CandidateManager({
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ tone: "success" | "error"; text: string } | null>(null);
 
+  const handleSourceChange = (newSource: string) => {
+    const isGlobal = newSource === "Global Visa Resource";
+    setForm((prev) => ({
+      ...prev,
+      source: newSource,
+      visaType: isGlobal ? (prev.visaType || "H-1B") : "",
+      visaStatus: isGlobal ? (prev.visaStatus || "Valid") : "",
+      benchStatus: isGlobal ? (prev.benchStatus === "Direct" ? "Available / On Bench" : prev.benchStatus) : "Direct",
+      ssn: isGlobal ? prev.ssn : "",
+      commissionPaid: isGlobal ? prev.commissionPaid : "",
+      address: isGlobal ? prev.address : "",
+    }));
+  };
+
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setBusy(true);
     setNotice(null);
     setErrors({});
     try {
+      const isGlobal = form.source === "Global Visa Resource";
+      const payload = {
+        ...form,
+        skills: form.techStack,
+        visaType: isGlobal ? form.visaType : null,
+        visaStatus: isGlobal ? form.visaStatus : null,
+        ssn: isGlobal ? form.ssn : null,
+        commissionPaid: isGlobal ? form.commissionPaid : null,
+        benchStatus: isGlobal ? form.benchStatus : "Direct",
+      };
+
       const res = await fetch("/api/candidates", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, skills: form.techStack }),
+        body: JSON.stringify(payload),
       });
       const result = (await res.json()) as { message?: string; errors?: Errors };
       if (!res.ok) {
@@ -368,19 +393,29 @@ export function CandidateManager({
                   </td>
                   <td>
                     <div className="flex flex-col gap-0.5">
-                      <span className="text-xs font-semibold text-slate-800">
-                        {c.visaType || "—"} {c.visaStatus ? `(${c.visaStatus})` : ""}
-                      </span>
-                      {c.commissionPaid && c.commissionPaid !== "—" && (
-                        <span className="text-xs text-emerald-700 font-medium">
-                          Comm: {c.commissionPaid}
-                        </span>
+                      {c.resourceType === "GLOBAL" && c.visaType ? (
+                        <>
+                          <span className="text-xs font-semibold text-slate-800">
+                            {c.visaType} {c.visaStatus ? `(${c.visaStatus})` : ""}
+                          </span>
+                          {c.commissionPaid && c.commissionPaid !== "—" && (
+                            <span className="text-xs text-emerald-700 font-medium">
+                              Comm: {c.commissionPaid}
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        <span className="text-xs text-slate-500 font-medium italic">Non-Visa / Direct</span>
                       )}
                     </div>
                   </td>
                   <td>
-                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
-                      {c.benchStatus}
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold ${
+                      c.resourceType === "GLOBAL"
+                        ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                        : "bg-slate-100 text-slate-700 border border-slate-200"
+                    }`}>
+                      {c.resourceType === "GLOBAL" ? c.benchStatus : "Direct"}
                     </span>
                   </td>
                   <td>{c.applications.length === 0 ? "—" : c.applications.join(", ")}</td>
@@ -491,7 +526,7 @@ export function CandidateManager({
                   <select
                     id="cd-source"
                     value={form.source}
-                    onChange={(e) => setForm({ ...form, source: e.target.value })}
+                    onChange={(e) => handleSourceChange(e.target.value)}
                   >
                     <option value="Global Visa Resource">Global Visa Resource (VISA Utilisation & Placement Commission)</option>
                     <option value="Direct / LinkedIn">Employee Dev (Sourced via LinkedIn)</option>
