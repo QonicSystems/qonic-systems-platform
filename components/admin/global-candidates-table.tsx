@@ -8,6 +8,7 @@ import { TableToolbar } from "@/components/portal/table-toolbar";
 import { useFilter } from "@/lib/ui/filter";
 import { formatMoney } from "@/lib/money";
 import { RESOURCE_TYPE_CLASS, RESOURCE_TYPE_LABEL, type ResourceType } from "@/lib/ats/resource-type";
+import { TechStackBadges } from "@/components/ats/tech-stack-badges";
 
 export type GlobalCandidateRow = {
   id: string;
@@ -257,7 +258,7 @@ export function GlobalCandidatesTable({
                     </span>
                   </th>
                   <td>
-                    <span className="font-semibold text-slate-900">{c.techStack || "—"}</span>
+                    <TechStackBadges stack={c.techStack} limit={4} />
                   </td>
                   <td>
                     <div className="text-xs">

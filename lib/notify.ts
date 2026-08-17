@@ -31,3 +31,23 @@ export async function notifyMany(userIds: ReadonlyArray<string>, entry: Omit<Not
     data: unique.map((userId) => ({ userId, kind: entry.kind, title: entry.title, body: entry.body ?? null, link: entry.link ?? null })),
   });
 }
+
+/**
+ * Dual Leadership Notification:
+ * Automatically dispatches an in-app alert to BOTH Founder (CEO) and Co-Founder.
+ */
+export async function notifyLeadership(entry: Omit<NotifyInput, "userId">, client: Prisma.TransactionClient | typeof db = db): Promise<void> {
+  const leaders = await (client as typeof db).user.findMany({
+    where: {
+      status: "ACTIVE",
+      role: { key: { in: ["ceo", "co_founder"] } },
+    },
+    select: { id: true },
+  });
+
+  const ids = leaders.map((l) => l.id);
+  if (ids.length > 0) {
+    await notifyMany(ids, entry, client);
+  }
+}
+

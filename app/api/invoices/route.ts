@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { clientIp, recordAudit } from "@/lib/audit";
 import { guardRoute } from "@/lib/auth/guard";
-import { hoursToCentihours, invoiceTotals, lineAmount, toMinor } from "@/lib/money";
+import { formatMoney, hoursToCentihours, invoiceTotals, lineAmount, toMinor } from "@/lib/money";
+import { notifyLeadership } from "@/lib/notify";
 import { db } from "@/lib/db";
 
 export const runtime = "nodejs";
@@ -119,6 +120,12 @@ export async function POST(request: Request) {
         data: { invoicedAt: new Date(), invoiceId: invoice.id },
       });
     }
+    await notifyLeadership({
+      kind: "INVOICE",
+      title: `Invoice Raised: ${invoice.number}`,
+      body: `${context.user.name} raised invoice ${invoice.number} for ${formatMoney(total, invoice.currency)}.`,
+      link: `/invoices`,
+    }, tx);
     await recordAudit({ actorId: context.user.id, action: "invoice.create", entityType: "Invoice", entityId: invoice.id, after: { number: invoice.number, total }, ipAddress: clientIp(request) }, tx);
     return invoice;
   });

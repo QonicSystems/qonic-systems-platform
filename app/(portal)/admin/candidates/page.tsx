@@ -10,6 +10,7 @@ export default async function AdminGlobalCandidatesPage() {
   const canManage = can(context, "candidate.manage");
 
   const candidates = await db.candidate.findMany({
+    where: { source: "Global Visa Resource" },
     orderBy: [{ status: "asc" }, { createdAt: "desc" }],
   });
 

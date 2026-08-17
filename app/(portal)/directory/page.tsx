@@ -1,4 +1,5 @@
 import { Avatar } from "@/components/portal/avatar";
+import { TechStackBadges } from "@/components/ats/tech-stack-badges";
 import { requirePermission } from "@/lib/auth/guard";
 import { db } from "@/lib/db";
 
@@ -29,6 +30,11 @@ export default async function DirectoryPage() {
           <a className="text-link" href={`mailto:${person.email}`} title={person.email}>{person.email}</a>
           {person.phone && <p className="portal-muted">{person.phone}</p>}
           {person.manager && <p className="portal-muted">Reports to {person.manager.name}</p>}
+          {person.techStack && (
+            <div className="mt-2">
+              <TechStackBadges stack={person.techStack} limit={5} />
+            </div>
+          )}
         </div>
       </article>)}
     </div>

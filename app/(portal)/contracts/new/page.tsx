@@ -9,9 +9,16 @@ export const metadata = { title: "Draft a Contract Letter" };
 export default async function NewContractPage() {
   const context = await requirePermission("contract.generate");
 
-  // The eligible list is computed with the SAME seniority rule the API enforces,
-  // so the form cannot offer a choice the server would then refuse.
-  const users = await db.user.findMany({ where: { status: "ACTIVE" }, include: { role: true }, orderBy: { name: "asc" } });
+  // The eligible list is strictly for non-leadership employees (Employee Devs)
+  // that the current user can administer. Founder and Co-Founder are excluded.
+  const users = await db.user.findMany({
+    where: {
+      status: "ACTIVE",
+      role: { key: { notIn: ["ceo", "co_founder"] } },
+    },
+    include: { role: true },
+    orderBy: { name: "asc" },
+  });
   const employees = users
     .filter((user) => canAdminister(context, user).ok)
     .map((user) => ({ id: user.id, name: user.name, roleLabel: user.role.label }));

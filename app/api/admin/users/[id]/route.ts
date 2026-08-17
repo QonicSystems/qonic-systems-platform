@@ -125,6 +125,72 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   const authority = canAdminister(context, target);
   if (!authority.ok) return NextResponse.json({ message: authority.reason }, { status: authority.status });
 
+  // If the user is already ARCHIVED, only Founder & CEO (Super Admin) can permanently delete
+  if (target.status === "ARCHIVED") {
+    if (!context.role.isSuperAdmin) {
+      return NextResponse.json(
+        { message: "Only the Founder & CEO has the authority to permanently delete archived users and purge their associated data." },
+        { status: 403 }
+      );
+    }
+
+    try {
+      await db.$transaction(async (tx) => {
+        // 1. Invalidate sessions and tokens
+        await tx.session.deleteMany({ where: { userId: target.id } });
+        await tx.passwordResetToken.deleteMany({ where: { userId: target.id } });
+
+        // 2. Contract letters and events
+        await tx.contractLetterEvent.deleteMany({
+          where: { letter: { OR: [{ subjectUserId: target.id }, { authorUserId: target.id }] } },
+        });
+        await tx.contractLetter.deleteMany({
+          where: { OR: [{ subjectUserId: target.id }, { authorUserId: target.id }] },
+        });
+
+        // 3. Time entries and timesheets
+        await tx.timeEntry.deleteMany({ where: { timesheet: { userId: target.id } } });
+        await tx.timesheet.deleteMany({ where: { userId: target.id } });
+
+        // 4. Expenses & Assignments
+        await tx.expense.deleteMany({ where: { userId: target.id } });
+        await tx.projectAssignment.deleteMany({ where: { userId: target.id } });
+
+        // 5. Unassign from managed projects, clients, reports, and placements
+        await tx.project.updateMany({ where: { managerId: target.id }, data: { managerId: null } });
+        await tx.client.updateMany({ where: { ownerId: target.id }, data: { ownerId: null } });
+        await tx.user.updateMany({ where: { managerId: target.id }, data: { managerId: null } });
+        await tx.placement.updateMany({ where: { recruiterId: target.id }, data: { recruiterId: null } });
+
+        // 6. Leave requests, notifications, permission overrides
+        await tx.leaveRequest.deleteMany({ where: { userId: target.id } });
+        await tx.notification.deleteMany({ where: { userId: target.id } });
+        await tx.userPermissionOverride.deleteMany({ where: { userId: target.id } });
+
+        // 7. Permanently delete the user
+        await tx.user.delete({ where: { id: target.id } });
+
+        // 8. Record audit log
+        await recordAudit({
+          actorId: context.user.id,
+          action: "user.purge_permanent",
+          entityType: "User",
+          entityId: target.id,
+          before: { name: target.name, email: target.email, role: target.role.key, status: target.status },
+          after: null,
+          ipAddress: clientIp(request),
+        }, tx);
+      });
+
+      return NextResponse.json({ message: `${target.name} and all associated records have been permanently deleted.` });
+    } catch (error) {
+      if (isRecordNotFound(error)) {
+        return NextResponse.json({ message: "That account no longer exists." }, { status: 404 });
+      }
+      throw error;
+    }
+  }
+
   try {
     await db.$transaction(async (tx) => {
       // 1. Invalidate all active sessions and pending reset tokens immediately

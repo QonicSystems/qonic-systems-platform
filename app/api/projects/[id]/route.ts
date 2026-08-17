@@ -73,6 +73,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         endDate: data.endDate ? new Date(`${data.endDate}T00:00:00.000Z`) : null,
         managerId: data.managerId || null,
         notes: data.notes || null,
+        negotiationCompleted: data.negotiationCompleted,
+        completedReason: data.completedReason || null,
       },
     });
     // Keep the manager bookable on their own project.

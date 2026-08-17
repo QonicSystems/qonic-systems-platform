@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { clientIp, recordAudit } from "@/lib/audit";
 import { guardRoute } from "@/lib/auth/guard";
+import { notify, notifyLeadership } from "@/lib/notify";
 import { db } from "@/lib/db";
 
 export const runtime = "nodejs";
@@ -33,6 +34,24 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       update: { allocationPercent: allocation },
       create: { projectId: id, userId, allocationPercent: allocation },
     });
+
+    // 1. Notify the assigned employee
+    await notify({
+      userId: user.id,
+      kind: "SYSTEM",
+      title: `Assigned to ${project.name}`,
+      body: `You have been allocated to ${project.name} (${allocation}%). You can now book time and manage deliverables.`,
+      link: `/projects/${project.id}`,
+    }, tx);
+
+    // 2. Notify Leadership (Founder and Co-Founder)
+    await notifyLeadership({
+      kind: "SYSTEM",
+      title: `Team Allocation: ${user.name} → ${project.name}`,
+      body: `${context.user.name} allocated ${user.name} (${allocation}%) to project ${project.name}.`,
+      link: `/projects/${project.id}`,
+    }, tx);
+
     await recordAudit({ actorId: context.user.id, action: "project.assign", entityType: "Project", entityId: id, after: { user: user.email, allocation }, ipAddress: clientIp(request) }, tx);
   });
 

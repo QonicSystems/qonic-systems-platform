@@ -4,7 +4,7 @@ import { appOrigin } from "@/lib/app-origin";
 import { clientIp, recordAudit } from "@/lib/audit";
 import { guardRoute } from "@/lib/auth/guard";
 import { canTransition, canViewLetter } from "@/lib/contracts/workflow";
-import { notify } from "@/lib/notify";
+import { notify, notifyLeadership } from "@/lib/notify";
 import { db } from "@/lib/db";
 import type { ContractStatus } from "@/lib/generated/prisma/enums";
 
@@ -74,7 +74,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         note: note || null,
       },
     });
-    // The subject only needs to hear about the outcomes that affect them.
     if (to === "RELEASED" || to === "REVOKED") {
       await notify(
         {
@@ -90,6 +89,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         tx
       );
     }
+    await notifyLeadership(
+      {
+        kind: "CONTRACT",
+        title: `Contract ${to.replace("_", " ")}: ${letter.reference}`,
+        body: `${context.user.name} transitioned contract ${letter.reference} (${letter.subject?.name ?? "Staff"}) to ${to}.`,
+        link: `/contracts/${letter.id}`,
+      },
+      tx
+    );
     await recordAudit(
       {
         actorId: context.user.id,

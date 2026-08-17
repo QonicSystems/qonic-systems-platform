@@ -7,7 +7,10 @@ export default async function CapacityPage() {
   await requirePermission("report.utilization");
 
   const people = await db.user.findMany({
-    where: { status: "ACTIVE" },
+    where: {
+      status: "ACTIVE",
+      role: { key: { notIn: ["ceo", "co_founder"] } },
+    },
     include: {
       role: { select: { label: true } },
       projectAssignments: { include: { project: { include: { client: { select: { name: true } } } } } },

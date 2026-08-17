@@ -15,7 +15,15 @@ export default async function ReportsPage() {
   from.setUTCDate(from.getUTCDate() - 7 * (WEEKS - 1));
 
   const [people, entries, projects] = await Promise.all([
-    db.user.findMany({ where: { status: "ACTIVE" }, select: { id: true, name: true, role: { select: { label: true } } }, orderBy: { name: "asc" } }),
+    // Exclude executive leadership (Founder and Co-Founder) from billable delivery utilisation
+    db.user.findMany({
+      where: {
+        status: "ACTIVE",
+        role: { key: { notIn: ["ceo", "co_founder"] } },
+      },
+      select: { id: true, name: true, role: { select: { label: true } } },
+      orderBy: { name: "asc" },
+    }),
     db.timeEntry.findMany({
       where: { workDate: { gte: from } },
       select: { minutes: true, billable: true, projectId: true, timesheet: { select: { userId: true, status: true } } },
