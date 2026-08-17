@@ -8,6 +8,7 @@ import { guardRoute } from "@/lib/auth/guard";
 import { hashPassword } from "@/lib/auth/password";
 import { INVITE_TTL_MS, createResetToken, hashResetToken, inviteEmail, resetUrl } from "@/lib/auth/reset";
 import { emailPattern } from "@/lib/contact";
+import { syncCandidateAndUsers } from "@/lib/ats/sync";
 import { db } from "@/lib/db";
 import { isUniqueEmailViolation } from "@/lib/db-errors";
 
@@ -108,6 +109,8 @@ export async function POST(request: Request) {
     }
     throw error;
   }
+
+  await syncCandidateAndUsers();
 
   const url = resetUrl(appOrigin(), token);
   const config = smtp();

@@ -6,8 +6,49 @@ import { db } from "@/lib/db";
 
 export const metadata = { title: "Draft a Contract Letter" };
 
-export default async function NewContractPage() {
+export default async function NewContractPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ candidateId?: string; name?: string; email?: string }>;
+}) {
   const context = await requirePermission("contract.generate");
+  const params = searchParams ? await searchParams : {};
+  const candidateId = params?.candidateId;
+  const queryName = params?.name;
+  const queryEmail = params?.email;
+
+  let initialSubjectId = "";
+
+  // If navigated from Candidate Pool, ensure the candidate has an Employee (Dev) account
+  if (candidateId || queryEmail) {
+    const candidate = candidateId ? await db.candidate.findUnique({ where: { id: candidateId } }) : null;
+    const emailToUse = (candidate?.email ?? queryEmail ?? "").trim().toLowerCase();
+    const nameToUse = (candidate?.name ?? queryName ?? "").trim();
+
+    if (emailToUse && nameToUse) {
+      let candidateUser = await db.user.findUnique({ where: { email: emailToUse } });
+      if (!candidateUser) {
+        const employeeRole = await db.role.findFirst({ where: { key: "employee" } });
+        if (employeeRole) {
+          candidateUser = await db.user.create({
+            data: {
+              email: emailToUse,
+              name: nameToUse,
+              roleId: employeeRole.id,
+              status: "ACTIVE",
+              mustChangePassword: true,
+              techStack: candidate?.techStack ?? null,
+              phone: candidate?.phone ?? null,
+              passwordHash: "INVITED_CANDIDATE_NO_LOGIN_YET",
+            },
+          });
+        }
+      }
+      if (candidateUser) {
+        initialSubjectId = candidateUser.id;
+      }
+    }
+  }
 
   // The eligible list is strictly for non-leadership employees (Employee Devs)
   // that the current user can administer. Founder and Co-Founder are excluded.
@@ -31,9 +72,18 @@ export default async function NewContractPage() {
     </header>
 
     {employees.length === 0
-      ? <p className="portal-note">There is nobody you can draft a letter for. You can only do so for people in roles junior to your own.</p>
-      : <section className="portal-panel"><ContractForm employees={employees} /></section>}
+      ? <div className="portal-panel p-6">
+          <p className="portal-note">
+            There are currently no Employee (Dev) team members in the workspace.
+          </p>
+          <p className="mt-2 text-sm text-slate-600">
+            You can <Link className="text-link font-semibold" href="/candidates">select a candidate from the Candidate Pool</Link> to generate their contract, or <Link className="text-link font-semibold" href="/admin">add an Employee in Administration</Link>.
+          </p>
+        </div>
+      : <section className="portal-panel">
+          <ContractForm employees={employees} initialSubjectId={initialSubjectId} />
+        </section>}
 
-    <p><Link className="text-link" href="/contracts">Back to contract letters</Link></p>
+    <p className="mt-4"><Link className="text-link" href="/contracts">Back to contract letters</Link></p>
   </div>;
 }

@@ -32,7 +32,7 @@ export default async function DirectoryPage() {
           {person.manager && <p className="portal-muted">Reports to {person.manager.name}</p>}
           {person.techStack && (
             <div className="mt-2">
-              <TechStackBadges stack={person.techStack} limit={5} />
+              <TechStackBadges stack={person.techStack} />
             </div>
           )}
         </div>

@@ -258,7 +258,7 @@ export function GlobalCandidatesTable({
                     </span>
                   </th>
                   <td>
-                    <TechStackBadges stack={c.techStack} limit={4} />
+                    <TechStackBadges stack={c.techStack} />
                   </td>
                   <td>
                     <div className="text-xs">

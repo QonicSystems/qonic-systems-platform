@@ -2,6 +2,7 @@ import { CandidateManager } from "@/components/ats/candidate-manager";
 import { can, requirePermission } from "@/lib/auth/guard";
 import { STAGE_LABELS } from "@/lib/ats/pipeline";
 import { resourceTypeOf } from "@/lib/ats/resource-type";
+import { syncCandidateAndUsers } from "@/lib/ats/sync";
 import { db } from "@/lib/db";
 
 export const metadata = { title: "Candidate Pool" };
@@ -11,6 +12,9 @@ const money = (minor: number | null) =>
 
 export default async function CandidatesPage() {
   const context = await requirePermission("candidate.view");
+
+  // Sync any staff users into Candidate pool
+  await syncCandidateAndUsers();
 
   const candidates = await db.candidate.findMany({
     include: {
@@ -51,12 +55,20 @@ export default async function CandidatesPage() {
           visaType: candidate.visaType ?? "",
           visaStatus: candidate.visaStatus ?? (candidate.visaType ? "Valid" : ""),
           commissionPaid: money(candidate.commissionPaid),
+          rawCommissionPaid: candidate.commissionPaid !== null ? String(candidate.commissionPaid / 100) : "",
           ssn: candidate.ssn ? `•••-••-${candidate.ssn.slice(-4)}` : "—",
-          benchStatus: candidate.benchStatus ?? (resourceTypeOf(candidate.source) === "GLOBAL" ? "Available / On Bench" : "Direct"),
+          rawSsn: candidate.ssn ?? "",
+          address: candidate.address ?? "",
+          benchStatus: candidate.benchStatus ?? (resourceTypeOf(candidate.source) === "GLOBAL" ? "Available / On Bench" : "Available / Ready to Deploy"),
           source: candidate.source,
           resourceType: resourceTypeOf(candidate.source),
+          noticePeriod: candidate.noticePeriod ?? "",
+          expectedSalary: candidate.expectedSalary !== null ? String(candidate.expectedSalary / 100) : "",
+          currentSalary: candidate.currentSalary !== null ? String(candidate.currentSalary / 100) : "",
+          notes: candidate.notes ?? "",
           status: candidate.status,
           resumeUrl: candidate.resumeUrl,
+          linkedinUrl: candidate.linkedinUrl ?? "",
           hasConsent: candidate.consentAt !== null,
           applications: candidate.applications.map((a) => `${a.job.title} (${STAGE_LABELS[a.stage]})`),
         }))}

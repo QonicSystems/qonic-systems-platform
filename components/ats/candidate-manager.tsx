@@ -27,12 +27,20 @@ type Row = {
   visaType: string;
   visaStatus?: string;
   commissionPaid?: string;
+  rawCommissionPaid?: string;
   ssn?: string;
+  rawSsn?: string;
+  address?: string;
   benchStatus: string;
   source: string;
   resourceType: ResourceType;
+  noticePeriod?: string;
+  expectedSalary?: string;
+  currentSalary?: string;
+  notes?: string;
   status: "ACTIVE" | "ARCHIVED";
   resumeUrl: string | null;
+  linkedinUrl?: string;
   hasConsent: boolean;
   applications: string[];
 };
@@ -97,6 +105,7 @@ export function CandidateManager({
   const strongMatches = scored.filter((entry) => (entry.match?.score ?? 0) >= 70).length;
 
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<Row | null>(null);
   const [deleting, setDeleting] = useState<Row | null>(null);
   const empty = {
     name: "",
@@ -110,7 +119,7 @@ export function CandidateManager({
     ssn: "",
     commissionPaid: "",
     address: "",
-    benchStatus: "Direct",
+    benchStatus: "Available / Ready to Deploy",
     source: "Direct / LinkedIn",
     resumeUrl: "",
     linkedinUrl: "",
@@ -125,6 +134,43 @@ export function CandidateManager({
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ tone: "success" | "error"; text: string } | null>(null);
 
+  const startEdit = (c: Row) => {
+    setEditing(c);
+    setForm({
+      name: c.name,
+      email: c.email,
+      phone: c.phone || "",
+      headline: c.headline || "",
+      location: c.location || "",
+      techStack: c.techStack || "",
+      visaType: c.visaType || "",
+      visaStatus: c.visaStatus || "",
+      ssn: c.rawSsn || "",
+      commissionPaid: c.rawCommissionPaid || "",
+      address: c.address || "",
+      benchStatus: c.benchStatus || "Available / Ready to Deploy",
+      source: c.source || "Direct / LinkedIn",
+      resumeUrl: c.resumeUrl || "",
+      linkedinUrl: c.linkedinUrl || "",
+      noticePeriod: c.noticePeriod || "",
+      currentSalary: c.currentSalary || "",
+      expectedSalary: c.expectedSalary || "",
+      notes: c.notes || "",
+      consent: c.hasConsent,
+    });
+    setErrors({});
+    setNotice(null);
+    setOpen(true);
+  };
+
+  const startAdd = () => {
+    setEditing(null);
+    setForm(empty);
+    setErrors({});
+    setNotice(null);
+    setOpen(true);
+  };
+
   const handleSourceChange = (newSource: string) => {
     const isGlobal = newSource === "Global Visa Resource";
     setForm((prev) => ({
@@ -132,7 +178,7 @@ export function CandidateManager({
       source: newSource,
       visaType: isGlobal ? (prev.visaType || "H-1B") : "",
       visaStatus: isGlobal ? (prev.visaStatus || "Valid") : "",
-      benchStatus: isGlobal ? (prev.benchStatus === "Direct" ? "Available / On Bench" : prev.benchStatus) : "Direct",
+      benchStatus: isGlobal ? (prev.benchStatus.includes("Bench") ? prev.benchStatus : "Available / On Bench") : "Available / Ready to Deploy",
       ssn: isGlobal ? prev.ssn : "",
       commissionPaid: isGlobal ? prev.commissionPaid : "",
       address: isGlobal ? prev.address : "",
@@ -153,11 +199,12 @@ export function CandidateManager({
         visaStatus: isGlobal ? form.visaStatus : null,
         ssn: isGlobal ? form.ssn : null,
         commissionPaid: isGlobal ? form.commissionPaid : null,
-        benchStatus: isGlobal ? form.benchStatus : "Direct",
+        benchStatus: form.benchStatus || (isGlobal ? "Available / On Bench" : "Available / Ready to Deploy"),
       };
 
-      const res = await fetch("/api/candidates", {
-        method: "POST",
+      const url = editing ? `/api/candidates/${editing.id}` : "/api/candidates";
+      const res = await fetch(url, {
+        method: editing ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
@@ -167,9 +214,10 @@ export function CandidateManager({
         setNotice({ tone: "error", text: result.message ?? "Unable to save candidate." });
         return;
       }
-      setNotice({ tone: "success", text: result.message ?? "Candidate added to pool." });
+      setNotice({ tone: "success", text: result.message ?? (editing ? "Candidate updated successfully." : "Candidate added to pool.") });
       setForm(empty);
       setOpen(false);
+      setEditing(null);
       router.refresh();
     } catch {
       setNotice({ tone: "error", text: "Unable to reach the server." });
@@ -257,7 +305,7 @@ export function CandidateManager({
         label="Search candidate pool"
       >
         {canManage && (
-          <button type="button" className="button button-primary" onClick={() => setOpen(true)}>
+          <button type="button" className="button button-primary" onClick={startAdd}>
             Add Candidate
           </button>
         )}
@@ -280,9 +328,10 @@ export function CandidateManager({
               type="text"
               value={matchRequirement}
               onChange={(e) => setMatchRequirement(e.target.value)}
-              placeholder="Type the skills a role needs — e.g. React, AWS, Node — to score every candidate instantly"
-              className="ai-match__input"
+              placeholder="e.g. React, TypeScript, Python, AWS…"
               autoComplete="off"
+              spellCheck="false"
+              className="ai-match__input"
             />
           </div>
           {requirement && (
@@ -329,152 +378,377 @@ export function CandidateManager({
           isFiltered={isFiltered || typeFilter !== "ALL" || statusFilter !== "ACTIVE"}
         />
       ) : (
-        <div className="matrix-scroll">
-          <table className="matrix matrix--people">
-            <thead>
-              <tr>
-                <th scope="col">Candidate</th>
-                <th scope="col">Resource Type</th>
-                <th scope="col">Tech Stack &amp; Compatibility</th>
-                <th scope="col">Visa &amp; Commission</th>
-                <th scope="col">Bench / Utilization</th>
-                <th scope="col">Active Pipelines</th>
-                <th scope="col">CV</th>
-                <th scope="col">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {scored.map(({ row: c, match }) => (
-                <tr key={c.id} className={c.status === "ARCHIVED" ? "opacity-70" : undefined}>
-                  <th scope="row">
-                    <strong>{c.name}</strong>
-                    <span>
-                      {c.email} {c.location && `· ${c.location}`}
-                    </span>
-                    {c.ssn && c.ssn !== "—" && (
-                      <span className="text-xs text-slate-500 font-mono">SSN: {c.ssn}</span>
-                    )}
-                    {!c.hasConsent && <span className="portal-muted">No consent recorded</span>}
-                  </th>
-                  <td>
-                    <div className="flex flex-col items-start gap-1">
-                      <span
-                        className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold border ${RESOURCE_TYPE_CLASS[c.resourceType]}`}
-                        title={c.source || "Direct"}
-                      >
-                        {RESOURCE_TYPE_LABEL[c.resourceType]}
-                      </span>
-                      <StatusChip status={c.status} />
-                    </div>
-                  </td>
-                  <td>
-                    <div className="flex flex-col gap-1.5 min-w-[180px]">
-                      <TechStackBadges stack={c.techStack} limit={5} />
-                      {match && (
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                          <span
-                            className={`inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-bold ${
-                              match.score >= 70
-                                ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
-                                : match.score >= 40
-                                ? "bg-amber-100 text-amber-800 border border-amber-300"
-                                : "bg-slate-100 text-slate-600 border border-slate-300"
-                            }`}
-                          >
-                            ⚡ {match.score}% Match
-                          </span>
-                          {match.matchedSkills.length > 0 && (
-                            <span className="text-[10px] text-emerald-700 font-medium">
-                              ({match.matchedSkills.join(", ")})
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </td>
-                  <td>
-                    <div className="flex flex-col gap-0.5">
-                      {c.resourceType === "GLOBAL" && c.visaType ? (
-                        <>
-                          <span className="text-xs font-semibold text-slate-800">
-                            {c.visaType} {c.visaStatus ? `(${c.visaStatus})` : ""}
-                          </span>
-                          {c.commissionPaid && c.commissionPaid !== "—" && (
-                            <span className="text-xs text-emerald-700 font-medium">
-                              Comm: {c.commissionPaid}
-                            </span>
-                          )}
-                        </>
-                      ) : (
-                        <span className="text-xs text-slate-500 font-medium italic">Non-Visa / Direct</span>
-                      )}
-                    </div>
-                  </td>
-                  <td>
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold ${
-                      c.resourceType === "GLOBAL"
-                        ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
-                        : "bg-slate-100 text-slate-700 border border-slate-200"
-                    }`}>
-                      {c.resourceType === "GLOBAL" ? c.benchStatus : "Direct"}
-                    </span>
-                  </td>
-                  <td>{c.applications.length === 0 ? "—" : c.applications.join(", ")}</td>
-                  <td>
-                    {c.resumeUrl ? (
-                      <a className="text-link" href={c.resumeUrl} target="_blank" rel="noreferrer noopener">
-                        View CV
-                      </a>
-                    ) : (
-                      "—"
-                    )}
-                  </td>
-                  <td>
-                    <div className="row-actions flex flex-wrap gap-1">
-                      {canDraftContract && c.status === "ACTIVE" && (
-                        <Link
-                          href={`/contracts/new?candidateId=${c.id}&name=${encodeURIComponent(c.name)}&email=${encodeURIComponent(c.email)}`}
-                          className="row-action row-action--highlight"
-                          title="Draft employment contract for candidate"
-                        >
-                          {c.resourceType === "GLOBAL" ? "Issue Agreement" : "Draft Contract"}
-                        </Link>
-                      )}
-                      {canManage && (
-                        <button
-                          type="button"
-                          className="row-action"
-                          onClick={() => toggleStatus(c)}
-                          disabled={busy}
-                          title={
-                            c.status === "ACTIVE"
-                              ? "Archive — keeps the record and its history"
-                              : "Return this candidate to the active pool"
-                          }
-                        >
-                          {c.status === "ACTIVE" ? "Deactivate" : "Reactivate"}
-                        </button>
-                      )}
-                      {canManage && (
-                        <button
-                          type="button"
-                          className="row-action row-action--danger"
-                          onClick={() => {
-                            setDeleting(c);
-                            setNotice(null);
-                          }}
-                          disabled={busy}
-                        >
-                          Delete
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <>
+          {/* ── Section 1: Employee (Dev) & Direct Talent Pool ────────────── */}
+          {(typeFilter === "ALL" || typeFilter === "DIRECT" || typeFilter === "EMPLOYEE_DEV") && (
+            <section className="mb-6">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2.5">
+                  <span className="w-3 h-3 rounded-full bg-blue-600 shadow-xs" />
+                  <h2 className="text-lg font-extrabold text-[#111111] tracking-tight m-0">
+                    Employee (Dev) &amp; Direct Talent Pool
+                  </h2>
+                  <span className="bg-[#eef2ff] text-[#1e40af] border border-[#c7d2fe] text-xs font-bold px-2.5 py-0.5 rounded-full shadow-xs">
+                    {scored.filter((entry) => entry.row.resourceType !== "GLOBAL").length} Developers
+                  </span>
+                </div>
+                <span className="text-xs text-slate-600 font-medium hidden sm:inline">
+                  Synced with Admin &rarr; People
+                </span>
+              </div>
+
+              {scored.filter((entry) => entry.row.resourceType !== "GLOBAL").length === 0 ? (
+                <div className="portal-panel p-6 text-center text-sm text-slate-500">
+                  No direct employee developers found matching the current search.
+                </div>
+              ) : (
+                <div className="matrix-scroll">
+                  <table className="matrix matrix--people">
+                    <thead>
+                      <tr>
+                        <th scope="col">Candidate</th>
+                        <th scope="col">Classification</th>
+                        <th scope="col">Tech Stack &amp; Compatibility</th>
+                        <th scope="col">Compensation &amp; Notice</th>
+                        <th scope="col">Deployment Availability</th>
+                        <th scope="col">Active Pipelines</th>
+                        <th scope="col">CV</th>
+                        <th scope="col">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {scored
+                        .filter((entry) => entry.row.resourceType !== "GLOBAL")
+                        .map(({ row: c, match }) => (
+                          <tr key={c.id} className={c.status === "ARCHIVED" ? "opacity-70" : undefined}>
+                            <th scope="row">
+                              <strong>{c.name}</strong>
+                              <span>
+                                {c.email} {c.location && `· ${c.location}`}
+                              </span>
+                              {!c.hasConsent && <span className="portal-muted">No consent recorded</span>}
+                            </th>
+                            <td>
+                              <div className="flex flex-col items-start gap-1">
+                                <span
+                                  className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold border ${RESOURCE_TYPE_CLASS[c.resourceType]}`}
+                                  title={c.source || "Direct"}
+                                >
+                                  {RESOURCE_TYPE_LABEL[c.resourceType]}
+                                </span>
+                                <StatusChip status={c.status} />
+                              </div>
+                            </td>
+                            <td>
+                              <div className="flex flex-col gap-1.5 min-w-[200px]">
+                                <TechStackBadges stack={c.techStack} />
+                                {match && (
+                                  <div className="flex items-center gap-1.5 mt-0.5">
+                                    <span
+                                      className={`inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-bold ${
+                                        match.score >= 70
+                                          ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
+                                          : match.score >= 40
+                                          ? "bg-amber-100 text-amber-800 border border-amber-300"
+                                          : "bg-slate-100 text-slate-600 border border-slate-300"
+                                      }`}
+                                    >
+                                      ⚡ {match.score}% Match
+                                    </span>
+                                    {match.matchedSkills.length > 0 && (
+                                      <span className="text-[10px] text-emerald-700 font-medium">
+                                        ({match.matchedSkills.join(", ")})
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                            <td>
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-xs font-semibold text-slate-800">
+                                  Direct Staff (Non-Visa)
+                                </span>
+                                {c.expectedSalary && (
+                                  <span className="text-xs text-slate-600">
+                                    Exp: ₹{c.expectedSalary}
+                                  </span>
+                                )}
+                                {c.noticePeriod && (
+                                  <span className="text-[11px] text-blue-700 font-medium">
+                                    Notice: {c.noticePeriod}
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td>
+                              <span className="inline-flex items-center px-2.5 py-1 rounded text-xs font-semibold border bg-blue-50 text-blue-800 border-blue-200">
+                                {c.benchStatus && c.benchStatus !== "Direct" ? c.benchStatus : "Available / Ready to Deploy"}
+                              </span>
+                            </td>
+                            <td>{c.applications.length === 0 ? "—" : c.applications.join(", ")}</td>
+                            <td>
+                              {c.resumeUrl ? (
+                                <a className="text-link" href={c.resumeUrl} target="_blank" rel="noreferrer noopener">
+                                  View CV
+                                </a>
+                              ) : (
+                                "—"
+                              )}
+                            </td>
+                            <td>
+                              <div className="row-actions flex flex-wrap gap-1">
+                                {canManage && (
+                                  <button
+                                    type="button"
+                                    className="row-action font-semibold text-slate-800 hover:text-black"
+                                    onClick={() => startEdit(c)}
+                                    disabled={busy}
+                                  >
+                                    Edit
+                                  </button>
+                                )}
+                                {canDraftContract && c.status === "ACTIVE" && (
+                                  <Link
+                                    href={`/contracts/new?candidateId=${c.id}&name=${encodeURIComponent(c.name)}&email=${encodeURIComponent(c.email)}`}
+                                    className="row-action row-action--highlight"
+                                    title="Draft employment contract for candidate"
+                                  >
+                                    Draft Contract
+                                  </Link>
+                                )}
+                                {canManage && (
+                                  <button
+                                    type="button"
+                                    className="row-action"
+                                    onClick={() => toggleStatus(c)}
+                                    disabled={busy}
+                                    title={
+                                      c.status === "ACTIVE"
+                                        ? "Archive — keeps the record and its history"
+                                        : "Return this candidate to the active pool"
+                                    }
+                                  >
+                                    {c.status === "ACTIVE" ? "Deactivate" : "Reactivate"}
+                                  </button>
+                                )}
+                                {canManage && (
+                                  <button
+                                    type="button"
+                                    className="row-action row-action--danger"
+                                    onClick={() => {
+                                      setDeleting(c);
+                                      setNotice(null);
+                                    }}
+                                    disabled={busy}
+                                  >
+                                    Delete
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+          )}
+
+          {/* ── Separator Divider (Visible on All tab) ─────────────────────── */}
+          {typeFilter === "ALL" && (
+            <div className="relative my-10 py-2" aria-hidden="true">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t-2 border-dashed border-slate-300 dark:border-neutral-700" />
+              </div>
+              <div className="relative flex justify-center">
+                <div className="inline-flex items-center gap-2.5 bg-[#111111] text-white px-5 py-2 rounded-full text-xs font-bold uppercase tracking-wider shadow-lg border border-slate-700">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  <span>Global Visa Resources (H-1B, L-1 &amp; US Bench)</span>
+                  <span className="bg-[#ffd700] text-[#111111] text-[11px] px-2 py-0.5 rounded-full font-extrabold">
+                    {scored.filter((entry) => entry.row.resourceType === "GLOBAL").length}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── Section 2: Global Visa Resources Pool ─────────────────────── */}
+          {(typeFilter === "ALL" || typeFilter === "GLOBAL") && (
+            <section className="mt-4">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2.5">
+                  <span className="w-3 h-3 rounded-full bg-emerald-600 shadow-xs" />
+                  <h2 className="text-lg font-extrabold text-[#111111] tracking-tight m-0">
+                    Global Visa Resources Pool
+                  </h2>
+                  <span className="bg-[#ecfdf5] text-[#065f46] border border-[#a7f3d0] text-xs font-bold px-2.5 py-0.5 rounded-full shadow-xs">
+                    {scored.filter((entry) => entry.row.resourceType === "GLOBAL").length} Visa Resources
+                  </span>
+                </div>
+                <span className="text-xs text-slate-600 font-medium hidden sm:inline">
+                  Synced with Admin &rarr; Global Candidates
+                </span>
+              </div>
+
+              {scored.filter((entry) => entry.row.resourceType === "GLOBAL").length === 0 ? (
+                <div className="portal-panel p-6 text-center text-sm text-slate-500">
+                  No global visa candidates found matching the current search.
+                </div>
+              ) : (
+                <div className="matrix-scroll">
+                  <table className="matrix matrix--people">
+                    <thead>
+                      <tr>
+                        <th scope="col">Candidate</th>
+                        <th scope="col">Visa Classification</th>
+                        <th scope="col">Tech Stack &amp; Compatibility</th>
+                        <th scope="col">Visa Type &amp; Commission</th>
+                        <th scope="col">Bench Utilization</th>
+                        <th scope="col">Active Pipelines</th>
+                        <th scope="col">CV</th>
+                        <th scope="col">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {scored
+                        .filter((entry) => entry.row.resourceType === "GLOBAL")
+                        .map(({ row: c, match }) => (
+                          <tr key={c.id} className={c.status === "ARCHIVED" ? "opacity-70" : undefined}>
+                            <th scope="row">
+                              <strong>{c.name}</strong>
+                              <span>
+                                {c.email} {c.location && `· ${c.location}`}
+                              </span>
+                              {c.ssn && c.ssn !== "—" && (
+                                <span className="text-xs text-slate-500 font-mono">SSN: {c.ssn}</span>
+                              )}
+                              {!c.hasConsent && <span className="portal-muted">No consent recorded</span>}
+                            </th>
+                            <td>
+                              <div className="flex flex-col items-start gap-1">
+                                <span
+                                  className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold border ${RESOURCE_TYPE_CLASS[c.resourceType]}`}
+                                  title={c.source || "Global"}
+                                >
+                                  {RESOURCE_TYPE_LABEL[c.resourceType]}
+                                </span>
+                                <StatusChip status={c.status} />
+                              </div>
+                            </td>
+                            <td>
+                              <div className="flex flex-col gap-1.5 min-w-[200px]">
+                                <TechStackBadges stack={c.techStack} />
+                                {match && (
+                                  <div className="flex items-center gap-1.5 mt-0.5">
+                                    <span
+                                      className={`inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-bold ${
+                                        match.score >= 70
+                                          ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
+                                          : match.score >= 40
+                                          ? "bg-amber-100 text-amber-800 border border-amber-300"
+                                          : "bg-slate-100 text-slate-600 border border-slate-300"
+                                      }`}
+                                    >
+                                      ⚡ {match.score}% Match
+                                    </span>
+                                    {match.matchedSkills.length > 0 && (
+                                      <span className="text-[10px] text-emerald-700 font-medium">
+                                        ({match.matchedSkills.join(", ")})
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                            <td>
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-xs font-semibold text-slate-800">
+                                  {c.visaType || "Visa Required"} {c.visaStatus ? `(${c.visaStatus})` : ""}
+                                </span>
+                                {c.commissionPaid && c.commissionPaid !== "—" && (
+                                  <span className="text-xs text-emerald-700 font-medium">
+                                    Comm: {c.commissionPaid}
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td>
+                              <span className="inline-flex items-center px-2.5 py-1 rounded text-xs font-semibold border bg-emerald-50 text-emerald-800 border-emerald-200">
+                                {c.benchStatus || "Available / On Bench"}
+                              </span>
+                            </td>
+                            <td>{c.applications.length === 0 ? "—" : c.applications.join(", ")}</td>
+                            <td>
+                              {c.resumeUrl ? (
+                                <a className="text-link" href={c.resumeUrl} target="_blank" rel="noreferrer noopener">
+                                  View CV
+                                </a>
+                              ) : (
+                                "—"
+                              )}
+                            </td>
+                            <td>
+                              <div className="row-actions flex flex-wrap gap-1">
+                                {canManage && (
+                                  <button
+                                    type="button"
+                                    className="row-action font-semibold text-slate-800 hover:text-black"
+                                    onClick={() => startEdit(c)}
+                                    disabled={busy}
+                                  >
+                                    Edit
+                                  </button>
+                                )}
+                                {canDraftContract && c.status === "ACTIVE" && (
+                                  <Link
+                                    href={`/contracts/new?candidateId=${c.id}&name=${encodeURIComponent(c.name)}&email=${encodeURIComponent(c.email)}`}
+                                    className="row-action row-action--highlight"
+                                    title="Issue client / placement agreement for candidate"
+                                  >
+                                    Issue Agreement
+                                  </Link>
+                                )}
+                                {canManage && (
+                                  <button
+                                    type="button"
+                                    className="row-action"
+                                    onClick={() => toggleStatus(c)}
+                                    disabled={busy}
+                                    title={
+                                      c.status === "ACTIVE"
+                                        ? "Archive — keeps the record and its history"
+                                        : "Return this candidate to the active pool"
+                                    }
+                                  >
+                                    {c.status === "ACTIVE" ? "Deactivate" : "Reactivate"}
+                                  </button>
+                                )}
+                                {canManage && (
+                                  <button
+                                    type="button"
+                                    className="row-action row-action--danger"
+                                    onClick={() => {
+                                      setDeleting(c);
+                                      setNotice(null);
+                                    }}
+                                    disabled={busy}
+                                  >
+                                    Delete
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+          )}
+        </>
       )}
 
       {deleting && (
@@ -518,7 +792,7 @@ export function CandidateManager({
         <div className="dialog-backdrop" role="dialog" aria-modal="true" aria-labelledby="cand-title">
           <div className="dialog dialog--wide">
             <h3 id="cand-title" className="dialog-title">
-              Add Candidate to Pool
+              {editing ? `Edit Candidate: ${editing.name}` : "Add Candidate to Pool"}
             </h3>
             <form className="contact-form" noValidate onSubmit={submit}>
               <div className="grid gap-5 sm:grid-cols-2">
@@ -726,11 +1000,19 @@ export function CandidateManager({
                 </div>
               </div>
               <div className="dialog-actions mt-5">
-                <button type="button" className="button button-outline" onClick={() => setOpen(false)} disabled={busy}>
+                <button
+                  type="button"
+                  className="button button-outline"
+                  onClick={() => {
+                    setOpen(false);
+                    setEditing(null);
+                  }}
+                  disabled={busy}
+                >
                   Cancel
                 </button>
                 <button type="submit" className="button button-primary" disabled={busy}>
-                  {busy ? "Saving…" : "Add to Candidate Pool"}
+                  {busy ? (editing ? "Updating…" : "Saving…") : (editing ? "Update Candidate" : "Add to Candidate Pool")}
                 </button>
               </div>
             </form>
