@@ -184,7 +184,7 @@ export function PeopleTable({ people, roles, canCreate }: {
                 {person.jobTitle && <span className="text-slate-500 block text-xs">{person.jobTitle}</span>}
                 {person.techStack && (
                   <div className="mt-1">
-                    <TechStackBadges stack={person.techStack} limit={4} />
+                    <TechStackBadges stack={person.techStack} />
                   </div>
                 )}
               </div>
@@ -221,9 +221,15 @@ export function PeopleTable({ people, roles, canCreate }: {
                       </button>
                     )}
                     {person.canExport && <a className="row-action" href={`/api/admin/users/${person.id}/data`} download>Export data</a>}
-                    {person.canRemove && person.status !== "ARCHIVED" && (
-                      <button type="button" className="row-action row-action--danger" onClick={() => { setConfirming(person); setNotice(null); }} disabled={busy}>
-                        Remove
+                    {person.canRemove && (
+                      <button
+                        type="button"
+                        className="row-action row-action--danger"
+                        onClick={() => { setConfirming(person); setNotice(null); }}
+                        disabled={busy}
+                        title={person.status === "ARCHIVED" ? "Permanently purge user and all associated data" : "Archive account"}
+                      >
+                        {person.status === "ARCHIVED" ? "Delete permanently" : "Remove"}
                       </button>
                     )}
                   </div>
@@ -259,14 +265,18 @@ export function PeopleTable({ people, roles, canCreate }: {
 
     {confirming && <div className="dialog-backdrop" role="dialog" aria-modal="true" aria-labelledby="remove-title">
       <div className="dialog">
-        <h3 id="remove-title" className="dialog-title">Remove &amp; Archive {confirming.name}?</h3>
+        <h3 id="remove-title" className="dialog-title">
+          {confirming.status === "ARCHIVED" ? `Permanently delete ${confirming.name}?` : `Remove & Archive ${confirming.name}?`}
+        </h3>
         <p className="portal-note">
-          This will move <strong>{confirming.name}</strong> to Archived status and sign them out immediately. All historical records (including contract letters, timesheets, and assignments) will be safely preserved.
+          {confirming.status === "ARCHIVED"
+            ? `This will permanently delete ${confirming.name} and purge all associated records (contract letters, timesheets, expenses, and assignments) from the workspace. This action is exclusive to the Founder and cannot be undone.`
+            : `This will move ${confirming.name} to Archived status and sign them out immediately. All historical records (including contract letters, timesheets, and assignments) will be safely preserved.`}
         </p>
         <div className="dialog-actions">
           <button type="button" className="button button-outline" onClick={() => setConfirming(null)} disabled={busy}>Cancel</button>
           <button type="button" className="button button-danger" onClick={() => remove(confirming)} disabled={busy}>
-            {busy ? "Archiving…" : "Archive account"}
+            {busy ? (confirming.status === "ARCHIVED" ? "Deleting…" : "Archiving…") : (confirming.status === "ARCHIVED" ? "Delete permanently" : "Archive account")}
           </button>
         </div>
       </div>

@@ -50,6 +50,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       where: { id },
       data: { status, archivedAt: input.active ? null : new Date() },
     });
+    if (candidate.source !== "Global Visa Resource") {
+      await tx.user.updateMany({
+        where: { email: candidate.email },
+        data: { status: input.active ? "ACTIVE" : "ARCHIVED" },
+      });
+    }
     await recordAudit(
       {
         actorId: context.user.id,

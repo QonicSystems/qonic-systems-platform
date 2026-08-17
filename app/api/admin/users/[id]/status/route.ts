@@ -55,6 +55,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     // happens to expire. (getAuthContext also rejects non-ACTIVE users, so this
     // is belt and braces — but it frees the rows and forces a clean re-login.)
     if (!active) await tx.session.deleteMany({ where: { userId: target.id } });
+    await tx.candidate.updateMany({
+      where: { email: target.email },
+      data: { status: active ? "ACTIVE" : "ARCHIVED" },
+    });
     await recordAudit({
       actorId: context.user.id,
       action: active ? "user.reactivate" : "user.deactivate",
