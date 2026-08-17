@@ -6,6 +6,7 @@ import { EmptyState } from "@/components/portal/empty-state";
 import { StatusChip } from "@/components/status-chip";
 import { TableToolbar } from "@/components/portal/table-toolbar";
 import { useFilter } from "@/lib/ui/filter";
+import { TechStackBadges } from "@/components/ats/tech-stack-badges";
 
 export type PersonRow = {
   id: string;
@@ -178,13 +179,13 @@ export function PeopleTable({ people, roles, canCreate }: {
               <span>{person.email}</span>
             </th>
             <td>
-              <div>
+              <div className="flex flex-col gap-1">
                 <strong className="text-slate-900">{person.roleLabel}</strong>
                 {person.jobTitle && <span className="text-slate-500 block text-xs">{person.jobTitle}</span>}
                 {person.techStack && (
-                  <span className="inline-block mt-0.5 text-[11px] font-mono font-medium text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
-                    {person.techStack}
-                  </span>
+                  <div className="mt-1">
+                    <TechStackBadges stack={person.techStack} limit={4} />
+                  </div>
                 )}
               </div>
             </td>

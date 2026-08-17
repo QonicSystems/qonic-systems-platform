@@ -18,11 +18,20 @@ type Row = {
   id: string;
   code: string;
   name: string;
+  clientId: string;
   client: string;
   status: string;
   billing: string;
+  rawBilling?: string;
   budget: string;
+  budgetAmount?: string;
+  budgetCurrency?: string;
+  defaultRate?: string;
+  startDate?: string;
+  endDate?: string;
+  managerId?: string;
   manager: string;
+  notes?: string;
   team: number;
   hours: string;
   negotiationCompleted?: boolean;
@@ -81,6 +90,7 @@ export function ProjectManager({
     project.manager,
   ]);
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<Row | null>(null);
   const [deleting, setDeleting] = useState<Row | null>(null);
   const empty = {
     name: "",
@@ -103,14 +113,48 @@ export function ProjectManager({
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ tone: "success" | "error"; text: string } | null>(null);
 
+  const startEdit = (project: Row) => {
+    setEditing(project);
+    const parts = project.code.split("-");
+    const suffix = parts.length > 1 ? parts.slice(1).join("-") : project.code;
+    setForm({
+      name: project.name,
+      code: suffix,
+      clientId: project.clientId,
+      status: project.status,
+      billing: project.rawBilling || "TIME_AND_MATERIALS",
+      budgetAmount: project.budgetAmount || "",
+      budgetCurrency: project.budgetCurrency || "INR",
+      defaultRate: project.defaultRate || "",
+      startDate: project.startDate || "",
+      endDate: project.endDate || "",
+      managerId: project.managerId || (people[0]?.id ?? ""),
+      notes: project.notes || "",
+      negotiationCompleted: project.negotiationCompleted ?? false,
+      completedReason: project.completedReason ?? "",
+    });
+    setErrors({});
+    setNotice(null);
+    setOpen(true);
+  };
+
+  const startAdd = () => {
+    setEditing(null);
+    setForm(empty);
+    setErrors({});
+    setNotice(null);
+    setOpen(true);
+  };
+
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setBusy(true);
     setNotice(null);
     setErrors({});
     try {
-      const response = await fetch("/api/projects", {
-        method: "POST",
+      const url = editing ? `/api/projects/${editing.id}` : "/api/projects";
+      const response = await fetch(url, {
+        method: editing ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
       });
@@ -120,9 +164,10 @@ export function ProjectManager({
         setNotice({ tone: "error", text: result.message ?? "Unable to save project." });
         return;
       }
-      setNotice({ tone: "success", text: result.message ?? "Project created successfully." });
+      setNotice({ tone: "success", text: result.message ?? (editing ? "Project updated successfully." : "Project created successfully.") });
       setForm(empty);
       setOpen(false);
+      setEditing(null);
       router.refresh();
     } catch {
       setNotice({ tone: "error", text: "Unable to reach the server." });
@@ -207,7 +252,7 @@ export function ProjectManager({
             <button
               type="button"
               className="button button-primary"
-              onClick={() => setOpen(true)}
+              onClick={startAdd}
               disabled={clients.length === 0}
             >
               Create a project
@@ -276,6 +321,14 @@ export function ProjectManager({
                       <div className="row-actions flex flex-wrap gap-1">
                         <button
                           type="button"
+                          className="row-action font-semibold text-slate-800 hover:text-black"
+                          onClick={() => startEdit(project)}
+                          disabled={busy}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
                           className="row-action"
                           onClick={() => toggleCancelled(project)}
                           disabled={busy}
@@ -321,7 +374,7 @@ export function ProjectManager({
         <div className="dialog-backdrop" role="dialog" aria-modal="true" aria-labelledby="project-title">
           <div className="dialog dialog--wide">
             <h3 id="project-title" className="dialog-title">
-              Create a project
+              {editing ? `Edit ${editing.name}` : "Create a project"}
             </h3>
             <form className="contact-form" noValidate onSubmit={submit}>
               <div className="grid gap-5 sm:grid-cols-2">
@@ -515,13 +568,16 @@ export function ProjectManager({
                 <button
                   type="button"
                   className="button button-outline"
-                  onClick={() => setOpen(false)}
+                  onClick={() => {
+                    setOpen(false);
+                    setEditing(null);
+                  }}
                   disabled={busy}
                 >
                   Cancel
                 </button>
                 <button type="submit" className="button button-primary" disabled={busy}>
-                  {busy ? "Creating…" : "Create Project"}
+                  {busy ? (editing ? "Updating…" : "Creating…") : (editing ? "Update Project" : "Create Project")}
                 </button>
               </div>
             </form>

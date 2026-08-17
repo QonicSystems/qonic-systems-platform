@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { clientIp, recordAudit } from "@/lib/audit";
 import { guardRoute } from "@/lib/auth/guard";
 import { validateLeaveInput } from "@/lib/leave/leave";
+import { notifyLeadership } from "@/lib/notify";
 import { db } from "@/lib/db";
 
 export const runtime = "nodejs";
@@ -61,6 +62,12 @@ export async function POST(request: Request) {
         reason: data.reason || null, status: "PENDING",
       },
     });
+    await notifyLeadership({
+      kind: "LEAVE",
+      title: `Leave Requested: ${context.user.name}`,
+      body: `${context.user.name} requested ${data.days} day(s) of ${leaveType.label} (${data.startDate} to ${data.endDate}).`,
+      link: `/leave`,
+    }, tx);
     await recordAudit({
       actorId: context.user.id, action: "leave.request", entityType: "LeaveRequest", entityId: leave.id,
       after: { type: leaveType.key, days: data.days, from: data.startDate, to: data.endDate }, ipAddress: clientIp(request),

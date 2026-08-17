@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { clientIp, recordAudit } from "@/lib/audit";
 import { guardRoute } from "@/lib/auth/guard";
 import { MAX_DAY_MINUTES, canEditTimesheet, canSubmitTimesheet, parseDuration } from "@/lib/delivery/timesheet";
+import { notifyLeadership } from "@/lib/notify";
 import { db } from "@/lib/db";
 
 export const runtime = "nodejs";
@@ -93,6 +94,14 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         ? { status: "SUBMITTED", submittedAt: new Date(), decidedById: null, decidedAt: null, decisionNote: null }
         : { status: "DRAFT" },
     });
+    if (submit) {
+      await notifyLeadership({
+        kind: "TIMESHEET",
+        title: `Timesheet Submitted: ${context.user.name}`,
+        body: `${context.user.name} submitted a timesheet (${(total / 60).toFixed(1)} hrs) for week of ${sheet.weekStart.toISOString().slice(0, 10)}.`,
+        link: `/timesheets`,
+      }, tx);
+    }
     await recordAudit({
       actorId: context.user.id,
       action: submit ? "timesheet.submit" : "timesheet.save",

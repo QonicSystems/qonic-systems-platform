@@ -14,6 +14,7 @@ import {
   RESOURCE_TYPE_TABS,
   type ResourceType,
 } from "@/lib/ats/resource-type";
+import { TechStackBadges } from "@/components/ats/tech-stack-badges";
 
 type Row = {
   id: string;
@@ -367,8 +368,8 @@ export function CandidateManager({
                     </div>
                   </td>
                   <td>
-                    <div className="flex flex-col gap-1">
-                      <span className="font-semibold text-slate-900">{c.techStack || "—"}</span>
+                    <div className="flex flex-col gap-1.5 min-w-[180px]">
+                      <TechStackBadges stack={c.techStack} limit={5} />
                       {match && (
                         <div className="flex items-center gap-1.5 mt-0.5">
                           <span
@@ -383,7 +384,7 @@ export function CandidateManager({
                             ⚡ {match.score}% Match
                           </span>
                           {match.matchedSkills.length > 0 && (
-                            <span className="text-[10px] text-emerald-700">
+                            <span className="text-[10px] text-emerald-700 font-medium">
                               ({match.matchedSkills.join(", ")})
                             </span>
                           )}
@@ -676,6 +677,19 @@ export function CandidateManager({
                         onChange={(e) => setForm({ ...form, expectedSalary: e.target.value })}
                         placeholder="e.g. 80000 or $50/hr"
                       />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label htmlFor="cd-bench-non-global">Bench &amp; Deployment Availability</label>
+                      <select
+                        id="cd-bench-non-global"
+                        value={form.benchStatus}
+                        onChange={(e) => setForm({ ...form, benchStatus: e.target.value })}
+                      >
+                        <option value="Available / Ready to Deploy">Available / Ready to Deploy</option>
+                        <option value="Allocated to Client Project">Allocated to Client Project</option>
+                        <option value="Interviewing / In Pipeline">Interviewing / In Pipeline</option>
+                        <option value="On Notice Period">On Notice Period</option>
+                      </select>
                     </div>
                   </>
                 )}
