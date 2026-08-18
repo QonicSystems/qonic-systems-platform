@@ -29,7 +29,7 @@ export default async function DashboardPage({
     myAssignments,
   ] = await Promise.all([
     db.user.count({ where: { status: "ACTIVE" } }),
-    db.candidate.count(),
+    db.candidate.count({ where: { status: "ACTIVE" } }),
     db.job.count({ where: { status: { in: ["OPEN", "DRAFT"] } } }),
     db.application.groupBy({
       by: ["stage"],

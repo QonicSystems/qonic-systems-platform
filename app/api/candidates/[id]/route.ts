@@ -124,6 +124,14 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   }
 
   await db.$transaction(async (tx) => {
+    // Also clean up any unlinked/matching staff user with this email
+    await tx.user.deleteMany({
+      where: {
+        email: { equals: existing.email, mode: "insensitive" },
+        role: { key: { notIn: ["ceo", "co_founder"] } },
+      },
+    });
+
     await tx.candidate.delete({ where: { id } });
     await recordAudit({ actorId: context.user.id, action: "candidate.delete", entityType: "Candidate", entityId: id, ipAddress: clientIp(request) }, tx);
   });

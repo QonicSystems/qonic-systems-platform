@@ -145,7 +145,16 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
 
         // 2. Contract letters and events
         await tx.contractLetterEvent.deleteMany({
-          where: { letter: { OR: [{ subjectUserId: target.id }, { authorUserId: target.id }] } },
+          where: {
+            OR: [
+              { letter: { OR: [{ subjectUserId: target.id }, { authorUserId: target.id }] } },
+              { actorId: target.id },
+            ],
+          },
+        });
+        await tx.contractLetter.updateMany({
+          where: { releasedById: target.id },
+          data: { releasedById: null },
         });
         await tx.contractLetter.deleteMany({
           where: { OR: [{ subjectUserId: target.id }, { authorUserId: target.id }] },
@@ -153,27 +162,39 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
 
         // 3. Time entries and timesheets
         await tx.timeEntry.deleteMany({ where: { timesheet: { userId: target.id } } });
+        await tx.timesheet.updateMany({ where: { decidedById: target.id }, data: { decidedById: null } });
         await tx.timesheet.deleteMany({ where: { userId: target.id } });
 
         // 4. Expenses & Assignments
+        await tx.expense.updateMany({ where: { decidedById: target.id }, data: { decidedById: null } });
         await tx.expense.deleteMany({ where: { userId: target.id } });
         await tx.projectAssignment.deleteMany({ where: { userId: target.id } });
 
-        // 5. Unassign from managed projects, clients, reports, and placements
+        // 5. Unassign from managed projects, clients, jobs, applications, interviews, payments, reports, and placements
         await tx.project.updateMany({ where: { managerId: target.id }, data: { managerId: null } });
         await tx.client.updateMany({ where: { ownerId: target.id }, data: { ownerId: null } });
+        await tx.job.updateMany({ where: { ownerId: target.id }, data: { ownerId: null } });
+        await tx.application.updateMany({ where: { ownerId: target.id }, data: { ownerId: null } });
+        await tx.interview.updateMany({ where: { interviewerId: target.id }, data: { interviewerId: null } });
+        await tx.payment.updateMany({ where: { recordedById: target.id }, data: { recordedById: null } });
         await tx.user.updateMany({ where: { managerId: target.id }, data: { managerId: null } });
         await tx.placement.updateMany({ where: { recruiterId: target.id }, data: { recruiterId: null } });
 
-        // 6. Leave requests, notifications, permission overrides
+        // 6. Leave requests, leave balances, bank detail, notifications, permission overrides
+        await tx.leaveRequest.updateMany({ where: { decidedById: target.id }, data: { decidedById: null } });
         await tx.leaveRequest.deleteMany({ where: { userId: target.id } });
+        await tx.leaveBalance.deleteMany({ where: { userId: target.id } });
+        await tx.bankDetail.deleteMany({ where: { userId: target.id } });
         await tx.notification.deleteMany({ where: { userId: target.id } });
         await tx.userPermissionOverride.deleteMany({ where: { userId: target.id } });
 
-        // 7. Permanently delete the user
+        // 7. Clean up matching candidate in Candidate pool so auto-sync will never resurrect the user
+        await tx.candidate.deleteMany({ where: { email: { equals: target.email, mode: "insensitive" } } });
+
+        // 8. Permanently delete the user
         await tx.user.delete({ where: { id: target.id } });
 
-        // 8. Record audit log
+        // 9. Record audit log
         await recordAudit({
           actorId: context.user.id,
           action: "user.purge_permanent",

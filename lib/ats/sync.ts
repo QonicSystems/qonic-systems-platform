@@ -28,6 +28,7 @@ export async function syncCandidateAndUsers(): Promise<void> {
       const email = c.email.toLowerCase().trim();
       const existingUser = staffUsers.find((u) => u.email.toLowerCase().trim() === email);
       if (!existingUser) {
+        if (c.status === "ARCHIVED") continue; // Never resurrect or auto-create archived records
         await db.user.create({
           data: {
             email,
@@ -36,7 +37,7 @@ export async function syncCandidateAndUsers(): Promise<void> {
             jobTitle: c.headline || "Employee (Dev)",
             techStack: c.techStack || c.skills || null,
             roleId: employeeRole.id,
-            status: c.status === "ACTIVE" ? "ACTIVE" : "ARCHIVED",
+            status: "ACTIVE",
             mustChangePassword: true,
             passwordHash: "INVITED_CANDIDATE_NO_LOGIN_YET",
           },
@@ -46,7 +47,8 @@ export async function syncCandidateAndUsers(): Promise<void> {
         if (
           existingUser.name !== c.name ||
           existingUser.techStack !== (c.techStack || c.skills) ||
-          existingUser.phone !== (c.phone || null)
+          existingUser.phone !== (c.phone || null) ||
+          existingUser.status !== c.status
         ) {
           await db.user.update({
             where: { id: existingUser.id },
@@ -55,6 +57,7 @@ export async function syncCandidateAndUsers(): Promise<void> {
               phone: c.phone || null,
               jobTitle: c.headline || existingUser.jobTitle || "Employee (Dev)",
               techStack: c.techStack || c.skills || existingUser.techStack,
+              status: c.status === "ACTIVE" ? "ACTIVE" : "ARCHIVED",
             },
           }).catch(() => {});
         }
@@ -66,6 +69,7 @@ export async function syncCandidateAndUsers(): Promise<void> {
       const email = u.email.toLowerCase().trim();
       const existingCandidate = nonGlobalCandidates.find((c) => c.email.toLowerCase().trim() === email);
       if (!existingCandidate) {
+        if (u.status === "ARCHIVED") continue; // Never resurrect or auto-create archived records
         await db.candidate.create({
           data: {
             email,
@@ -76,7 +80,7 @@ export async function syncCandidateAndUsers(): Promise<void> {
             skills: u.techStack || null,
             source: "Direct / Internal",
             benchStatus: "Available / Ready to Deploy",
-            status: u.status === "ACTIVE" ? "ACTIVE" : "ARCHIVED",
+            status: "ACTIVE",
             consentAt: new Date(),
           },
         }).catch(() => {});
@@ -85,7 +89,8 @@ export async function syncCandidateAndUsers(): Promise<void> {
         if (
           existingCandidate.name !== u.name ||
           existingCandidate.techStack !== u.techStack ||
-          existingCandidate.phone !== (u.phone || null)
+          existingCandidate.phone !== (u.phone || null) ||
+          existingCandidate.status !== u.status
         ) {
           await db.candidate.update({
             where: { id: existingCandidate.id },
@@ -95,6 +100,7 @@ export async function syncCandidateAndUsers(): Promise<void> {
               headline: u.jobTitle || existingCandidate.headline || "Employee (Dev)",
               techStack: u.techStack || existingCandidate.techStack,
               skills: u.techStack || existingCandidate.skills,
+              status: u.status === "ACTIVE" ? "ACTIVE" : "ARCHIVED",
             },
           }).catch(() => {});
         }
