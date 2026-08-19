@@ -7,7 +7,7 @@ import {
 import { toMinorUnits, validateClient, validateProject } from "@/lib/delivery/validate";
 
 const actor = (id: string, permissions: string[]): AuthContext => ({
-  user: { id, name: id, email: `${id}@x.com`, phone: null, jobTitle: null, photoUrl: null, mustChangePassword: false },
+  user: { id, name: id, email: `${id}@x.com`, phone: null, jobTitle: null, photoUrl: null, mustChangePassword: false, unreadNotificationCount: 0 },
   role: { id: "r", key: id, label: id, isSuperAdmin: false, rank: 20 },
   permissions: new Set(permissions),
   sessionId: "s",

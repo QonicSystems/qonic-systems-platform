@@ -8,7 +8,7 @@ import { resolvePermissions } from "@/lib/auth/permissions";
 import { ABSOLUTE_TTL_MS, IDLE_TTL_MS, REFRESH_AFTER_MS, SESSION_COOKIE, hashSessionToken, sessionCookieOptions } from "@/lib/auth/session";
 
 export type AuthContext = {
-  user: { id: string; name: string; email: string; phone: string | null; jobTitle: string | null; photoUrl: string | null; mustChangePassword: boolean };
+  user: { id: string; name: string; email: string; phone: string | null; jobTitle: string | null; photoUrl: string | null; mustChangePassword: boolean; unreadNotificationCount: number };
   role: { id: string; key: string; label: string; isSuperAdmin: boolean; rank: number };
   permissions: ReadonlySet<string>;
   sessionId: string;
@@ -33,6 +33,10 @@ export const getAuthContext = cache(async (): Promise<AuthContext | null> => {
         include: {
           role: { include: { permissions: { include: { permission: true } } } },
           overrides: { include: { permission: true } },
+          // Folded in here so the portal layout's unread badge doesn't cost a
+          // second round trip on every page load — this query already runs on
+          // every request regardless.
+          _count: { select: { notifications: { where: { readAt: null } } } },
         },
       },
     },
@@ -55,7 +59,7 @@ export const getAuthContext = cache(async (): Promise<AuthContext | null> => {
   const overrides = user.overrides.map((entry) => ({ permissionKey: entry.permission.key, effect: entry.effect, expiresAt: entry.expiresAt }));
 
   return {
-    user: { id: user.id, name: user.name, email: user.email, phone: user.phone, jobTitle: user.jobTitle, photoUrl: user.photoUrl, mustChangePassword: user.mustChangePassword },
+    user: { id: user.id, name: user.name, email: user.email, phone: user.phone, jobTitle: user.jobTitle, photoUrl: user.photoUrl, mustChangePassword: user.mustChangePassword, unreadNotificationCount: user._count.notifications },
     role: { id: user.role.id, key: user.role.key, label: user.role.label, isSuperAdmin: user.role.isSuperAdmin, rank: user.role.rank },
     permissions: resolvePermissions(user.role, enabled, overrides, now),
     sessionId: session.id,

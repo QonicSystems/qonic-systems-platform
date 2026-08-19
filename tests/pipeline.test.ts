@@ -4,7 +4,7 @@ import { PIPELINE, availableStages, canMoveStage, conversionRate, jobAgeing } fr
 import type { ApplicationStage } from "@/lib/generated/prisma/enums";
 
 const actor = (permissions: string[]): AuthContext => ({
-  user: { id: "u1", name: "R", email: "r@x.com", phone: null, jobTitle: null, photoUrl: null, mustChangePassword: false },
+  user: { id: "u1", name: "R", email: "r@x.com", phone: null, jobTitle: null, photoUrl: null, mustChangePassword: false, unreadNotificationCount: 0 },
   role: { id: "r", key: "projects", label: "Projects", isSuperAdmin: false, rank: 20 },
   permissions: new Set(permissions),
   sessionId: "s",
