@@ -173,35 +173,36 @@ export function TimesheetGrid({ timesheetId, weekDates, projects, initialRows, e
       You are not assigned to any project yet, so there is nowhere to book time. Ask a project manager to add you.
     </p> : <>
       {editable && (
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-3 p-3 bg-neutral-900/40 border border-neutral-800 rounded-lg">
-          <span className="text-xs text-neutral-400 font-medium">⚡ Smart Actions:</span>
-          <div className="flex items-center gap-2">
+        <div className="smart-actions">
+          <span className="smart-actions__label">Smart actions</span>
+          <div className="smart-actions__buttons">
             <button
               type="button"
-              className="button button-outline text-xs py-1 px-2.5 text-amber-400 border-amber-500/30 hover:border-amber-400"
+              className="row-action row-action--highlight"
               onClick={() => autofillWeek(true)}
               disabled={busy}
               title="Fills weekdays up to today with 8h/day — never future dates"
             >
-              ⚡ Autofill To Date
+              Autofill to date
             </button>
             <button
               type="button"
-              className="button button-outline text-xs py-1 px-2.5 text-amber-400 border-amber-500/30 hover:border-amber-400"
+              className="row-action row-action--highlight"
               onClick={() => autofillWeek(false)}
               disabled={busy}
               title="Fills Monday to Friday with 8h/day, including days still to come"
             >
-              ⚡ Whole Week
+              Autofill whole week
             </button>
             {rows.length > 0 && (
               <button
                 type="button"
-                className="button button-outline text-xs py-1 px-2.5 text-neutral-400 hover:text-white"
+                className="row-action row-action--danger"
                 onClick={() => setRows([])}
                 disabled={busy}
+                title="Empties every cell on screen. Nothing is removed until you save the week."
               >
-                Clear All
+                Clear all cells
               </button>
             )}
           </div>
@@ -267,8 +268,17 @@ export function TimesheetGrid({ timesheetId, weekDates, projects, initialRows, e
         {invalid && <p className="form-error">One of the cells is not a valid duration.</p>}
         <div className="action-bar mt-4">
           <button type="button" className="button button-outline" onClick={addRow} disabled={busy}>Add a row</button>
-          <button type="button" className="button button-outline" onClick={() => save(false)} disabled={busy || invalid}>
-            {busy ? "Saving…" : "Save draft"}
+          <button
+            type="button"
+            className="button button-outline"
+            onClick={() => save(false)}
+            disabled={busy || invalid}
+            // "Save draft" read as though it kept a copy somewhere. It does not:
+            // the write replaces the week outright, so saving an emptied grid
+            // deletes that week's entries. The label says what it does.
+            title="Saves this week exactly as it appears, without sending it for approval"
+          >
+            {busy ? "Saving…" : "Save week"}
           </button>
           <button type="button" className="button button-primary" onClick={() => save(true)} disabled={busy || invalid || weekTotal === 0}>
             Submit for approval

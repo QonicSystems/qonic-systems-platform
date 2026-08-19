@@ -113,7 +113,13 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   });
 
   return NextResponse.json({
-    message: submit ? "Timesheet submitted for approval." : "Draft saved.",
+    // Not "Draft saved" — nothing is kept aside as a draft. The week is written
+    // exactly as it was sent, so an emptied grid clears it.
+    message: submit
+      ? "Timesheet submitted for approval."
+      : total === 0
+      ? "Week saved as empty — its time entries have been removed."
+      : "Week saved. It has not been sent for approval yet.",
     totalMinutes: total,
   });
 }
@@ -152,5 +158,5 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     }, tx);
   });
 
-  return NextResponse.json({ message: "Timesheet pulled back to draft. Edit it and submit again when you are ready." });
+  return NextResponse.json({ message: "Week unlocked for editing. Your time entries are unchanged — submit again when you are ready." });
 }

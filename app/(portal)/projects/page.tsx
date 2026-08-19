@@ -28,10 +28,6 @@ export default async function ProjectsPage() {
           },
         },
         _count: { select: { assignments: true, timeEntries: true, invoices: true, expenses: true } },
-        // Both were written by the API and read by nothing — the project row now
-        // opens a plan panel that shows and edits them.
-        milestones: { orderBy: [{ dueDate: "asc" }, { sortOrder: "asc" }] },
-        tasks: { include: { _count: { select: { timeEntries: true } } }, orderBy: { sortOrder: "asc" } },
         timeEntries: { select: { minutes: true, billable: true } },
       },
       orderBy: [{ status: "asc" }, { name: "asc" }],
@@ -110,20 +106,6 @@ export default async function ProjectsPage() {
             hours: (minutes / 60).toFixed(1),
             negotiationCompleted: project.negotiationCompleted,
             completedReason: project.completedReason ?? "",
-            milestones: project.milestones.map((m) => ({
-              id: m.id,
-              name: m.name,
-              dueDate: m.dueDate.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }),
-              status: m.status,
-              amount: m.amount === null ? "—" : money(m.amount, project.budgetCurrency),
-            })),
-            tasks: project.tasks.map((t) => ({
-              id: t.id,
-              name: t.name,
-              billable: t.billable,
-              isActive: t.isActive,
-              entries: t._count.timeEntries,
-            })),
             timeEntryCount: project._count.timeEntries,
             invoiceCount: project._count.invoices,
             expenseCount: project._count.expenses,

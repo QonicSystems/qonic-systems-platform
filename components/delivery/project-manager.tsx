@@ -23,22 +23,6 @@ export type Assignment = {
   jobTitle: string;
 };
 
-export type Milestone = {
-  id: string;
-  name: string;
-  dueDate: string;
-  status: string;
-  amount: string;
-};
-
-export type ProjectTask = {
-  id: string;
-  name: string;
-  billable: boolean;
-  isActive: boolean;
-  entries: number;
-};
-
 export type EmployeeOption = {
   id: string;
   name: string;
@@ -74,8 +58,6 @@ type Row = {
   timeEntryCount: number;
   invoiceCount: number;
   expenseCount: number;
-  milestones?: ReadonlyArray<Milestone>;
-  tasks?: ReadonlyArray<ProjectTask>;
 };
 type Errors = Partial<
   Record<
@@ -131,7 +113,6 @@ export function ProjectManager({
   const [editing, setEditing] = useState<Row | null>(null);
   const [deleting, setDeleting] = useState<Row | null>(null);
   const [managingTeam, setManagingTeam] = useState<Row | null>(null);
-  const [planningId, setPlanningId] = useState<string | null>(null);
   const empty = {
     name: "",
     code: "",
@@ -249,7 +230,6 @@ export function ProjectManager({
     if (await act(`/api/projects/${project.id}`, { method: "DELETE" })) setDeleting(null);
   };
 
-  const planning = projects.find((p) => p.id === planningId) ?? null;
   const selectedClient = clients.find((client) => client.id === form.clientId);
 
   return (
@@ -368,15 +348,6 @@ export function ProjectManager({
                           title="Allocate or manage team members on this project"
                         >
                           Team ({project.assignments?.length ?? project.team})
-                        </button>
-                        <button
-                          type="button"
-                          className="row-action"
-                          onClick={() => setPlanningId(project.id)}
-                          disabled={busy}
-                          title="Milestones and the tasks time can be booked to"
-                        >
-                          Plan ({(project.milestones?.length ?? 0) + (project.tasks?.length ?? 0)})
                         </button>
                         <button
                           type="button"
@@ -644,15 +615,6 @@ export function ProjectManager({
         </div>
       )}
 
-      {planning && (
-        <PlanDialog
-          project={planning}
-          busy={busy}
-          canManage={canManage}
-          onClose={() => setPlanningId(null)}
-          onCall={act}
-        />
-      )}
 
       {managingTeam && (
         <TeamDialog
@@ -725,214 +687,6 @@ export function ProjectManager({
           }}
         />
       )}
-    </div>
-  );
-}
-
-const MILESTONE_STATUSES = [
-  { key: "PENDING", label: "Pending" },
-  { key: "IN_PROGRESS", label: "In progress" },
-  { key: "COMPLETED", label: "Completed" },
-  { key: "MISSED", label: "Missed" },
-];
-
-/**
- * The delivery plan for one project: the milestones it bills against, and the
- * tasks people can book time to.
- *
- * Both existed in the schema and in the API and had no screen. Milestones were
- * invisible entirely; tasks could only ever be the single "General" row created
- * with the project, which meant the per-task billable flag the invoice builder
- * reads could never be varied.
- */
-function PlanDialog({ project, busy, canManage, onClose, onCall }: {
-  project: Row;
-  busy: boolean;
-  canManage: boolean;
-  onClose: () => void;
-  onCall: (url: string, init: RequestInit) => Promise<boolean>;
-}) {
-  const [milestone, setMilestone] = useState({ name: "", dueDate: "", amount: "" });
-  const [task, setTask] = useState({ name: "", billable: true });
-  const nonBillable = project.rawBilling === "NON_BILLABLE";
-
-  const milestones = project.milestones ?? [];
-  const tasks = project.tasks ?? [];
-
-  return (
-    <div className="dialog-backdrop" role="dialog" aria-modal="true" aria-labelledby="plan-title">
-      <div className="dialog dialog--wide">
-        <h3 id="plan-title" className="dialog-title">Plan — {project.name}</h3>
-        <p className="portal-note">{project.client} · {project.billing}</p>
-
-        {/* ── Milestones ───────────────────────────────────────────────── */}
-        <section className="panel-block">
-          <div className="panel-block__head">
-            <h4>Milestones</h4>
-            {project.rawBilling === "FIXED_PRICE" && (
-              <span className="pill pill--warn">Fixed price bills on these</span>
-            )}
-          </div>
-
-          {milestones.length === 0
-            ? <p className="portal-muted">No milestones yet.</p>
-            : <ul className="timeline timeline--tight">
-                {milestones.map((m) => <li key={m.id} className="timeline__item">
-                  <div className="timeline__head">
-                    <strong>{m.name}</strong>
-                    <StatusChip status={m.status} />
-                    {m.amount !== "—" && <span className="timeline__amount">{m.amount}</span>}
-                  </div>
-                  <p className="timeline__meta">Due {m.dueDate}</p>
-                  {canManage && <div className="row-actions flex flex-wrap gap-1">
-                    {MILESTONE_STATUSES.filter((o) => o.key !== m.status).map((o) => (
-                      <button
-                        key={o.key}
-                        type="button"
-                        className="row-action"
-                        disabled={busy}
-                        onClick={() => onCall(`/api/projects/${project.id}/milestones`, {
-                          method: "PATCH",
-                          body: JSON.stringify({ milestoneId: m.id, status: o.key }),
-                        })}
-                      >
-                        {o.label}
-                      </button>
-                    ))}
-                  </div>}
-                </li>)}
-              </ul>}
-
-          {canManage && <div className="contact-form panel-form mt-4">
-            <div className="grid gap-4 sm:grid-cols-3">
-              <div className="sm:col-span-3">
-                <label htmlFor="ms-name">Milestone <em>*</em></label>
-                <input id="ms-name" value={milestone.name} onChange={(e) => setMilestone({ ...milestone, name: e.target.value })} placeholder="Phase 1 sign-off" />
-              </div>
-              <div>
-                <label htmlFor="ms-due">Due date <em>*</em></label>
-                <input id="ms-due" type="date" value={milestone.dueDate} onChange={(e) => setMilestone({ ...milestone, dueDate: e.target.value })} />
-              </div>
-              <div>
-                <label htmlFor="ms-amt">Amount</label>
-                <input id="ms-amt" inputMode="decimal" value={milestone.amount} onChange={(e) => setMilestone({ ...milestone, amount: e.target.value })} placeholder="Optional" />
-              </div>
-            </div>
-            <div className="dialog-actions">
-              <button
-                type="button"
-                className="button button-primary"
-                disabled={busy || milestone.name.trim().length < 2 || !milestone.dueDate}
-                onClick={async () => {
-                  const ok = await onCall(`/api/projects/${project.id}/milestones`, { method: "POST", body: JSON.stringify(milestone) });
-                  if (ok) setMilestone({ name: "", dueDate: "", amount: "" });
-                }}
-              >
-                {busy ? "Adding…" : "Add milestone"}
-              </button>
-            </div>
-          </div>}
-        </section>
-
-        {/* ── Tasks ────────────────────────────────────────────────────── */}
-        <section className="panel-block">
-          <div className="panel-block__head">
-            <h4>Tasks time can be booked to</h4>
-          </div>
-
-          {tasks.length === 0
-            ? <p className="portal-muted">No tasks yet.</p>
-            : <ul className="timeline timeline--tight">
-                {tasks.map((t) => <li key={t.id} className="timeline__item">
-                  <div className="timeline__head">
-                    <strong>{t.name}</strong>
-                    <span className={`pill${t.billable ? " pill--warn" : ""}`}>{t.billable ? "Billable" : "Non-billable"}</span>
-                    {!t.isActive && <StatusChip status="ARCHIVED" />}
-                  </div>
-                  <p className="timeline__meta">
-                    {t.entries === 0 ? "No time booked" : `${t.entries} time ${t.entries === 1 ? "entry" : "entries"}`}
-                  </p>
-                  {canManage && <div className="row-actions flex flex-wrap gap-1">
-                    {!nonBillable && (
-                      <button
-                        type="button"
-                        className="row-action"
-                        disabled={busy}
-                        onClick={() => onCall(`/api/projects/${project.id}/tasks`, {
-                          method: "PATCH",
-                          body: JSON.stringify({ taskId: t.id, billable: !t.billable }),
-                        })}
-                      >
-                        Make {t.billable ? "non-billable" : "billable"}
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      className="row-action"
-                      disabled={busy}
-                      onClick={() => onCall(`/api/projects/${project.id}/tasks`, {
-                        method: "PATCH",
-                        body: JSON.stringify({ taskId: t.id, isActive: !t.isActive }),
-                      })}
-                    >
-                      {t.isActive ? "Retire" : "Reinstate"}
-                    </button>
-                    {t.entries === 0 && (
-                      <button
-                        type="button"
-                        className="row-action row-action--danger"
-                        disabled={busy}
-                        onClick={() => onCall(`/api/projects/${project.id}/tasks?taskId=${encodeURIComponent(t.id)}`, { method: "DELETE" })}
-                      >
-                        Delete
-                      </button>
-                    )}
-                  </div>}
-                </li>)}
-              </ul>}
-
-          {canManage && <div className="contact-form panel-form mt-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <label htmlFor="tk-name">Task <em>*</em></label>
-                <input id="tk-name" value={task.name} onChange={(e) => setTask({ ...task, name: e.target.value })} placeholder="Discovery, QA, Support…" />
-              </div>
-              <div>
-                <label className="inline-check mt-6">
-                  <input
-                    type="checkbox"
-                    checked={task.billable && !nonBillable}
-                    disabled={nonBillable}
-                    onChange={(e) => setTask({ ...task, billable: e.target.checked })}
-                  />
-                  <span>Billable</span>
-                </label>
-                {nonBillable && <p className="field-hint">This project is non-billable, so its tasks are too.</p>}
-              </div>
-            </div>
-            <div className="dialog-actions">
-              <button
-                type="button"
-                className="button button-primary"
-                disabled={busy || task.name.trim().length < 2}
-                onClick={async () => {
-                  const ok = await onCall(`/api/projects/${project.id}/tasks`, {
-                    method: "POST",
-                    body: JSON.stringify({ name: task.name, billable: task.billable && !nonBillable }),
-                  });
-                  if (ok) setTask({ name: "", billable: !nonBillable });
-                }}
-              >
-                {busy ? "Adding…" : "Add task"}
-              </button>
-            </div>
-          </div>}
-        </section>
-
-        <div className="dialog-actions">
-          <button type="button" className="button button-outline" onClick={onClose} disabled={busy}>Close</button>
-        </div>
-      </div>
     </div>
   );
 }
