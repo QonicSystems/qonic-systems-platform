@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { navigation, site } from "@/lib/site";
 import { BrandLockup } from "@/components/brand";
+import { ArrowRight, LockIcon } from "@/components/icons";
 
 export function SiteHeader() {
   const [open, setOpen] = useState(false);
@@ -31,10 +32,10 @@ export function SiteHeader() {
           {navigation.map(([label, href]) => <a key={href} href={href} className="nav-link">{label}</a>)}
         </div>
         <div className="flex items-center gap-3">
-          {/* Staff entry point. Deliberately a quiet text link, not a second
+          {/* Staff entry point. A quiet outlined pill, not a solid second
               button — it must not compete with the visitor-facing CTA. */}
-          <a href="/login" className="staff-link">Sign In</a>
-          <a href="/contact" className="button button-primary header-cta">Let&apos;s Talk</a>
+          <a href="/login" className="staff-link"><LockIcon />Sign In</a>
+          <a href="/contact" className="button button-primary header-cta">Let&apos;s Talk<ArrowRight /></a>
           <button type="button" className={`menu-toggle lg:hidden ${open ? "is-open" : ""}`} aria-expanded={open} aria-controls="mobile-menu" aria-label="Toggle navigation menu" onClick={() => setOpen((current) => !current)}>
             <span /><span /><span />
           </button>

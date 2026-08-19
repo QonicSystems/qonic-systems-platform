@@ -195,11 +195,14 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 .nav-link:hover::after { width: calc(100% - 1.7rem); }
 
 .staff-link {
-  display: inline-flex; align-items: center; border-radius: 0.55rem; padding: 0.5rem 0.8rem;
-  color: rgba(255, 255, 255, 0.85); font-size: 0.88rem; font-weight: 600;
-  text-decoration: none; transition: color 0.2s var(--ease), background 0.2s var(--ease);
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  border: 1px solid rgba(255, 255, 255, 0.22); border-radius: 999px; padding: 0.48rem 1rem 0.48rem 0.8rem;
+  color: rgba(255, 255, 255, 0.9); font-size: 0.86rem; font-weight: 700;
+  text-decoration: none; transition: border-color 0.2s var(--ease), background 0.2s var(--ease), color 0.2s var(--ease);
 }
-.staff-link:hover { background: rgba(255, 255, 255, 0.12); color: var(--accent); }
+.staff-link svg { width: 0.95rem; height: 0.95rem; opacity: 0.85; }
+.staff-link:hover { border-color: var(--accent); background: rgba(255, 215, 0, 0.1); color: var(--accent-soft); }
+.staff-link:hover svg { opacity: 1; }
 
 .menu-toggle {
   position: relative; display: grid; width: 2.5rem; height: 2.5rem;
@@ -306,7 +309,11 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 }
 
 .button-large { padding: 0.9rem 1.85rem; font-size: 1rem; }
-.header-cta { display: none; }
+
+/* Header CTA — rounded to match the pill-shaped Sign In button beside it,
+   so the pair reads as one considered cluster rather than a rectangle next
+   to a pill. Still the only solid-fill control in the header. */
+.header-cta { display: none; border-radius: 999px; padding: 0.62rem 1.3rem 0.62rem 1.15rem; }
 @media (min-width: 640px) { .header-cta { display: inline-flex; } }
 
 /* ── Hero ──────────────────────────────────────────────────────────────── */
