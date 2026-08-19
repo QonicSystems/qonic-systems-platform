@@ -1185,6 +1185,7 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 .status-chip--placed,
 .status-chip--paid,
 .status-chip--reimbursed,
+.status-chip--advance,
 .status-chip--filled {
   background: #f0fdf4; color: #166534; border-color: #bbf7d0;
 }
@@ -1192,6 +1193,9 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 .status-chip--suspended,
 .status-chip--revoked,
 .status-chip--rejected,
+.status-chip--reject,
+.status-chip--no-show,
+.status-chip--missed,
 .status-chip--overdue {
   background: #fef2f2; color: #991b1b; border-color: #fecaca;
 }
@@ -1209,6 +1213,7 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 .status-chip--planned,
 .status-chip--acknowledged,
 .status-chip--screened,
+.status-chip--in-progress,
 .status-chip--part-paid {
   background: #eff6ff; color: #1e40af; border-color: #bfdbfe;
 }
@@ -1869,3 +1874,105 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 .err-btn--solid:hover { background: #ffdd2e; }
 .err-btn--ghost { border-color: rgba(255, 255, 255, 0.25); color: #ffffff; }
 .err-btn--ghost:hover { border-color: var(--accent); color: var(--accent); background: rgba(255, 215, 0, 0.08); }
+
+
+/* --- Pipeline card: opens the full application record --- */
+.board-open {
+  display: block; width: 100%; margin-top: 0.35rem;
+  border: 1px dashed var(--line-strong); border-radius: 0.4rem;
+  background: transparent; padding: 0.3rem 0.45rem;
+  color: var(--faint); font-size: 0.74rem; font-weight: 600;
+  text-align: left; cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.board-open:hover { border-color: var(--ink); color: var(--ink); background: var(--canvas-sub); }
+.board-open:focus-visible { outline: none; border-color: var(--accent-dark); box-shadow: var(--ring-focus); }
+
+/* --- Panels inside a wide dialog (application record, project milestones) --- */
+.panel-block { margin-top: 1.6rem; border-top: 1px solid var(--line); padding-top: 1.1rem; }
+.panel-block__head {
+  display: flex; flex-wrap: wrap; align-items: center;
+  justify-content: space-between; gap: 0.6rem; margin-bottom: 0.85rem;
+}
+.panel-block__head h4 {
+  margin: 0; color: var(--ink); font-size: 0.78rem; font-weight: 800;
+  letter-spacing: 0.09em; text-transform: uppercase;
+}
+.panel-form {
+  border: 1px solid var(--line); border-radius: 0.6rem;
+  background: var(--canvas-sub); padding: 1rem; margin-bottom: 1rem;
+}
+.panel-form .dialog-actions { margin-top: 1rem; }
+
+/* --- Timeline: interviews, stage history, payments, credit notes --- */
+.timeline { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.7rem; }
+.timeline--tight { gap: 0.45rem; }
+.timeline__item {
+  border: 1px solid var(--line); border-radius: 0.55rem;
+  background: var(--canvas); padding: 0.75rem 0.9rem;
+}
+.timeline__head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.timeline__head strong { color: var(--ink); font-size: 0.9rem; font-weight: 700; }
+.timeline__score {
+  border: 1px solid var(--accent-soft); border-radius: 999px;
+  background: var(--accent-tint); padding: 0.05rem 0.45rem;
+  color: var(--accent-dark); font-size: 0.72rem; font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.timeline__meta { margin: 0.3rem 0 0; color: var(--faint); font-size: 0.78rem; }
+.timeline__note {
+  margin: 0.45rem 0 0; padding-left: 0.65rem;
+  border-left: 2px solid var(--line-strong);
+  color: var(--body); font-size: 0.84rem; white-space: pre-wrap;
+}
+.timeline__item .row-action { margin-top: 0.55rem; }
+.timeline__amount {
+  margin-left: auto; color: var(--ink); font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Invoice record: line editor, totals, small count pills --- */
+.pill {
+  border: 1px solid var(--line-strong); border-radius: 999px;
+  background: var(--canvas-sub); padding: 0.05rem 0.5rem;
+  color: var(--body); font-size: 0.7rem; font-weight: 600;
+}
+.pill--warn { border-color: var(--accent-soft); background: var(--accent-tint); color: var(--accent-dark); }
+
+.matrix td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.totals {
+  display: flex; flex-wrap: wrap; justify-content: flex-end;
+  gap: 0.35rem 1.5rem; margin: 0.9rem 0 0; padding-top: 0.75rem;
+  border-top: 1px solid var(--line);
+  color: var(--faint); font-size: 0.84rem;
+}
+.totals b { margin-left: 0.35rem; color: var(--ink); font-variant-numeric: tabular-nums; }
+.totals__sum { color: var(--faint); font-size: 0.84rem; }
+.totals__sum b { margin-left: 0.35rem; color: var(--ink); font-variant-numeric: tabular-nums; }
+
+.line-editor { display: grid; gap: 0.5rem; }
+.line-editor__row {
+  display: grid; gap: 0.5rem; align-items: end;
+  grid-template-columns: minmax(0, 1fr) 5.5rem 7rem auto;
+}
+.line-editor__desc { min-width: 0; }
+.line-editor__row input { width: 100%; }
+.line-editor__foot {
+  display: flex; flex-wrap: wrap; align-items: center;
+  justify-content: space-between; gap: 0.6rem; margin-top: 0.7rem;
+}
+@media (max-width: 620px) {
+  .line-editor__row { grid-template-columns: minmax(0, 1fr) 1fr; }
+  .line-editor__desc { grid-column: 1 / -1; }
+}
+
+/* --- Bank details on file --- */
+.bank-onfile {
+  display: flex; flex-wrap: wrap; align-items: center;
+  justify-content: space-between; gap: 0.85rem;
+  border: 1px solid var(--line); border-radius: 0.6rem;
+  background: var(--canvas-sub); padding: 0.9rem 1.05rem;
+}
+.bank-onfile strong { display: block; color: var(--ink); font-weight: 700; }
+.bank-onfile .portal-muted { display: block; margin-top: 0.15rem; font-size: 0.82rem; }

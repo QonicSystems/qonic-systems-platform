@@ -24,10 +24,14 @@ export default async function ProjectsPage() {
           select: {
             userId: true,
             allocationPercent: true,
-            user: { select: { id: true, name: true, email: true, jobTitle: true, role: { select: { label: true } } } },
+            user: { select: { id: true, name: true, email: true, jobTitle: true, role: { select: { key: true, label: true } } } },
           },
         },
         _count: { select: { assignments: true, timeEntries: true, invoices: true, expenses: true } },
+        // Both were written by the API and read by nothing — the project row now
+        // opens a plan panel that shows and edits them.
+        milestones: { orderBy: [{ dueDate: "asc" }, { sortOrder: "asc" }] },
+        tasks: { include: { _count: { select: { timeEntries: true } } }, orderBy: { sortOrder: "asc" } },
         timeEntries: { select: { minutes: true, billable: true } },
       },
       orderBy: [{ status: "asc" }, { name: "asc" }],
@@ -46,10 +50,13 @@ export default async function ProjectsPage() {
       select: { id: true, name: true, role: { select: { label: true } } },
       orderBy: { name: "asc" },
     }),
-    // All active staff members eligible for project allocation
+    // All active developer/staff members eligible for project allocation (strictly excludes Leadership)
     db.user.findMany({
-      where: { status: "ACTIVE" },
-      select: { id: true, name: true, email: true, jobTitle: true, role: { select: { label: true } } },
+      where: {
+        status: "ACTIVE",
+        role: { key: { notIn: [ROLE.CEO, ROLE.CO_FOUNDER] } },
+      },
+      select: { id: true, name: true, email: true, jobTitle: true, role: { select: { key: true, label: true } } },
       orderBy: [{ name: "asc" }],
     }),
   ]);
@@ -70,6 +77,9 @@ export default async function ProjectsPage() {
       <ProjectManager
         projects={projects.map((project) => {
           const minutes = project.timeEntries.reduce((sum, entry) => sum + entry.minutes, 0);
+          const validAssignments = project.assignments.filter(
+            (a) => !["ceo", "co_founder"].includes(a.user.role.key)
+          );
           return {
             id: project.id,
             code: project.code,
@@ -88,8 +98,8 @@ export default async function ProjectsPage() {
             managerId: project.managerId ?? "",
             manager: project.manager?.name ?? "Leadership",
             notes: project.notes ?? "",
-            team: project._count.assignments,
-            assignments: project.assignments.map((a) => ({
+            team: validAssignments.length,
+            assignments: validAssignments.map((a) => ({
               userId: a.userId,
               allocationPercent: a.allocationPercent,
               name: a.user.name,
@@ -100,6 +110,20 @@ export default async function ProjectsPage() {
             hours: (minutes / 60).toFixed(1),
             negotiationCompleted: project.negotiationCompleted,
             completedReason: project.completedReason ?? "",
+            milestones: project.milestones.map((m) => ({
+              id: m.id,
+              name: m.name,
+              dueDate: m.dueDate.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }),
+              status: m.status,
+              amount: m.amount === null ? "—" : money(m.amount, project.budgetCurrency),
+            })),
+            tasks: project.tasks.map((t) => ({
+              id: t.id,
+              name: t.name,
+              billable: t.billable,
+              isActive: t.isActive,
+              entries: t._count.timeEntries,
+            })),
             timeEntryCount: project._count.timeEntries,
             invoiceCount: project._count.invoices,
             expenseCount: project._count.expenses,

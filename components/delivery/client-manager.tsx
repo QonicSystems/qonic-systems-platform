@@ -8,6 +8,15 @@ import { StatusChip } from "@/components/status-chip";
 import { TableToolbar } from "@/components/portal/table-toolbar";
 import { useFilter } from "@/lib/ui/filter";
 
+export type Contact = {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  title: string;
+  isPrimary: boolean;
+};
+
 type Row = {
   id: string;
   name: string;
@@ -21,6 +30,7 @@ type Row = {
   projectCount: number;
   jobCount: number;
   invoiceCount: number;
+  contacts: ReadonlyArray<Contact>;
 };
 type Errors = Partial<Record<"name" | "code" | "status" | "website" | "ownerId", string>>;
 type Form = { name: string; code: string; status: string; industry: string; website: string; ownerId: string; notes: string };
@@ -50,6 +60,7 @@ export function ClientManager({ clients, owners, canManage }: {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Row | null>(null);
   const [deleting, setDeleting] = useState<Row | null>(null);
+  const [contactsId, setContactsId] = useState<string | null>(null);
   const [form, setForm] = useState<Form>(blank);
   const [errors, setErrors] = useState<Errors>({});
   const [busy, setBusy] = useState(false);
@@ -126,6 +137,9 @@ export function ClientManager({ clients, owners, canManage }: {
     setOpen(true);
   };
 
+  // Read through the live prop so the panel refreshes after router.refresh().
+  const contactsFor = clients.find((c) => c.id === contactsId) ?? null;
+
   const closeDialog = () => { setOpen(false); setEditing(null); };
 
   return <div>
@@ -184,6 +198,15 @@ export function ClientManager({ clients, owners, canManage }: {
                 <button
                   type="button"
                   className="row-action"
+                  onClick={() => { setContactsId(client.id); setNotice(null); }}
+                  disabled={busy}
+                  title="The people to talk to at this client"
+                >
+                  Contacts ({client.contacts.length})
+                </button>
+                <button
+                  type="button"
+                  className="row-action"
                   onClick={() => toggleArchive(client)}
                   disabled={busy}
                   title={client.status === CLIENT_ARCHIVED_STATUS
@@ -206,6 +229,13 @@ export function ClientManager({ clients, owners, canManage }: {
         </tbody>
       </table>
     </div>}
+
+    {contactsFor && <ContactsDialog
+      client={contactsFor}
+      busy={busy}
+      onClose={() => setContactsId(null)}
+      onCall={act}
+    />}
 
     {deleting && <DeleteDialog client={deleting} busy={busy} onCancel={() => setDeleting(null)} onConfirm={() => remove(deleting)} />}
 
@@ -261,6 +291,128 @@ export function ClientManager({ clients, owners, canManage }: {
         </form>
       </div>
     </div>}
+  </div>;
+}
+
+/**
+ * The people to talk to at a client.
+ *
+ * ClientContact has been in the schema from the start and the only code that
+ * touched it was the delete cascade — you could record a company and not a
+ * single human being at it. Exactly one contact is primary; promoting one
+ * demotes the rest, which the API enforces.
+ */
+function ContactsDialog({ client, busy, onClose, onCall }: {
+  client: Row;
+  busy: boolean;
+  onClose: () => void;
+  onCall: (url: string, init: RequestInit) => Promise<boolean>;
+}) {
+  const blank = { name: "", email: "", phone: "", title: "", isPrimary: false };
+  const [form, setForm] = useState(blank);
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  const startEdit = (contact: Contact) => {
+    setEditingId(contact.id);
+    setForm({ name: contact.name, email: contact.email, phone: contact.phone, title: contact.title, isPrimary: contact.isPrimary });
+  };
+  const reset = () => { setEditingId(null); setForm(blank); };
+
+  return <div className="dialog-backdrop" role="dialog" aria-modal="true" aria-labelledby="contacts-title">
+    <div className="dialog dialog--wide">
+      <h3 id="contacts-title" className="dialog-title">Contacts — {client.name}</h3>
+
+      <section className="panel-block">
+        <div className="panel-block__head"><h4>{client.contacts.length} on record</h4></div>
+        {client.contacts.length === 0
+          ? <p className="portal-muted">Nobody recorded yet.</p>
+          : <ul className="timeline timeline--tight">
+              {client.contacts.map((contact) => <li key={contact.id} className="timeline__item">
+                <div className="timeline__head">
+                  <strong>{contact.name}</strong>
+                  {contact.isPrimary && <span className="pill pill--warn">Primary</span>}
+                </div>
+                <p className="timeline__meta">
+                  {[contact.title, contact.email, contact.phone].filter(Boolean).join(" · ") || "No details"}
+                </p>
+                <div className="row-actions flex flex-wrap gap-1">
+                  <button type="button" className="row-action" disabled={busy} onClick={() => startEdit(contact)}>Edit</button>
+                  {!contact.isPrimary && (
+                    <button
+                      type="button"
+                      className="row-action"
+                      disabled={busy}
+                      onClick={() => onCall(`/api/clients/${client.id}/contacts`, {
+                        method: "PATCH",
+                        body: JSON.stringify({ contactId: contact.id, ...contact, isPrimary: true }),
+                      })}
+                    >
+                      Make primary
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="row-action row-action--danger"
+                    disabled={busy}
+                    onClick={() => onCall(`/api/clients/${client.id}/contacts?contactId=${encodeURIComponent(contact.id)}`, { method: "DELETE" })}
+                  >
+                    Remove
+                  </button>
+                </div>
+              </li>)}
+            </ul>}
+      </section>
+
+      <section className="panel-block">
+        <div className="panel-block__head"><h4>{editingId ? "Edit contact" : "Add a contact"}</h4></div>
+        <div className="contact-form panel-form">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label htmlFor="ct-name">Full name <em>*</em></label>
+              <input id="ct-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+            </div>
+            <div>
+              <label htmlFor="ct-title">Job title</label>
+              <input id="ct-title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Head of Engineering" />
+            </div>
+            <div>
+              <label htmlFor="ct-email">Email</label>
+              <input id="ct-email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+            </div>
+            <div>
+              <label htmlFor="ct-phone">Phone</label>
+              <input id="ct-phone" type="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="inline-check">
+                <input type="checkbox" checked={form.isPrimary} onChange={(e) => setForm({ ...form, isPrimary: e.target.checked })} />
+                <span>Primary contact for this client</span>
+              </label>
+            </div>
+          </div>
+          <div className="dialog-actions">
+            {editingId && <button type="button" className="button button-outline" onClick={reset} disabled={busy}>Cancel edit</button>}
+            <button
+              type="button"
+              className="button button-primary"
+              disabled={busy || form.name.trim().length < 2}
+              onClick={async () => {
+                const ok = editingId
+                  ? await onCall(`/api/clients/${client.id}/contacts`, { method: "PATCH", body: JSON.stringify({ contactId: editingId, ...form }) })
+                  : await onCall(`/api/clients/${client.id}/contacts`, { method: "POST", body: JSON.stringify(form) });
+                if (ok) reset();
+              }}
+            >
+              {busy ? "Saving…" : editingId ? "Save contact" : "Add contact"}
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <div className="dialog-actions">
+        <button type="button" className="button button-outline" onClick={onClose} disabled={busy}>Close</button>
+      </div>
+    </div>
   </div>;
 }
 

@@ -12,12 +12,20 @@ export default async function AdminPeoplePage() {
   // Sync any non-global candidates into Users table
   await syncCandidateAndUsers();
 
-  const [users, roles] = await Promise.all([
-    db.user.findMany({ include: { role: true }, orderBy: [{ role: { rank: "asc" } }, { name: "asc" }] }),
+  const [users, roles, permissions] = await Promise.all([
+    // Overrides are per-person exceptions to the role matrix. The guard has
+    // always honoured them; nothing could create one until now.
+    db.user.findMany({
+      include: { role: true, overrides: { include: { permission: true } } },
+      orderBy: [{ role: { rank: "asc" } }, { name: "asc" }],
+    }),
     db.role.findMany({ orderBy: { rank: "asc" } }),
+    db.permission.findMany({ orderBy: [{ group: "asc" }, { sortOrder: "asc" }] }),
   ]);
 
   const mayEdit = can(context, "user.manage");
+  const mayOverride = can(context, "rbac.manage");
+  const today = new Date().toISOString().slice(0, 10);
 
   // Authority is resolved on the SERVER for each row. The table is a dumb
   // renderer — every action it offers is independently re-checked by its API.
@@ -44,6 +52,15 @@ export default async function AdminPeoplePage() {
     // The export route allows viewing your own record, hence no self exclusion.
     canExport: can(context, "user.view") && (user.id === context.user.id || canAdminister(context, { id: user.id, role: user.role }).ok),
     isSelf: user.id === context.user.id,
+    canOverride: mayOverride && user.id !== context.user.id && canAdminister(context, { id: user.id, role: user.role }).ok,
+    overrides: user.overrides.map((o) => ({
+      key: o.permission.key,
+      label: o.permission.label,
+      effect: o.effect,
+      reason: o.reason ?? "",
+      expiresAt: o.expiresAt ? o.expiresAt.toISOString().slice(0, 10) : "",
+      expired: o.expiresAt ? o.expiresAt.getTime() < Date.now() : false,
+    })),
   }));
 
   const roleOptions = roles.map((role) => ({
@@ -65,6 +82,8 @@ export default async function AdminPeoplePage() {
       // accounts and edit their details". Whether any given role can actually
       // be assigned is decided per role by canAssignRole below.
       canCreate={mayEdit && roleOptions.some((role) => role.assignable)}
+      permissions={permissions.map((p) => ({ key: p.key, label: p.label, group: p.group }))}
+      today={today}
     />
   </section>;
 }

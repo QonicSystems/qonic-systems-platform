@@ -85,19 +85,39 @@ export function TimesheetGrid({ timesheetId, weekDates, projects, initialRows, e
   const autofillStandardWeek = () => {
     if (projects.length === 0) return;
     const project = projects[0];
-    const standardDurations = weekDates.map((iso) => (isWeekend(iso) ? "" : "8.0"));
-    
+    const todayIso = new Date().toISOString().slice(0, 10);
+
+    // Only fill elapsed weekdays up to today (inclusive) for the active week, never future dates or future weeks
+    const standardDurations = weekDates.map((iso) => {
+      if (isWeekend(iso)) return "";
+      if (iso > todayIso) return ""; // Future date - do not fill
+      return "8.0";
+    });
+
+    const filledDays = standardDurations.filter((d) => d === "8.0").length;
+    if (filledDays === 0) {
+      setNotice({ tone: "error", text: "No elapsed weekdays in this week up to today to auto-fill." });
+      return;
+    }
+
+    const noteText = `Standard work (${filledDays * 8}h logged to date)`;
+
     if (rows.length === 0) {
       setRows([{
         key: `auto-${Date.now()}`,
         projectId: project.id,
         taskId: project.tasks[0]?.id ?? null,
         durations: standardDurations,
-        note: "Standard work week (40h)",
+        note: noteText,
       }]);
     } else {
-      setRows((current) => current.map((row, idx) => idx === 0 ? { ...row, durations: standardDurations } : row));
+      setRows((current) =>
+        current.map((row, idx) =>
+          idx === 0 ? { ...row, durations: standardDurations, note: row.note || noteText } : row
+        )
+      );
     }
+    setNotice({ tone: "success", text: `Auto-filled 8h/day for ${filledDays} elapsed weekday${filledDays === 1 ? "" : "s"} up to today.` });
   };
 
   return <div>
@@ -121,9 +141,9 @@ export function TimesheetGrid({ timesheetId, weekDates, projects, initialRows, e
               className="button button-outline text-xs py-1 px-2.5 text-amber-400 border-amber-500/30 hover:border-amber-400"
               onClick={autofillStandardWeek}
               disabled={busy}
-              title="Fills Mon–Fri with 8h/day (40 hours total)"
+              title="Fills elapsed weekdays up to today with 8h/day"
             >
-              ⚡ Autofill Standard Week (40h)
+              ⚡ Autofill To Date (8h/day)
             </button>
             {rows.length > 0 && (
               <button

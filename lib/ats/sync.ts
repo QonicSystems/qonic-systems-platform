@@ -6,8 +6,10 @@ import { db } from "@/lib/db";
  */
 export async function syncCandidateAndUsers(): Promise<void> {
   try {
-    const [employeeRole, nonGlobalCandidates, staffUsers] = await Promise.all([
-      db.role.findFirst({ where: { key: "employee" } }),
+    const employeeRole = await db.role.findFirst({ where: { key: "employee" } });
+    if (!employeeRole) return;
+
+    const [nonGlobalCandidates, staffUsers] = await Promise.all([
       db.candidate.findMany({
         where: {
           source: { not: "Global Visa Resource" },
@@ -21,14 +23,18 @@ export async function syncCandidateAndUsers(): Promise<void> {
       }),
     ]);
 
-    if (!employeeRole) return;
+    const userByEmail = new Map(staffUsers.map((u) => [u.email.toLowerCase().trim(), u]));
+    const candidateByEmail = new Map(nonGlobalCandidates.map((c) => [c.email.toLowerCase().trim(), c]));
 
-    // 1. Sync Candidate Pool -> Admin People (User)
-    for (const c of nonGlobalCandidates) {
-      const email = c.email.toLowerCase().trim();
-      const existingUser = staffUsers.find((u) => u.email.toLowerCase().trim() === email);
-      if (!existingUser) {
-        if (c.status === "ARCHIVED") continue; // Never resurrect or auto-create archived records
+    const allEmails = new Set([...userByEmail.keys(), ...candidateByEmail.keys()]);
+
+    for (const email of allEmails) {
+      const c = candidateByEmail.get(email);
+      const u = userByEmail.get(email);
+
+      if (c && !u) {
+        // Candidate exists without User: create User if active
+        if (c.status === "ARCHIVED") continue;
         await db.user.create({
           data: {
             email,
@@ -42,34 +48,9 @@ export async function syncCandidateAndUsers(): Promise<void> {
             passwordHash: "INVITED_CANDIDATE_NO_LOGIN_YET",
           },
         }).catch(() => {});
-      } else {
-        // Sync attributes if changed
-        if (
-          existingUser.name !== c.name ||
-          existingUser.techStack !== (c.techStack || c.skills) ||
-          existingUser.phone !== (c.phone || null) ||
-          existingUser.status !== c.status
-        ) {
-          await db.user.update({
-            where: { id: existingUser.id },
-            data: {
-              name: c.name,
-              phone: c.phone || null,
-              jobTitle: c.headline || existingUser.jobTitle || "Employee (Dev)",
-              techStack: c.techStack || c.skills || existingUser.techStack,
-              status: c.status === "ACTIVE" ? "ACTIVE" : "ARCHIVED",
-            },
-          }).catch(() => {});
-        }
-      }
-    }
-
-    // 2. Sync Admin People (User) -> Candidate Pool (Candidate)
-    for (const u of staffUsers) {
-      const email = u.email.toLowerCase().trim();
-      const existingCandidate = nonGlobalCandidates.find((c) => c.email.toLowerCase().trim() === email);
-      if (!existingCandidate) {
-        if (u.status === "ARCHIVED") continue; // Never resurrect or auto-create archived records
+      } else if (u && !c) {
+        // User exists without Candidate: create Candidate if active
+        if (u.status === "ARCHIVED") continue;
         await db.candidate.create({
           data: {
             email,
@@ -84,30 +65,51 @@ export async function syncCandidateAndUsers(): Promise<void> {
             consentAt: new Date(),
           },
         }).catch(() => {});
-      } else {
-        // Sync attributes if changed
-        if (
-          existingCandidate.name !== u.name ||
-          existingCandidate.techStack !== u.techStack ||
-          existingCandidate.phone !== (u.phone || null) ||
-          existingCandidate.status !== u.status
-        ) {
-          await db.candidate.update({
-            where: { id: existingCandidate.id },
-            data: {
-              name: u.name,
-              phone: u.phone || null,
-              headline: u.jobTitle || existingCandidate.headline || "Employee (Dev)",
-              techStack: u.techStack || existingCandidate.techStack,
-              skills: u.techStack || existingCandidate.skills,
-              status: u.status === "ACTIVE" ? "ACTIVE" : "ARCHIVED",
-            },
-          }).catch(() => {});
+      } else if (c && u) {
+        // Both exist: reconcile based on which record was updated more recently
+        if (c.updatedAt >= u.updatedAt) {
+          // Candidate is newer -> update User
+          if (
+            u.name !== c.name ||
+            u.phone !== (c.phone || null) ||
+            u.techStack !== (c.techStack || c.skills) ||
+            u.status !== c.status
+          ) {
+            await db.user.update({
+              where: { id: u.id },
+              data: {
+                name: c.name,
+                phone: c.phone || null,
+                jobTitle: c.headline || u.jobTitle || "Employee (Dev)",
+                techStack: c.techStack || c.skills || u.techStack,
+                status: c.status === "ACTIVE" ? "ACTIVE" : "ARCHIVED",
+              },
+            }).catch(() => {});
+          }
+        } else {
+          // User is newer -> update Candidate
+          if (
+            c.name !== u.name ||
+            c.phone !== (u.phone || null) ||
+            c.techStack !== u.techStack ||
+            c.status !== u.status
+          ) {
+            await db.candidate.update({
+              where: { id: c.id },
+              data: {
+                name: u.name,
+                phone: u.phone || null,
+                headline: u.jobTitle || c.headline || "Employee (Dev)",
+                techStack: u.techStack || c.techStack,
+                skills: u.techStack || c.skills,
+                status: u.status === "ACTIVE" ? "ACTIVE" : "ARCHIVED",
+              },
+            }).catch(() => {});
+          }
         }
       }
     }
   } catch (err) {
-    // Non-blocking sync log
     console.error("Auto-sync error between Candidates and Users:", err);
   }
 }

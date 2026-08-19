@@ -3,17 +3,22 @@ import { clientIp, recordAudit } from "@/lib/audit";
 import { guardRoute } from "@/lib/auth/guard";
 import { toMinor } from "@/lib/money";
 import { db } from "@/lib/db";
+import { nextReferenceFrom, referenceWhere } from "@/lib/reference";
 
 export const runtime = "nodejs";
 
 const STATUSES = ["DRAFT", "OPEN", "ON_HOLD", "FILLED", "CLOSED"];
 
+/** Sequential per year, e.g. QNC-JOB-2026-0001 (prefix from lib/reference). */
 async function nextReference(): Promise<string> {
   const year = new Date().getFullYear();
-  const prefix = `AVX-JOB-${year}-`;
-  const latest = await db.job.findFirst({ where: { reference: { startsWith: prefix } }, orderBy: { reference: "desc" } });
-  const sequence = latest ? Number(latest.reference.slice(prefix.length)) + 1 : 1;
-  return `${prefix}${String(sequence).padStart(4, "0")}`;
+  // Legacy-prefixed records are matched too, so the rename from AVX to
+  // QNC continues the year's sequence instead of restarting it at 0001.
+  const existing = await db.job.findMany({
+    where: { OR: referenceWhere("reference", "JOB", year) },
+    select: { reference: true },
+  });
+  return nextReferenceFrom(existing.map((row) => row.reference), "JOB", year);
 }
 
 export async function POST(request: Request) {

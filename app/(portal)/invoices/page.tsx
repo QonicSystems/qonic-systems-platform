@@ -10,7 +10,18 @@ export default async function InvoicesPage() {
   const context = await requirePermission("invoice.view");
 
   const [invoices, clients, projects, candidates] = await Promise.all([
-    db.invoice.findMany({ include: { client: { select: { name: true } }, project: { select: { name: true } } }, orderBy: { issueDate: "desc" } }),
+    // Lines, payments and credit notes are all loaded: each was written by the
+    // app and read back nowhere, so an invoice could not be inspected at all.
+    db.invoice.findMany({
+      include: {
+        client: { select: { name: true } },
+        project: { select: { name: true } },
+        lines: { orderBy: { sortOrder: "asc" } },
+        payments: { orderBy: { paidOn: "desc" } },
+        creditNotes: { orderBy: { issuedAt: "desc" } },
+      },
+      orderBy: { issueDate: "desc" },
+    }),
     db.client.findMany({ where: { status: { in: ["ACTIVE", "PROSPECT"] } }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
     db.project.findMany({ where: { status: { in: ["ACTIVE", "COMPLETED"] } }, select: { id: true, name: true, clientId: true }, orderBy: { name: "asc" } }),
     // Archived candidates must not accrue commission. `source` is canonicalised
@@ -18,6 +29,14 @@ export default async function InvoicesPage() {
     // stored as GLOBAL_VISA_RESOURCE.
     db.candidate.findMany({ where: { source: "Global Visa Resource", status: "ACTIVE" }, take: 10 }),
   ]);
+
+  // CreditNote.issuedById has no relation, so issuer names are resolved in one
+  // pass rather than a query per note.
+  const issuerIds = [...new Set(invoices.flatMap((i) => i.creditNotes.map((n) => n.issuedById).filter((v): v is string => Boolean(v))))];
+  const issuers = issuerIds.length
+    ? await db.user.findMany({ where: { id: { in: issuerIds } }, select: { id: true, name: true } })
+    : [];
+  const issuerName = new Map(issuers.map((u) => [u.id, u.name]));
 
   // Derive commission items from invoices and global candidates
   const commissionItems: CommissionItem[] = [];
@@ -74,6 +93,37 @@ export default async function InvoicesPage() {
         total: formatMoney(invoice.total, invoice.currency),
         outstanding: formatMoney(invoice.total - invoice.paidAmount, invoice.currency),
         ageing: ["PAID", "VOID", "DRAFT"].includes(invoice.status) ? "—" : ageingBucket(invoice.dueDate),
+        subtotal: formatMoney(invoice.subtotal, invoice.currency),
+        taxPercent: invoice.taxPercent,
+        taxAmount: formatMoney(invoice.taxAmount, invoice.currency),
+        notes: invoice.notes ?? "",
+        lines: invoice.lines.map((line) => ({
+          id: line.id,
+          description: line.description,
+          // Quantity is stored in hundredths so part-hours survive rounding.
+          quantity: (line.quantity / 100).toLocaleString("en-IN", { maximumFractionDigits: 2 }),
+          unitRate: formatMoney(line.unitRate, invoice.currency),
+          amount: formatMoney(line.amount, invoice.currency),
+        })),
+        payments: invoice.payments.map((p) => ({
+          id: p.id,
+          amount: formatMoney(p.amount, invoice.currency),
+          paidOn: p.paidOn.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }),
+          method: p.method ?? "",
+          reference: p.reference ?? "",
+        })),
+        creditNotes: invoice.creditNotes.map((n) => ({
+          id: n.id,
+          number: n.number,
+          amount: formatMoney(n.amount, invoice.currency),
+          reason: n.reason,
+          issuedOn: n.issuedAt.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }),
+          issuedBy: n.issuedById ? issuerName.get(n.issuedById) ?? "—" : "—",
+        })),
+        creditable: formatMoney(
+          Math.max(0, invoice.total - invoice.creditNotes.reduce((sum, n) => sum + n.amount, 0)),
+          invoice.currency
+        ),
       }))}
       clients={clients}
       projects={projects}
