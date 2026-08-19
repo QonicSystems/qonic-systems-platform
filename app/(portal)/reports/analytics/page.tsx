@@ -1,3 +1,4 @@
+import { BarChart } from "@/components/portal/bar-chart";
 import { requirePermission } from "@/lib/auth/guard";
 import { STAGE_LABELS } from "@/lib/ats/pipeline";
 import { formatMoney } from "@/lib/money";
@@ -66,6 +67,17 @@ export default async function AnalyticsPage() {
     <section className="portal-section">
       <h2 className="portal-section-title">Recruitment funnel</h2>
       <p className="portal-note">How many applications ever reached each stage, and the conversion from the one before.</p>
+      <div className="chart-panel">
+        <BarChart
+          ariaLabel="Applications reaching each recruitment stage"
+          items={FUNNEL.map((stage) => ({
+            key: stage,
+            label: STAGE_LABELS[stage],
+            value: reached.get(stage) ?? 0,
+            formattedValue: String(reached.get(stage) ?? 0),
+          }))}
+        />
+      </div>
       <div className="matrix-scroll">
         <table className="matrix matrix--people">
           <thead><tr><th scope="col">Stage</th><th scope="col">Reached</th><th scope="col">From previous</th><th scope="col"></th></tr></thead>
@@ -93,6 +105,15 @@ export default async function AnalyticsPage() {
 
     <section className="portal-section">
       <h2 className="portal-section-title">Revenue mix</h2>
+      {(billed > 0 || feeRevenue > 0) && <div className="chart-panel">
+        <BarChart
+          ariaLabel="Revenue by source"
+          items={[
+            { key: "services", label: "Professional services", value: billed, formattedValue: formatMoney(billed) },
+            { key: "fees", label: "Placement fees", value: feeRevenue, formattedValue: formatMoney(feeRevenue) },
+          ]}
+        />
+      </div>}
       <div className="matrix-scroll">
         <table className="matrix matrix--people">
           <tbody>
