@@ -32,6 +32,7 @@ type Row = {
   rawSsn?: string;
   address?: string;
   benchStatus: string;
+  projectAllocations?: ReadonlyArray<{ projectName: string; projectCode: string; allocationPercent: number }>;
   source: string;
   resourceType: ResourceType;
   noticePeriod?: string;
@@ -482,9 +483,24 @@ export function CandidateManager({
                               </div>
                             </td>
                             <td>
-                              <span className="inline-flex items-center px-2.5 py-1 rounded text-xs font-semibold border bg-blue-50 text-blue-800 border-blue-200">
-                                {c.benchStatus && c.benchStatus !== "Direct" ? c.benchStatus : "Available / Ready to Deploy"}
-                              </span>
+                              {c.projectAllocations && c.projectAllocations.length > 0 ? (
+                                <div className="flex flex-col gap-1">
+                                  {c.projectAllocations.map((p) => (
+                                    <span
+                                      key={p.projectName}
+                                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-300 shadow-xs"
+                                    >
+                                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                      <span>Tagged: {p.projectName} ({p.allocationPercent}%)</span>
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-semibold border bg-amber-50 text-amber-900 border-amber-200">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                                  <span>Available / Ready to Deploy</span>
+                                </span>
+                              )}
                             </td>
                             <td>{c.applications.length === 0 ? "—" : c.applications.join(", ")}</td>
                             <td>
@@ -675,9 +691,24 @@ export function CandidateManager({
                               </div>
                             </td>
                             <td>
-                              <span className="inline-flex items-center px-2.5 py-1 rounded text-xs font-semibold border bg-emerald-50 text-emerald-800 border-emerald-200">
-                                {c.benchStatus || "Available / On Bench"}
-                              </span>
+                              {c.projectAllocations && c.projectAllocations.length > 0 ? (
+                                <div className="flex flex-col gap-1">
+                                  {c.projectAllocations.map((p) => (
+                                    <span
+                                      key={p.projectName}
+                                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-300 shadow-xs"
+                                    >
+                                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                      <span>Tagged: {p.projectName} ({p.allocationPercent}%)</span>
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-semibold border bg-emerald-50 text-emerald-800 border-emerald-200">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                  <span>{c.benchStatus || "Available / On Bench"}</span>
+                                </span>
+                              )}
                             </td>
                             <td>{c.applications.length === 0 ? "—" : c.applications.join(", ")}</td>
                             <td>

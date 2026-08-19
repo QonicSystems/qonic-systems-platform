@@ -1,3 +1,4 @@
+import { BarChart, SplitBarChart } from "@/components/portal/bar-chart";
 import { requirePermission } from "@/lib/auth/guard";
 import { STANDARD_WEEK_MINUTES, formatDuration, utilisation, weekStartOf } from "@/lib/delivery/timesheet";
 import { db } from "@/lib/db";
@@ -15,11 +16,20 @@ export default async function ReportsPage() {
   from.setUTCDate(from.getUTCDate() - 7 * (WEEKS - 1));
 
   const [people, entries, projects] = await Promise.all([
-    // Exclude executive leadership (Founder and Co-Founder) from billable delivery utilisation
+    // Anyone doing delivery work, by evidence rather than by job title.
+    //
+    // This used to exclude the CEO and Co-Founder outright, on the assumption
+    // that leadership does not bill. In a firm where the founders deliver, that
+    // hid the only recorded time in the system and the report read as empty and
+    // broken. Someone with neither an assignment nor booked time is still left
+    // out, so pure-admin accounts do not pad the list with permanent zeroes.
     db.user.findMany({
       where: {
         status: "ACTIVE",
-        role: { key: { notIn: ["ceo", "co_founder"] } },
+        OR: [
+          { projectAssignments: { some: {} } },
+          { timesheets: { some: { entries: { some: {} } } } },
+        ],
       },
       select: { id: true, name: true, role: { select: { label: true } } },
       orderBy: { name: "asc" },
@@ -78,6 +88,20 @@ export default async function ReportsPage() {
     <section className="portal-section">
       <h2 className="portal-section-title">By person</h2>
       <p className="portal-note">Utilisation is billable time against a {STANDARD_WEEK_MINUTES / 60}-hour week. Someone on the bench shows 0%.</p>
+      {rows.length > 0 && <div className="chart-panel">
+        <SplitBarChart
+          primaryLabel="Billable"
+          contextLabel="Non-billable"
+          rows={[...rows].sort((a, b) => b.billableMinutes + b.nonBillableMinutes - (a.billableMinutes + a.nonBillableMinutes)).map((row) => ({
+            key: row.id,
+            label: row.name,
+            primary: row.billableMinutes,
+            context: row.nonBillableMinutes,
+            primaryFormatted: formatDuration(row.billableMinutes),
+            contextFormatted: formatDuration(row.nonBillableMinutes),
+          }))}
+        />
+      </div>}
       <div className="matrix-scroll">
         <table className="matrix matrix--people">
           <thead><tr><th scope="col">Person</th><th scope="col">Role</th><th scope="col">Billable</th><th scope="col">Non-billable</th><th scope="col">Billable share</th><th scope="col">Utilisation</th></tr></thead>
@@ -102,21 +126,37 @@ export default async function ReportsPage() {
 
     <section className="portal-section">
       <h2 className="portal-section-title">By project</h2>
-      {byProject.size === 0 ? <p className="portal-note">No time recorded in this window yet.</p> : <div className="matrix-scroll">
-        <table className="matrix matrix--people">
-          <thead><tr><th scope="col">Project</th><th scope="col">Client</th><th scope="col">Time</th></tr></thead>
-          <tbody>
-            {projects
+      {byProject.size === 0 ? <p className="portal-note">No time recorded in this window yet.</p> : <>
+        <div className="chart-panel">
+          <BarChart
+            ariaLabel="Time recorded by project"
+            items={[...projects]
               .filter((project) => byProject.has(project.id))
               .sort((a, b) => (byProject.get(b.id) ?? 0) - (byProject.get(a.id) ?? 0))
-              .map((project) => <tr key={project.id}>
-                <th scope="row"><strong>{project.name}</strong></th>
-                <td>{project.client.name}</td>
-                <td>{formatDuration(byProject.get(project.id) ?? 0)}</td>
-              </tr>)}
-          </tbody>
-        </table>
-      </div>}
+              .map((project) => ({
+                key: project.id,
+                label: `${project.client.name} — ${project.name}`,
+                value: byProject.get(project.id) ?? 0,
+                formattedValue: formatDuration(byProject.get(project.id) ?? 0),
+              }))}
+          />
+        </div>
+        <div className="matrix-scroll">
+          <table className="matrix matrix--people">
+            <thead><tr><th scope="col">Project</th><th scope="col">Client</th><th scope="col">Time</th></tr></thead>
+            <tbody>
+              {projects
+                .filter((project) => byProject.has(project.id))
+                .sort((a, b) => (byProject.get(b.id) ?? 0) - (byProject.get(a.id) ?? 0))
+                .map((project) => <tr key={project.id}>
+                  <th scope="row"><strong>{project.name}</strong></th>
+                  <td>{project.client.name}</td>
+                  <td>{formatDuration(byProject.get(project.id) ?? 0)}</td>
+                </tr>)}
+            </tbody>
+          </table>
+        </div>
+      </>}
     </section>
   </div>;
 }

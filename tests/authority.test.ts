@@ -6,7 +6,7 @@ import type { AuthContext } from "@/lib/auth/guard";
 const role = (key: string, rank: number, isSuperAdmin = false) => ({ id: `role-${key}`, key, label: key.toUpperCase(), rank, isSuperAdmin });
 
 const actor = (key: string, rank: number, isSuperAdmin = false, id = `user-${key}`): AuthContext => ({
-  user: { id, name: key, email: `${key}@x.com`, phone: null, jobTitle: null, photoUrl: null, mustChangePassword: false },
+  user: { id, name: key, email: `${key}@x.com`, phone: null, jobTitle: null, photoUrl: null, mustChangePassword: false, unreadNotificationCount: 0 },
   role: role(key, rank, isSuperAdmin),
   permissions: new Set(),
   sessionId: "s1",

@@ -25,8 +25,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ message: "Allocation must be a whole number between 1 and 100." }, { status: 422 });
   }
 
-  const user = await db.user.findUnique({ where: { id: userId } });
+  const user = await db.user.findUnique({ where: { id: userId }, include: { role: true } });
   if (!user || user.status !== "ACTIVE") return NextResponse.json({ message: "That person is not an active member of staff." }, { status: 422 });
+  if (user.role.isSuperAdmin || ["ceo", "co_founder"].includes(user.role.key)) {
+    return NextResponse.json({ message: "Leadership cannot be allocated as project delivery resources." }, { status: 422 });
+  }
 
   await db.$transaction(async (tx) => {
     await tx.projectAssignment.upsert({
@@ -41,7 +44,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       kind: "SYSTEM",
       title: `Assigned to ${project.name}`,
       body: `You have been allocated to ${project.name} (${allocation}%). You can now book time and manage deliverables.`,
-      link: `/projects/${project.id}`,
+      link: "/projects",
     }, tx);
 
     // 2. Notify Leadership (Founder and Co-Founder)
@@ -49,7 +52,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       kind: "SYSTEM",
       title: `Team Allocation: ${user.name} → ${project.name}`,
       body: `${context.user.name} allocated ${user.name} (${allocation}%) to project ${project.name}.`,
-      link: `/projects/${project.id}`,
+      link: "/projects",
     }, tx);
 
     await recordAudit({ actorId: context.user.id, action: "project.assign", entityType: "Project", entityId: id, after: { user: user.email, allocation }, ipAddress: clientIp(request) }, tx);

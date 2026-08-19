@@ -3,14 +3,20 @@ import { clientIp, recordAudit } from "@/lib/audit";
 import { guardRoute } from "@/lib/auth/guard";
 import { formatMoney, toMinor } from "@/lib/money";
 import { db } from "@/lib/db";
+import { nextReferenceFrom, referenceWhere } from "@/lib/reference";
 
 export const runtime = "nodejs";
 
+/** Sequential per year, e.g. QNC-CN-2026-0001 (prefix from lib/reference). */
 async function nextNumber(): Promise<string> {
   const year = new Date().getFullYear();
-  const prefix = `AVX-CN-${year}-`;
-  const latest = await db.creditNote.findFirst({ where: { number: { startsWith: prefix } }, orderBy: { number: "desc" } });
-  return `${prefix}${String(latest ? Number(latest.number.slice(prefix.length)) + 1 : 1).padStart(4, "0")}`;
+  // Legacy-prefixed records are matched too, so the rename from AVX to
+  // QNC continues the year's sequence instead of restarting it at 0001.
+  const existing = await db.creditNote.findMany({
+    where: { OR: referenceWhere("number", "CN", year) },
+    select: { number: true },
+  });
+  return nextReferenceFrom(existing.map((row) => row.number), "CN", year);
 }
 
 /**

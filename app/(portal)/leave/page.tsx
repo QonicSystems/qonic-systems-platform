@@ -49,12 +49,5 @@ export default async function LeavePage() {
       canDecide: true, canCancel: false,
     }));
 
-  return <>
-    <header className="portal-page-head">
-      <p className="eyebrow">Time off</p>
-      <h1 className="portal-title">Leave</h1>
-      <p className="portal-lead">Request time off and track what you have left this year.</p>
-    </header>
-    <LeaveManager types={typeOptions} mine={mine} toDecide={toDecide} canRequest={can(context, "leave.request")} />
-  </>;
+  return <LeaveManager types={typeOptions} mine={mine} toDecide={toDecide} canRequest={can(context, "leave.request")} />;
 }

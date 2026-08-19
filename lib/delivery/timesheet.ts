@@ -85,6 +85,26 @@ export function canDecideTimesheet(
   return { ok: true };
 }
 
+/**
+ * Whether the owner may pull a submitted week back to draft.
+ *
+ * Submitting used to be one-way: EDITABLE_STATUSES is DRAFT and REJECTED, so a
+ * week sent in with a typo could only be fixed by an approver rejecting it,
+ * which put a spurious rejection on the record. Recall is allowed only while the
+ * week is still SUBMITTED — once it is APPROVED the time is immutable, and the
+ * approver's rejection is the correct route back.
+ */
+export function canRecallTimesheet(
+  actor: AuthContext,
+  sheet: TimesheetFacts,
+): { ok: true } | { ok: false; reason: string; status: 403 | 409 } {
+  if (sheet.userId !== actor.user.id) return { ok: false, reason: "You can only recall your own timesheet.", status: 403 };
+  if (!actor.permissions.has("timesheet.submit")) return { ok: false, reason: "You do not have permission to record time.", status: 403 };
+  if (sheet.status === "APPROVED") return { ok: false, reason: "That week has been approved and can no longer be changed. Ask an approver to reject it if it is wrong.", status: 409 };
+  if (sheet.status !== "SUBMITTED") return { ok: false, reason: "Only a submitted week can be recalled.", status: 409 };
+  return { ok: true };
+}
+
 export function canSubmitTimesheet(
   actor: AuthContext,
   sheet: TimesheetFacts,

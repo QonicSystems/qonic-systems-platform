@@ -14,6 +14,23 @@ import { StatusChip } from "@/components/status-chip";
 import { TableToolbar } from "@/components/portal/table-toolbar";
 import { useFilter } from "@/lib/ui/filter";
 
+export type Assignment = {
+  userId: string;
+  allocationPercent: number;
+  name: string;
+  email: string;
+  roleLabel: string;
+  jobTitle: string;
+};
+
+export type EmployeeOption = {
+  id: string;
+  name: string;
+  email: string;
+  roleLabel: string;
+  jobTitle: string;
+};
+
 type Row = {
   id: string;
   code: string;
@@ -33,6 +50,7 @@ type Row = {
   manager: string;
   notes?: string;
   team: number;
+  assignments?: ReadonlyArray<Assignment>;
   hours: string;
   negotiationCompleted?: boolean;
   completedReason?: string;
@@ -61,11 +79,13 @@ export function ProjectManager({
   projects,
   clients,
   people,
+  allEmployees = [],
   canManage,
 }: {
   projects: ReadonlyArray<Row>;
   clients: ReadonlyArray<{ id: string; name: string; code: string }>;
   people: ReadonlyArray<{ id: string; name: string }>;
+  allEmployees?: ReadonlyArray<EmployeeOption>;
   canManage: boolean;
 }) {
   const router = useRouter();
@@ -92,6 +112,7 @@ export function ProjectManager({
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Row | null>(null);
   const [deleting, setDeleting] = useState<Row | null>(null);
+  const [managingTeam, setManagingTeam] = useState<Row | null>(null);
   const empty = {
     name: "",
     code: "",
@@ -319,6 +340,15 @@ export function ProjectManager({
                   {canManage && (
                     <td>
                       <div className="row-actions flex flex-wrap gap-1">
+                        <button
+                          type="button"
+                          className="row-action font-semibold text-amber-800 bg-amber-50 hover:bg-amber-100 hover:text-black border border-amber-200"
+                          onClick={() => setManagingTeam(project)}
+                          disabled={busy}
+                          title="Allocate or manage team members on this project"
+                        >
+                          Team ({project.assignments?.length ?? project.team})
+                        </button>
                         <button
                           type="button"
                           className="row-action font-semibold text-slate-800 hover:text-black"
@@ -584,6 +614,269 @@ export function ProjectManager({
           </div>
         </div>
       )}
+
+
+      {managingTeam && (
+        <TeamDialog
+          project={managingTeam}
+          allEmployees={allEmployees}
+          busy={busy}
+          onClose={() => setManagingTeam(null)}
+          onAssign={async (userId, allocationPercent) => {
+            setBusy(true);
+            try {
+              const res = await fetch(`/api/projects/${managingTeam.id}/team`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ userId, allocationPercent }),
+              });
+              const data = (await res.json()) as { message?: string };
+              if (res.ok) {
+                router.refresh();
+                const emp = allEmployees.find((e) => e.id === userId);
+                if (emp) {
+                  const updatedAssignments = [
+                    ...(managingTeam.assignments?.filter((a) => a.userId !== userId) ?? []),
+                    {
+                      userId: emp.id,
+                      name: emp.name,
+                      email: emp.email,
+                      roleLabel: emp.roleLabel,
+                      jobTitle: emp.jobTitle,
+                      allocationPercent,
+                    },
+                  ];
+                  setManagingTeam({
+                    ...managingTeam,
+                    assignments: updatedAssignments,
+                    team: updatedAssignments.length,
+                  });
+                }
+                return { ok: true, message: data.message };
+              }
+              return { ok: false, message: data.message ?? "Could not assign team member." };
+            } catch {
+              return { ok: false, message: "Unable to connect to server." };
+            } finally {
+              setBusy(false);
+            }
+          }}
+          onRemove={async (userId) => {
+            setBusy(true);
+            try {
+              const res = await fetch(`/api/projects/${managingTeam.id}/team?userId=${encodeURIComponent(userId)}`, {
+                method: "DELETE",
+              });
+              const data = (await res.json()) as { message?: string };
+              if (res.ok) {
+                router.refresh();
+                const updatedAssignments = (managingTeam.assignments ?? []).filter((a) => a.userId !== userId);
+                setManagingTeam({
+                  ...managingTeam,
+                  assignments: updatedAssignments,
+                  team: updatedAssignments.length,
+                });
+                return { ok: true, message: data.message };
+              }
+              return { ok: false, message: data.message ?? "Could not remove team member." };
+            } catch {
+              return { ok: false, message: "Unable to connect to server." };
+            } finally {
+              setBusy(false);
+            }
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Team and Resource Allocation Dialog
+ * Allows Founders/Managers to assign developers to projects with allocation %
+ * and remove unneeded allocations.
+ */
+function TeamDialog({
+  project,
+  allEmployees,
+  busy,
+  onClose,
+  onAssign,
+  onRemove,
+}: {
+  project: Row;
+  allEmployees: ReadonlyArray<EmployeeOption>;
+  busy: boolean;
+  onClose: () => void;
+  onAssign: (userId: string, allocationPercent: number) => Promise<{ ok: boolean; message?: string }>;
+  onRemove: (userId: string) => Promise<{ ok: boolean; message?: string }>;
+}) {
+  const [selectedUserId, setSelectedUserId] = useState(
+    allEmployees.find((e) => !project.assignments?.some((a) => a.userId === e.id))?.id ?? allEmployees[0]?.id ?? ""
+  );
+  const [allocation, setAllocation] = useState("100");
+  const [localNotice, setLocalNotice] = useState<{ tone: "success" | "error"; text: string } | null>(null);
+
+  const availableEmployees = allEmployees.filter(
+    (e) => !project.assignments?.some((a) => a.userId === e.id)
+  );
+
+  const handleAssign = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!selectedUserId) return;
+    setLocalNotice(null);
+    const res = await onAssign(selectedUserId, Number(allocation) || 100);
+    if (res.ok) {
+      setLocalNotice({ tone: "success", text: res.message ?? "Resource allocated successfully." });
+    } else {
+      setLocalNotice({ tone: "error", text: res.message ?? "Failed to assign resource." });
+    }
+  };
+
+  const handleRemove = async (userId: string) => {
+    setLocalNotice(null);
+    const res = await onRemove(userId);
+    if (res.ok) {
+      setLocalNotice({ tone: "success", text: res.message ?? "Removed from project." });
+    } else {
+      setLocalNotice({ tone: "error", text: res.message ?? "Failed to remove resource." });
+    }
+  };
+
+  return (
+    <div className="dialog-backdrop" role="dialog" aria-modal="true" aria-labelledby="team-dialog-title">
+      <div className="dialog dialog--wide">
+        <div className="flex items-center justify-between pb-3 border-b border-[#e7e4da]">
+          <div>
+            <h3 id="team-dialog-title" className="dialog-title text-lg font-bold text-[#111111]">
+              Team & Resource Allocation — {project.name}
+            </h3>
+            <p className="text-xs text-[#6b6b6b] mt-0.5">
+              Code: <span className="font-mono font-semibold">{project.code}</span> · Client: <strong>{project.client}</strong>
+            </p>
+          </div>
+          <button type="button" className="text-gray-400 hover:text-black font-bold p-1 text-lg" onClick={onClose}>
+            ✕
+          </button>
+        </div>
+
+        {localNotice && (
+          <p className={`form-status form-status--${localNotice.tone} mt-3 mb-0`} role="status">
+            {localNotice.text}
+          </p>
+        )}
+
+        {/* Current Team Roster */}
+        <div className="mt-4">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-[#4f4f4f] mb-2">
+            Currently Assigned Resources ({project.assignments?.length ?? 0})
+          </h4>
+          {!project.assignments || project.assignments.length === 0 ? (
+            <p className="text-xs text-[#8c8a82] italic bg-[#faf9f5] border border-[#e7e4da] p-3 rounded-lg">
+              No developers or staff are currently assigned to this project. Use the form below to allocate team members.
+            </p>
+          ) : (
+            <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+              {project.assignments.map((member) => (
+                <div
+                  key={member.userId}
+                  className="flex items-center justify-between p-3 bg-[#fbfbfa] border border-[#e7e4da] rounded-lg"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-[#111111] text-[#ffd700] flex items-center justify-center font-bold text-xs flex-shrink-0">
+                      {member.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-bold text-sm text-[#111111]">{member.name}</span>
+                        <span className="text-[11px] px-2 py-0.5 rounded bg-gray-100 font-medium text-[#4f4f4f]">
+                          {member.roleLabel}
+                        </span>
+                        <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          {member.allocationPercent}% Allocated
+                        </span>
+                      </div>
+                      <p className="text-xs text-[#6b6b6b] mt-0.5">
+                        {member.email} {member.jobTitle ? `· ${member.jobTitle}` : ""}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="text-xs font-semibold text-rose-600 hover:text-rose-800 hover:bg-rose-50 px-2.5 py-1 rounded border border-rose-200 transition-colors"
+                    onClick={() => handleRemove(member.userId)}
+                    disabled={busy}
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Allocate New Resource Form */}
+        <div className="mt-5 pt-4 border-t border-[#e7e4da]">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-[#4f4f4f] mb-2">
+            Assign Developer / Team Member
+          </h4>
+          {availableEmployees.length === 0 ? (
+            <p className="text-xs text-[#8c8a82]">All active staff members are already assigned to this project.</p>
+          ) : (
+            <form onSubmit={handleAssign} className="grid sm:grid-cols-12 gap-3 items-end">
+              <div className="sm:col-span-7">
+                <label htmlFor="assign-user" className="text-xs font-semibold text-[#4f4f4f] block mb-1">
+                  Select Employee / Developer <em>*</em>
+                </label>
+                <select
+                  id="assign-user"
+                  value={selectedUserId}
+                  onChange={(e) => setSelectedUserId(e.target.value)}
+                  className="w-full text-xs py-2 px-2.5 border border-[#e7e4da] rounded-md bg-white"
+                  required
+                >
+                  <option value="" disabled>Choose a person…</option>
+                  {availableEmployees.map((emp) => (
+                    <option key={emp.id} value={emp.id}>
+                      {emp.name} ({emp.roleLabel}) — {emp.email}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="sm:col-span-2">
+                <label htmlFor="assign-alloc" className="text-xs font-semibold text-[#4f4f4f] block mb-1">
+                  Allocation (%)
+                </label>
+                <input
+                  id="assign-alloc"
+                  type="number"
+                  min="1"
+                  max="100"
+                  value={allocation}
+                  onChange={(e) => setAllocation(e.target.value)}
+                  className="w-full text-xs text-center font-bold py-2 border border-[#e7e4da] rounded-md"
+                  required
+                />
+              </div>
+              <div className="sm:col-span-3">
+                <button
+                  type="submit"
+                  className="button button-primary w-full text-xs py-2"
+                  disabled={busy || !selectedUserId}
+                >
+                  {busy ? "Assigning…" : "+ Assign Resource"}
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
+
+        <div className="dialog-actions mt-6 pt-3 border-t border-[#e7e4da]">
+          <button type="button" className="button button-outline text-xs" onClick={onClose}>
+            Done
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

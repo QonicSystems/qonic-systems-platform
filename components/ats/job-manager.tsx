@@ -32,6 +32,7 @@ export function JobManager({ jobs, clients, canManage }: {
   const [form, setForm] = useState(empty);
   const [errors, setErrors] = useState<Errors>({});
   const [busy, setBusy] = useState(false);
+  const [deleting, setDeleting] = useState<Row | null>(null);
   const [notice, setNotice] = useState<{ tone: "success" | "error"; text: string } | null>(null);
 
   const call = async (url: string, init: RequestInit) => {
@@ -51,6 +52,10 @@ export function JobManager({ jobs, clients, canManage }: {
     event.preventDefault(); setErrors({});
     const result = await call("/api/jobs", { method: "POST", body: JSON.stringify({ ...form, openings: Number(form.openings) }) });
     if (result) { setForm(empty); setOpen(false); }
+  };
+
+  const remove = async (job: Row) => {
+    if (await call(`/api/jobs/${job.id}`, { method: "DELETE" })) setDeleting(null);
   };
 
   return <div>
@@ -91,11 +96,38 @@ export function JobManager({ jobs, clients, canManage }: {
                   onClick={() => call("/api/jobs", { method: "PATCH", body: JSON.stringify({ id: job.id, isPublished: !job.published }) })}>
                   {job.published ? "Unpublish" : "Publish"}
                 </button>
+                <button type="button" className="row-action row-action--danger" disabled={busy}
+                  onClick={() => { setDeleting(job); setNotice(null); }}>
+                  Delete
+                </button>
               </div>
             </td>}
           </tr>)}
         </tbody>
       </table>
+    </div>}
+
+    {deleting && <div className="dialog-backdrop" role="dialog" aria-modal="true" aria-labelledby="job-del-title">
+      <div className="dialog">
+        <h3 id="job-del-title" className="dialog-title">Delete {deleting.reference}?</h3>
+        {deleting.applications > 0 ? <>
+          <p className="portal-note">
+            <strong>{deleting.title}</strong> has {deleting.applications} candidate
+            {deleting.applications === 1 ? "" : "s"} in its pipeline. Deleting it would take their stage
+            history, interviews and any placement with it, so it is refused.
+          </p>
+          <p className="portal-note">Set the status to <strong>Closed</strong> instead — the requisition stops taking candidates and every record stays.</p>
+        </> : <p className="portal-note">
+          This permanently removes <strong>{deleting.title}</strong> ({deleting.reference}). No candidates
+          are attached, so no pipeline history is lost. It cannot be undone.
+        </p>}
+        <div className="dialog-actions">
+          <button type="button" className="button button-outline" onClick={() => setDeleting(null)} disabled={busy}>Cancel</button>
+          <button type="button" className="button button-danger" onClick={() => remove(deleting)} disabled={busy || deleting.applications > 0}>
+            {busy ? "Deleting…" : "Delete permanently"}
+          </button>
+        </div>
+      </div>
     </div>}
 
     {open && <div className="dialog-backdrop" role="dialog" aria-modal="true" aria-labelledby="job-title">

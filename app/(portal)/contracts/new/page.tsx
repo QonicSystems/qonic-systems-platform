@@ -62,7 +62,7 @@ export default async function NewContractPage({
   });
   const employees = users
     .filter((user) => canAdminister(context, user).ok)
-    .map((user) => ({ id: user.id, name: user.name, roleLabel: user.role.label }));
+    .map((user) => ({ id: user.id, name: `${user.name} (${user.email})`, roleLabel: user.role.label }));
 
   return <div className="portal-page portal-page--narrow">
     <header className="portal-page-head">

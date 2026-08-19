@@ -31,17 +31,33 @@ export type PersonRow = {
   canExport: boolean;
   /** The viewer's own row: identity is editable, role and removal are not. */
   isSelf: boolean;
+  canOverride: boolean;
+  overrides: ReadonlyArray<Override>;
 };
+
+export type Override = {
+  key: string;
+  label: string;
+  effect: "ALLOW" | "DENY";
+  reason: string;
+  expiresAt: string;
+  expired: boolean;
+};
+
+export type PermissionOption = { key: string; label: string; group: string };
 
 type RoleOption = { id: string; label: string; assignable: boolean };
 /** Success is explicit; `errors` is only ever present on a 422. */
 type ActResult = { ok: boolean; errors?: Errors; inviteUrl?: string };
 type Errors = Partial<Record<"name" | "email" | "phone" | "jobTitle" | "techStack" | "roleId", string>>;
 
-export function PeopleTable({ people, roles, canCreate }: {
+export function PeopleTable({ people, roles, canCreate, permissions, today }: {
   people: ReadonlyArray<PersonRow>;
   roles: ReadonlyArray<RoleOption>;
   canCreate: boolean;
+  permissions: ReadonlyArray<PermissionOption>;
+  /** Supplied by the server — reading the clock during render is impure. */
+  today: string;
 }) {
   const router = useRouter();
   const [statusFilter, setStatusFilter] = useState<"ALL" | "ACTIVE" | "SUSPENDED" | "ARCHIVED">("ALL");
@@ -66,6 +82,7 @@ export function PeopleTable({ people, roles, canCreate }: {
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [editing, setEditing] = useState<PersonRow | null>(null);
   const [confirming, setConfirming] = useState<PersonRow | null>(null);
+  const [overridingId, setOverridingId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ tone: "success" | "error"; text: string } | null>(null);
 
@@ -98,6 +115,9 @@ export function PeopleTable({ people, roles, canCreate }: {
       return { ok: false };
     } finally { setBusy(false); }
   };
+
+  // Read through the live prop so the panel refreshes after router.refresh().
+  const overriding = people.find((p) => p.id === overridingId) ?? null;
 
   const resendInvite = async (person: PersonRow) => {
     setNotice(null);
@@ -220,6 +240,17 @@ export function PeopleTable({ people, roles, canCreate }: {
                         {person.status === "ACTIVE" ? "Deactivate" : "Reactivate"}
                       </button>
                     )}
+                    {person.canOverride && (
+                      <button
+                        type="button"
+                        className="row-action"
+                        onClick={() => { setOverridingId(person.id); setNotice(null); }}
+                        disabled={busy}
+                        title="Grant or deny one capability for this person alone"
+                      >
+                        Exceptions{person.overrides.length > 0 ? ` (${person.overrides.length})` : ""}
+                      </button>
+                    )}
                     {person.canExport && <a className="row-action" href={`/api/admin/users/${person.id}/data`} download>Export data</a>}
                     {person.canRemove && (
                       <button
@@ -239,6 +270,15 @@ export function PeopleTable({ people, roles, canCreate }: {
         </tbody>
       </table>
     </div>}
+
+    {overriding && <OverrideDialog
+      person={overriding}
+      permissions={permissions}
+      today={today}
+      busy={busy}
+      onClose={() => setOverridingId(null)}
+      onCall={async (url, init) => (await act(url, init)).ok}
+    />}
 
     {editing && <EditDialog
       person={editing}
@@ -281,6 +321,116 @@ export function PeopleTable({ people, roles, canCreate }: {
         </div>
       </div>
     </div>}
+  </div>;
+}
+
+/**
+ * A per-person exception to their role's defaults.
+ *
+ * UserPermissionOverride has been honoured by the auth guard since the start —
+ * DENY beats ALLOW, and both lapse at `expiresAt` — but nothing could create
+ * one, so granting a single capability to a single person meant inventing a
+ * whole role for them.
+ *
+ * An expiry is strongly encouraged: an exception that never lapses is just a
+ * role by another name.
+ */
+function OverrideDialog({ person, permissions, today, busy, onClose, onCall }: {
+  person: PersonRow;
+  permissions: ReadonlyArray<PermissionOption>;
+  today: string;
+  busy: boolean;
+  onClose: () => void;
+  onCall: (url: string, init: RequestInit) => Promise<boolean>;
+}) {
+  const blank = { permission: permissions[0]?.key ?? "", effect: "ALLOW", reason: "", expiresAt: "" };
+  const [form, setForm] = useState(blank);
+
+  const groups = [...new Set(permissions.map((p) => p.group))];
+
+  return <div className="dialog-backdrop" role="dialog" aria-modal="true" aria-labelledby="ovr-title">
+    <div className="dialog dialog--wide">
+      <h3 id="ovr-title" className="dialog-title">Exceptions — {person.name}</h3>
+      <p className="portal-note">
+        {person.roleLabel} by role. Anything set here applies to {person.name} alone and overrides that.
+      </p>
+
+      <section className="panel-block">
+        <div className="panel-block__head"><h4>In force</h4></div>
+        {person.overrides.length === 0
+          ? <p className="portal-muted">None — {person.name} has exactly what their role grants.</p>
+          : <ul className="timeline timeline--tight">
+              {person.overrides.map((o) => <li key={o.key} className="timeline__item">
+                <div className="timeline__head">
+                  <strong>{o.label}</strong>
+                  <span className={`pill${o.effect === "DENY" ? "" : " pill--warn"}`}>{o.effect === "ALLOW" ? "Granted" : "Denied"}</span>
+                  {o.expired && <StatusChip status="ARCHIVED" label="lapsed" />}
+                </div>
+                <p className="timeline__meta">
+                  {o.expiresAt ? `${o.expired ? "Expired" : "Expires"} ${o.expiresAt}` : "No expiry"}
+                </p>
+                {o.reason && <p className="timeline__note">{o.reason}</p>}
+                <button
+                  type="button"
+                  className="row-action row-action--danger"
+                  disabled={busy}
+                  onClick={() => onCall(`/api/admin/users/${person.id}/overrides?permission=${encodeURIComponent(o.key)}`, { method: "DELETE" })}
+                >
+                  Remove
+                </button>
+              </li>)}
+            </ul>}
+      </section>
+
+      <section className="panel-block">
+        <div className="panel-block__head"><h4>Add an exception</h4></div>
+        <div className="contact-form panel-form">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <label htmlFor="ovr-perm">Capability</label>
+              <select id="ovr-perm" value={form.permission} onChange={(e) => setForm({ ...form, permission: e.target.value })}>
+                {groups.map((group) => <optgroup key={group} label={group}>
+                  {permissions.filter((p) => p.group === group).map((p) => (
+                    <option key={p.key} value={p.key}>{p.label}</option>
+                  ))}
+                </optgroup>)}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="ovr-effect">Effect</label>
+              <select id="ovr-effect" value={form.effect} onChange={(e) => setForm({ ...form, effect: e.target.value })}>
+                <option value="ALLOW">Grant it</option>
+                <option value="DENY">Take it away</option>
+              </select>
+            </div>
+            <div>
+              <label htmlFor="ovr-exp">Expires</label>
+              <input id="ovr-exp" type="date" min={today} value={form.expiresAt} onChange={(e) => setForm({ ...form, expiresAt: e.target.value })} />
+              <p className="field-hint">Leave blank for no expiry.</p>
+            </div>
+            <div className="sm:col-span-2">
+              <label htmlFor="ovr-why">Reason <em>*</em></label>
+              <textarea id="ovr-why" rows={2} value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })}
+                placeholder="Covering payroll while Anusha is on leave." />
+            </div>
+          </div>
+          <div className="dialog-actions">
+            <button
+              type="button"
+              className="button button-primary"
+              disabled={busy || !form.permission || form.reason.trim().length < 3}
+              onClick={async () => { if (await onCall(`/api/admin/users/${person.id}/overrides`, { method: "POST", body: JSON.stringify(form) })) setForm(blank); }}
+            >
+              {busy ? "Saving…" : "Apply exception"}
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <div className="dialog-actions">
+        <button type="button" className="button button-outline" onClick={onClose} disabled={busy}>Close</button>
+      </div>
+    </div>
   </div>;
 }
 

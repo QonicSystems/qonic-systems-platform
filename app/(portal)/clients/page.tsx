@@ -1,5 +1,6 @@
 import { ClientManager } from "@/components/delivery/client-manager";
 import { can, requirePermission } from "@/lib/auth/guard";
+import { ROLE } from "@/lib/auth/roles";
 import { db } from "@/lib/db";
 
 export const metadata = { title: "Clients" };
@@ -7,14 +8,27 @@ export const metadata = { title: "Clients" };
 export default async function ClientsPage() {
   const context = await requirePermission("client.view");
 
-  const [clients, owners] = await Promise.all([
+  const [clients, leadershipOwners] = await Promise.all([
     // Jobs and invoices are counted too: they decide whether a client can be
     // deleted, so the confirm dialog can say what is blocking it up front.
     db.client.findMany({
-      include: { owner: { select: { name: true } }, _count: { select: { projects: true, jobs: true, invoices: true } } },
+      include: {
+        owner: { select: { name: true } },
+        // Primary first, then alphabetical — the contact list had no reader at all.
+        contacts: { orderBy: [{ isPrimary: "desc" }, { name: "asc" }] },
+        _count: { select: { projects: true, jobs: true, invoices: true } },
+      },
       orderBy: { name: "asc" },
     }),
-    db.user.findMany({ where: { status: "ACTIVE" }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
+    // Account Owner is restricted to Leadership (CEO & Co-Founder)
+    db.user.findMany({
+      where: {
+        status: "ACTIVE",
+        role: { key: { in: [ROLE.CEO, ROLE.CO_FOUNDER] } },
+      },
+      select: { id: true, name: true, role: { select: { label: true } } },
+      orderBy: { name: "asc" },
+    }),
   ]);
 
   return <div className="portal-page">
@@ -32,8 +46,15 @@ export default async function ClientsPage() {
         projectCount: client._count.projects,
         jobCount: client._count.jobs,
         invoiceCount: client._count.invoices,
+        contacts: client.contacts.map((c) => ({
+          id: c.id, name: c.name, email: c.email ?? "", phone: c.phone ?? "",
+          title: c.title ?? "", isPrimary: c.isPrimary,
+        })),
       }))}
-      owners={owners}
+      owners={leadershipOwners.map((p) => ({
+        id: p.id,
+        name: `${p.name} (${p.role.label})`,
+      }))}
       canManage={can(context, "client.manage")}
     />
   </div>;

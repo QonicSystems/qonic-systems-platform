@@ -1,15 +1,23 @@
+import { BarChart } from "@/components/portal/bar-chart";
 import { requirePermission } from "@/lib/auth/guard";
 import { db } from "@/lib/db";
+import { statusSlug } from "@/lib/ui/status";
 
 export const metadata = { title: "Capacity" };
 
 export default async function CapacityPage() {
   await requirePermission("report.utilization");
 
+  // Capacity is about who is allocated to live work, not about job title. The
+  // previous filter dropped the CEO and Co-Founder, which on a founder-led team
+  // removed most of the delivery capacity from the report.
   const people = await db.user.findMany({
     where: {
       status: "ACTIVE",
-      role: { key: { notIn: ["ceo", "co_founder"] } },
+      OR: [
+        { projectAssignments: { some: {} } },
+        { timesheets: { some: { entries: { some: {} } } } },
+      ],
     },
     include: {
       role: { select: { label: true } },
@@ -47,6 +55,19 @@ export default async function CapacityPage() {
 
     <section className="portal-section">
       <h2 className="portal-section-title">Allocation</h2>
+      {rows.length > 0 && <div className="chart-panel">
+        <BarChart
+          ariaLabel="Allocation by person"
+          max={100}
+          items={[...rows].sort((a, b) => b.allocated - a.allocated).map((row) => ({
+            key: row.id,
+            label: row.name,
+            value: row.allocated,
+            formattedValue: `${row.allocated}%`,
+            severity: row.allocated > 100 ? 4 : undefined,
+          }))}
+        />
+      </div>}
       <div className="matrix-scroll">
         <table className="matrix matrix--people">
           <thead><tr><th scope="col">Person</th><th scope="col">Role</th><th scope="col">Projects</th><th scope="col">Allocated</th></tr></thead>
@@ -56,7 +77,7 @@ export default async function CapacityPage() {
               <td>{row.role}</td>
               <td>
                 {row.projects.length === 0 ? <span className="portal-muted">Unassigned</span>
-                  : row.projects.map((project) => <span key={project.name} className="alloc-chip">
+                  : row.projects.map((project) => <span key={project.name} className={`alloc-chip alloc-chip--${statusSlug(project.health)}`}>
                       {project.name} · {project.percent}%
                     </span>)}
               </td>

@@ -1,7 +1,8 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { CSSProperties, FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
+import { RingStat } from "@/components/portal/ring-stat";
 import { StatusChip } from "@/components/status-chip";
 
 export type LeaveTypeOption = { id: string; label: string; colour: string; entitled: number; used: number; tracksBalance: boolean };
@@ -59,17 +60,21 @@ export function LeaveManager({ types, mine, toDecide, canRequest }: {
   return <div className="portal-page">
     {notice && <p className={`form-status form-status--${notice.tone}`} role="status">{notice.text}</p>}
 
-    <section className="portal-section">
-      <h2 className="portal-section-title">Your balances</h2>
-      <div className="portal-grid">
-        {types.map((type) => <article key={type.id} className="portal-card balance-card" style={{ borderTopColor: type.colour }}>
-          <strong className="balance-label">{type.label}</strong>
-          {type.tracksBalance
-            ? <><span className="portal-stat">{Math.max(0, type.entitled - type.used)}</span><p>of {type.entitled} days remaining</p></>
-            : <><span className="portal-stat">—</span><p>No annual limit</p></>}
-        </article>)}
+    <div className="hero-panel">
+      <span className="hero-eyebrow">Time off</span>
+      <h1 className="hero-title">Your balances</h1>
+      <p className="hero-lead">What you have left this year. Weekends and public holidays are excluded automatically.</p>
+      <div className="ring-stat-row" style={{ marginTop: "2rem" }}>
+        {types.map((type) => <RingStat
+          key={type.id}
+          label={type.label}
+          colour={type.colour}
+          fraction={type.tracksBalance ? (type.entitled === 0 ? 0 : Math.max(0, type.entitled - type.used) / type.entitled) : null}
+          value={type.tracksBalance ? String(Math.max(0, type.entitled - type.used)) : "∞"}
+          valueLabel={type.tracksBalance ? `of ${type.entitled} days` : "No annual limit"}
+        />)}
       </div>
-    </section>
+    </div>
 
     {canRequest && <section className="portal-section">
       <h2 className="portal-section-title">Request leave</h2>
@@ -136,7 +141,7 @@ function LeaveTable({ rows, showRequester, busy, onDecide }: {
       <tbody>
         {rows.map((row) => <tr key={row.id}>
           {showRequester && <th scope="row"><strong>{row.requesterName}</strong>{row.reason && <span>{row.reason}</span>}</th>}
-          <td><span className="leave-dot" style={{ background: row.colour }} aria-hidden="true" />{row.typeLabel}</td>
+          <td><span className="leave-type-pill" style={{ "--dot": row.colour } as CSSProperties}>{row.typeLabel}</span></td>
           <td>{row.from} → {row.to}</td>
           <td>{row.days}</td>
           <td>

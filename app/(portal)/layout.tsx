@@ -4,7 +4,6 @@ import { ErrorPage } from "@/components/error-page";
 import { PortalShell } from "@/components/portal/portal-shell";
 import { can, requireAuth } from "@/lib/auth/guard";
 import { isGroup, portalNavigation, type NavGroup, type NavItem } from "@/lib/portal-nav";
-import { db } from "@/lib/db";
 
 const SECURITY_PATH = "/profile/security";
 
@@ -40,11 +39,9 @@ export default async function PortalLayout({ children }: Readonly<{ children: Re
     if (items.length > 0) links.push({ label: entry.label, items });
   }
 
-  const unreadCount = await db.notification.count({ where: { userId: context.user.id, readAt: null } });
-
   return <PortalShell
     user={{ name: context.user.name, email: context.user.email, roleLabel: context.role.label, photoUrl: context.user.photoUrl }}
     links={links}
-    unreadCount={unreadCount}
+    unreadCount={context.user.unreadNotificationCount}
   >{children}</PortalShell>;
 }

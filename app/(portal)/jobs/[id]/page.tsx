@@ -9,6 +9,12 @@ import { StatusChip } from "@/components/status-chip";
 
 export const metadata = { title: "Pipeline" };
 
+const dateTime = (value: Date) =>
+  value.toLocaleString("en-GB", {
+    day: "numeric", month: "short", year: "numeric",
+    hour: "2-digit", minute: "2-digit", timeZone: "UTC",
+  });
+
 export default async function JobPipelinePage({ params }: { params: Promise<{ id: string }> }) {
   const context = await requirePermission("job.view");
   const { id } = await params;
@@ -18,7 +24,14 @@ export default async function JobPipelinePage({ params }: { params: Promise<{ id
     include: {
       client: true,
       applications: {
-        include: { candidate: true, interviews: { orderBy: { scheduledAt: "desc" } }, placement: true },
+        include: {
+          candidate: true,
+          interviews: { include: { interviewer: { select: { name: true } } }, orderBy: { scheduledAt: "desc" } },
+          // The append-only stage history. It has been written since day one and
+          // was never read back anywhere — the board now shows it per candidate.
+          events: { orderBy: { createdAt: "desc" } },
+          placement: true,
+        },
         orderBy: { updatedAt: "desc" },
       },
     },
@@ -26,12 +39,24 @@ export default async function JobPipelinePage({ params }: { params: Promise<{ id
   if (!job) notFound();
 
   const { days, overSla } = jobAgeing(job);
-  const candidates = await db.candidate.findMany({
-    where: { NOT: { applications: { some: { jobId: id } } } },
-    select: { id: true, name: true, headline: true },
-    orderBy: { name: "asc" },
-    take: 200,
-  });
+
+  // ApplicationEvent.actorId has no relation, so names are resolved in one pass
+  // rather than a query per event.
+  const actorIds = [...new Set(job.applications.flatMap((a) => a.events.map((e) => e.actorId).filter((v): v is string => Boolean(v))))];
+  const actors = actorIds.length
+    ? await db.user.findMany({ where: { id: { in: actorIds } }, select: { id: true, name: true } })
+    : [];
+  const actorName = new Map(actors.map((a) => [a.id, a.name]));
+
+  const [candidates, interviewers] = await Promise.all([
+    db.candidate.findMany({
+      where: { NOT: { applications: { some: { jobId: id } } }, status: "ACTIVE" },
+      select: { id: true, name: true, headline: true },
+      orderBy: { name: "asc" },
+      take: 200,
+    }),
+    db.user.findMany({ where: { status: "ACTIVE" }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
+  ]);
 
   return <div className="portal-page">
     <header className="portal-page-head">
@@ -59,8 +84,28 @@ export default async function JobPipelinePage({ params }: { params: Promise<{ id
         placed: Boolean(application.placement),
         outcomeReason: application.outcomeReason,
         available: availableStages(context, application.stage).map((stage) => ({ key: stage, label: STAGE_LABELS[stage] })),
+        interviewList: application.interviews.map((interview) => ({
+          id: interview.id,
+          scheduledAt: dateTime(interview.scheduledAt),
+          durationMins: interview.durationMins,
+          kind: interview.kind,
+          location: interview.location ?? "",
+          interviewer: interview.interviewer?.name ?? "",
+          outcome: interview.outcome,
+          score: interview.score,
+          feedback: interview.feedback ?? "",
+        })),
+        history: application.events.map((event) => ({
+          id: event.id,
+          from: event.fromStage ? STAGE_LABELS[event.fromStage] : null,
+          to: STAGE_LABELS[event.toStage],
+          actor: event.actorId ? actorName.get(event.actorId) ?? "Someone" : "System",
+          note: event.note ?? "",
+          at: dateTime(event.createdAt),
+        })),
       }))}
       addableCandidates={candidates.map((c) => ({ id: c.id, label: c.headline ? `${c.name} — ${c.headline}` : c.name }))}
+      interviewers={interviewers}
       canManage={can(context, "candidate.manage")}
       canPlace={can(context, "placement.manage")}
     />

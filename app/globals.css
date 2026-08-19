@@ -1063,6 +1063,28 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 .permission-list strong { color: var(--ink); font-size: 0.92rem; }
 .permission-list span { color: var(--faint); font-size: 0.82rem; line-height: 1.5; }
 
+/* ── Directory: search + role filter ───────────────────────────────────── */
+.directory-filters { display: grid; gap: 0.85rem; }
+.directory-search {
+  width: 100%; max-width: 24rem; border: 1px solid var(--line);
+  border-radius: 0.75rem; background: #fff; padding: 0.6rem 0.9rem;
+  color: var(--ink); font-size: 0.9rem;
+  box-shadow: var(--shadow-xs); transition: border-color 0.18s, box-shadow 0.18s;
+}
+.directory-search:focus { border-color: var(--accent); box-shadow: var(--ring-focus); outline: none; }
+.directory-search::placeholder { color: var(--faint); }
+.directory-role-tabs { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.directory-role-tabs button {
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  border: 1px solid var(--line); border-radius: 999px; background: #fff;
+  padding: 0.32rem 0.8rem; color: var(--body); font-size: 0.82rem; font-weight: 600;
+  cursor: pointer; transition: border-color 0.18s, background 0.18s, color 0.18s;
+}
+.directory-role-tabs button span { color: var(--faint); font-weight: 700; font-variant-numeric: tabular-nums; }
+.directory-role-tabs button:hover { border-color: var(--accent-soft); }
+.directory-role-tabs button.is-active { border-color: var(--ink); background: var(--ink); color: #fff; }
+.directory-role-tabs button.is-active span { color: var(--accent-soft); }
+
 /* ── Modern Tabs & Breadcrumbs ─────────────────────────────────────────── */
 .page-tabs, .admin-tabs {
   display: flex; flex-wrap: wrap; gap: 0.25rem;
@@ -1185,14 +1207,20 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 .status-chip--placed,
 .status-chip--paid,
 .status-chip--reimbursed,
-.status-chip--filled {
+.status-chip--advance,
+.status-chip--filled,
+.status-chip--on-track {
   background: #f0fdf4; color: #166534; border-color: #bbf7d0;
 }
 
 .status-chip--suspended,
 .status-chip--revoked,
 .status-chip--rejected,
-.status-chip--overdue {
+.status-chip--reject,
+.status-chip--no-show,
+.status-chip--missed,
+.status-chip--overdue,
+.status-chip--off-track {
   background: #fef2f2; color: #991b1b; border-color: #fecaca;
 }
 
@@ -1202,13 +1230,15 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 .status-chip--on-hold,
 .status-chip--submitted,
 .status-chip--interview,
-.status-chip--sent {
+.status-chip--sent,
+.status-chip--at-risk {
   background: #fffbeb; color: #92400e; border-color: #fde68a;
 }
 
 .status-chip--planned,
 .status-chip--acknowledged,
 .status-chip--screened,
+.status-chip--in-progress,
 .status-chip--part-paid {
   background: #eff6ff; color: #1e40af; border-color: #bfdbfe;
 }
@@ -1473,16 +1503,6 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
   text-transform: uppercase; letter-spacing: 0.04em;
   border: 1px solid rgba(255, 215, 0, 0.3);
 }
-.balance-card { border-top: 3px solid var(--accent); }
-.balance-label {
-  display: block; margin-bottom: 0.35rem; color: var(--ink);
-  font-family: var(--font-display), sans-serif; font-size: 0.95rem; font-weight: 700;
-}
-.leave-dot {
-  display: inline-block; width: 0.6rem; height: 0.6rem;
-  margin-right: 0.5rem; border-radius: 50%; vertical-align: middle;
-}
-
 /* --- Delivery: Timesheets, Projects, Utilisation --- */
 .sr-only {
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
@@ -1509,6 +1529,65 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
   display: block; height: 100%; border-radius: 999px;
   background: linear-gradient(90deg, var(--accent), var(--accent-dark));
 }
+
+/* ── Report charts ──────────────────────────────────────────────────────
+   Hand-rolled rather than a library: the app has no client-side chart deps,
+   and these are static (server-rendered) magnitude/composition bars, not
+   interactive plots. Sequential fills reuse the same gold ramp as .meter;
+   "emphasis" bars pair the gold fill against a neutral gray rather than a
+   second hue, which sidesteps categorical colorblind-safety entirely (a
+   gray has no hue to confuse). See app/(portal)/reports/*. */
+.chart-panel + .chart-panel { margin-top: 1.75rem; }
+.chart-bars { display: grid; gap: 0.7rem; }
+.chart-bar-row {
+  display: grid; grid-template-columns: minmax(7rem, 14rem) 1fr auto;
+  align-items: center; gap: 0.9rem;
+}
+.chart-bar-label {
+  overflow: hidden; color: var(--ink); font-size: 0.85rem; font-weight: 600;
+  text-overflow: ellipsis; white-space: nowrap;
+}
+.chart-bar-track {
+  position: relative; height: 0.8rem; border-radius: 999px;
+  background: var(--canvas-muted); overflow: hidden;
+}
+.chart-bar-fill {
+  position: absolute; inset: 0; width: 0; border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent-soft), var(--accent-dark));
+}
+.chart-bar-value {
+  min-width: 3.6rem; color: var(--ink); font-size: 0.85rem; font-weight: 700;
+  font-variant-numeric: tabular-nums; text-align: right;
+}
+
+/* Ageing severity ramp — index-driven tone, gray (not yet a concern) through
+   to red (critically overdue). A status ramp, not a magnitude one: each row
+   is read against its own label and value, never matched to another row by
+   hue alone, so it isn't subject to the categorical CVD-pair checks. */
+.chart-bar-fill--severity-0 { background: var(--subtle); }
+.chart-bar-fill--severity-1 { background: linear-gradient(90deg, #fde68a, #f59e0b); }
+.chart-bar-fill--severity-2 { background: linear-gradient(90deg, #f59e0b, #ea580c); }
+.chart-bar-fill--severity-3 { background: linear-gradient(90deg, #f87171, #dc2626); }
+.chart-bar-fill--severity-4 { background: linear-gradient(90deg, #dc2626, #991b1b); }
+
+/* Emphasis split bar: one named "point" series (gold) against a gray
+   "everything else" — a 2px surface gap separates the two fills. */
+.chart-split-track {
+  display: flex; height: 0.8rem; gap: 2px; border-radius: 999px;
+  background: var(--canvas-muted); overflow: hidden;
+}
+.chart-split-fill { height: 100%; }
+.chart-split-fill:first-child { border-radius: 999px 0 0 999px; }
+.chart-split-fill:last-child { border-radius: 0 999px 999px 0; }
+.chart-split-fill--primary { background: linear-gradient(90deg, var(--accent-soft), var(--accent-dark)); }
+.chart-split-fill--context { background: var(--line-strong); }
+
+.chart-split-track--lg { height: 1.5rem; }
+.chart-legend { display: flex; flex-wrap: wrap; gap: 1.15rem; margin: 0 0 0.35rem; }
+.chart-legend-item { display: inline-flex; align-items: center; gap: 0.45rem; color: var(--body); font-size: 0.8rem; font-weight: 600; }
+.chart-legend-swatch { width: 0.6rem; height: 0.6rem; border-radius: 3px; flex: none; }
+.chart-legend-swatch--primary { background: linear-gradient(135deg, var(--accent), var(--accent-dark)); }
+.chart-legend-swatch--context { background: var(--line-strong); }
 
 /* --- Grouped portal navigation --- */
 .portal-group { position: relative; display: inline-flex; align-items: center; }
@@ -1592,12 +1671,123 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 }
 .inline-check input { width: auto; margin-top: 0.25rem; cursor: pointer; }
 .alloc-chip {
-  display: inline-block; margin: 0 0.4rem 0.4rem 0; border-radius: 999px;
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  margin: 0 0.4rem 0.4rem 0; border-radius: 999px;
   background: var(--accent-tint); padding: 0.18rem 0.65rem;
   color: var(--accent-dark); font-size: 0.74rem; font-weight: 600;
 }
+.alloc-chip::before {
+  content: ""; width: 0.4rem; height: 0.4rem; border-radius: 50%;
+  background: currentColor; opacity: 0.55; flex: none;
+}
+/* Health tint — on-track stays the default gold; only a project that needs
+   attention repaints the chip, so a calm allocation list doesn't turn into
+   a wall of color. */
+.alloc-chip--at-risk { background: #fffbeb; color: #92400e; }
+.alloc-chip--off-track { background: #fef2f2; color: #991b1b; }
 .meter span.is-over { background: linear-gradient(90deg, #f59e0b, #dc2626); }
 .text-over { color: #dc2626; font-weight: 700; }
+
+/* ── Dark hero panel ────────────────────────────────────────────────────
+   The one deliberately bold departure from the light card+table template
+   every other portal page uses — reserved for a page's single lead moment
+   (Access, Leave). Ink-to-navy gradient with a soft gold bloom, so it reads
+   as premium rather than "another card." */
+.hero-panel {
+  position: relative; overflow: hidden;
+  border-radius: 1.5rem; padding: clamp(1.75rem, 4vw, 2.75rem);
+  background: radial-gradient(120% 160% at 100% 0%, #2a2412 0%, transparent 55%), linear-gradient(150deg, var(--ink) 0%, #1a1a1a 100%);
+  box-shadow: var(--shadow-xl), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  color: #fff;
+}
+.hero-panel::before {
+  content: ""; position: absolute; inset: -40% -20% auto auto; width: 26rem; height: 26rem;
+  background: radial-gradient(circle, var(--accent-glass) 0%, transparent 70%);
+  pointer-events: none;
+}
+.hero-eyebrow {
+  display: inline-flex; align-items: center; gap: 0.5rem; border-radius: 999px;
+  border: 1px solid rgba(255, 215, 0, 0.35); background: rgba(255, 215, 0, 0.1);
+  padding: 0.3rem 0.85rem; color: var(--accent-soft); font-size: 0.74rem; font-weight: 700;
+  letter-spacing: 0.06em; text-transform: uppercase;
+}
+.hero-title {
+  position: relative; margin: 0.9rem 0 0.4rem; color: #fff;
+  font-family: var(--font-display), sans-serif; font-size: clamp(2rem, 4vw, 2.75rem);
+  font-weight: 800; letter-spacing: -0.04em;
+}
+.hero-lead { position: relative; margin: 0; max-width: 42rem; color: rgba(255, 255, 255, 0.72); font-size: 1.02rem; line-height: 1.6; }
+.hero-stats {
+  position: relative; display: flex; flex-wrap: wrap; gap: clamp(1.5rem, 4vw, 3rem);
+  margin-top: clamp(1.5rem, 3vw, 2.25rem); padding-top: clamp(1.5rem, 3vw, 2.25rem);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+.hero-stat-value {
+  display: block; background: linear-gradient(160deg, #fff, var(--accent) 140%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  font-family: var(--font-display), sans-serif; font-size: 2.15rem; font-weight: 800; letter-spacing: -0.03em;
+}
+.hero-stat-label { margin: 0.15rem 0 0; color: rgba(255, 255, 255, 0.55); font-size: 0.82rem; font-weight: 600; }
+
+/* ── Capability tiles (Access page) ────────────────────────────────────── */
+.capability-grid {
+  display: grid; gap: 1.25rem;
+  grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr));
+}
+/* Dark card, matching the hero panel above rather than sitting under it as a
+   plain white settings list — the two read as one continuous surface. */
+.capability-tile {
+  position: relative; overflow: hidden; border-radius: 1.25rem;
+  background: radial-gradient(140% 100% at 100% 0%, #241f0d 0%, transparent 50%), linear-gradient(165deg, var(--ink) 0%, #1c1c1c 100%);
+  padding: 1.6rem 1.6rem 1.5rem; color: #fff;
+  box-shadow: var(--shadow-md), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  transition: transform 0.25s var(--ease), box-shadow 0.25s;
+}
+.capability-tile:hover { transform: translateY(-3px); box-shadow: var(--shadow-xl), var(--shadow-glow); }
+.capability-tile-head { position: relative; display: flex; align-items: center; gap: 0.85rem; margin-bottom: 1.15rem; }
+.capability-tile-icon {
+  display: flex; flex: none; align-items: center; justify-content: center;
+  width: 2.6rem; height: 2.6rem; border-radius: 0.85rem;
+  background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+  color: var(--ink); font-family: var(--font-display), sans-serif; font-size: 1.05rem; font-weight: 800;
+}
+.capability-tile-head h3 {
+  flex: 1; margin: 0; color: #fff; font-family: var(--font-display), sans-serif;
+  font-size: 1.05rem; font-weight: 800; letter-spacing: -0.01em;
+}
+.capability-tile-count {
+  flex: none; border-radius: 999px; border: 1px solid rgba(255, 215, 0, 0.3);
+  background: rgba(255, 215, 0, 0.1); padding: 0.14rem 0.6rem;
+  color: var(--accent-soft); font-size: 0.72rem; font-weight: 800; font-variant-numeric: tabular-nums;
+}
+.capability-tile ul { position: relative; display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
+.capability-tile li {
+  display: grid; gap: 0.18rem; padding: 0.7rem 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.capability-tile li:first-child { border-top: none; padding-top: 0; }
+.capability-tile strong { color: #fff; font-size: 0.87rem; font-weight: 700; }
+.capability-tile span { color: rgba(255, 255, 255, 0.5); font-size: 0.79rem; line-height: 1.5; }
+
+/* ── Leave balance rings ────────────────────────────────────────────────── */
+.ring-stat-row { position: relative; display: flex; flex-wrap: wrap; gap: clamp(1.25rem, 3vw, 2rem); }
+.ring-stat { display: flex; flex-direction: column; align-items: center; gap: 0.3rem; text-align: center; }
+.ring-stat-value { fill: #fff; font-family: var(--font-display), sans-serif; font-size: 1.35rem; font-weight: 800; }
+.ring-stat-unit { fill: rgba(255, 255, 255, 0.5); font-size: 0.62rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+.ring-stat-label { margin-top: 0.35rem; color: #fff; font-size: 0.85rem; font-weight: 700; }
+.ring-stat-sub { color: rgba(255, 255, 255, 0.5); font-size: 0.74rem; font-weight: 600; }
+
+/* ── Leave type pill (upgrades the plain colour dot) ─────────────────────
+   Colour is per-type, from the database (lib/leave — LeaveType.colour), so
+   the tint is derived with color-mix() rather than a fixed palette. */
+.leave-type-pill {
+  display: inline-flex; align-items: center; gap: 0.4rem; border-radius: 999px;
+  padding: 0.2rem 0.65rem 0.2rem 0.5rem;
+  background: color-mix(in srgb, var(--dot) 14%, white);
+  color: color-mix(in srgb, var(--dot) 65%, black);
+  font-size: 0.78rem; font-weight: 700;
+}
+.leave-type-pill::before { content: ""; width: 0.5rem; height: 0.5rem; border-radius: 50%; background: var(--dot); flex: none; }
 
 /* --- Global Search Spotlight Command Palette --- */
 .global-search-trigger {
@@ -1869,3 +2059,248 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 .err-btn--solid:hover { background: #ffdd2e; }
 .err-btn--ghost { border-color: rgba(255, 255, 255, 0.25); color: #ffffff; }
 .err-btn--ghost:hover { border-color: var(--accent); color: var(--accent); background: rgba(255, 215, 0, 0.08); }
+
+
+/* --- Pipeline card: opens the full application record --- */
+.board-open {
+  display: block; width: 100%; margin-top: 0.35rem;
+  border: 1px dashed var(--line-strong); border-radius: 0.4rem;
+  background: transparent; padding: 0.3rem 0.45rem;
+  color: var(--faint); font-size: 0.74rem; font-weight: 600;
+  text-align: left; cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.board-open:hover { border-color: var(--ink); color: var(--ink); background: var(--canvas-sub); }
+.board-open:focus-visible { outline: none; border-color: var(--accent-dark); box-shadow: var(--ring-focus); }
+
+/* --- Panels inside a wide dialog (application record, project milestones) --- */
+.panel-block { margin-top: 1.6rem; border-top: 1px solid var(--line); padding-top: 1.1rem; }
+.panel-block__head {
+  display: flex; flex-wrap: wrap; align-items: center;
+  justify-content: space-between; gap: 0.6rem; margin-bottom: 0.85rem;
+}
+.panel-block__head h4 {
+  margin: 0; color: var(--ink); font-size: 0.78rem; font-weight: 800;
+  letter-spacing: 0.09em; text-transform: uppercase;
+}
+.panel-form {
+  border: 1px solid var(--line); border-radius: 0.6rem;
+  background: var(--canvas-sub); padding: 1rem; margin-bottom: 1rem;
+}
+.panel-form .dialog-actions { margin-top: 1rem; }
+
+/* --- Timeline: interviews, stage history, payments, credit notes --- */
+.timeline { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.7rem; }
+.timeline--tight { gap: 0.45rem; }
+.timeline__item {
+  border: 1px solid var(--line); border-radius: 0.55rem;
+  background: var(--canvas); padding: 0.75rem 0.9rem;
+}
+.timeline__head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.timeline__head strong { color: var(--ink); font-size: 0.9rem; font-weight: 700; }
+.timeline__score {
+  border: 1px solid var(--accent-soft); border-radius: 999px;
+  background: var(--accent-tint); padding: 0.05rem 0.45rem;
+  color: var(--accent-dark); font-size: 0.72rem; font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.timeline__meta { margin: 0.3rem 0 0; color: var(--faint); font-size: 0.78rem; }
+.timeline__note {
+  margin: 0.45rem 0 0; padding-left: 0.65rem;
+  border-left: 2px solid var(--line-strong);
+  color: var(--body); font-size: 0.84rem; white-space: pre-wrap;
+}
+.timeline__item .row-action { margin-top: 0.55rem; }
+.timeline__amount {
+  margin-left: auto; color: var(--ink); font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Invoice record: line editor, totals, small count pills --- */
+.pill {
+  border: 1px solid var(--line-strong); border-radius: 999px;
+  background: var(--canvas-sub); padding: 0.05rem 0.5rem;
+  color: var(--body); font-size: 0.7rem; font-weight: 600;
+}
+.pill--warn { border-color: var(--accent-soft); background: var(--accent-tint); color: var(--accent-dark); }
+
+.matrix td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.totals {
+  display: flex; flex-wrap: wrap; justify-content: flex-end;
+  gap: 0.35rem 1.5rem; margin: 0.9rem 0 0; padding-top: 0.75rem;
+  border-top: 1px solid var(--line);
+  color: var(--faint); font-size: 0.84rem;
+}
+.totals b { margin-left: 0.35rem; color: var(--ink); font-variant-numeric: tabular-nums; }
+.totals__sum { color: var(--faint); font-size: 0.84rem; }
+.totals__sum b { margin-left: 0.35rem; color: var(--ink); font-variant-numeric: tabular-nums; }
+
+.line-editor { display: grid; gap: 0.5rem; }
+.line-editor__row {
+  display: grid; gap: 0.5rem; align-items: end;
+  grid-template-columns: minmax(0, 1fr) 5.5rem 7rem auto;
+}
+.line-editor__desc { min-width: 0; }
+.line-editor__row input { width: 100%; }
+.line-editor__foot {
+  display: flex; flex-wrap: wrap; align-items: center;
+  justify-content: space-between; gap: 0.6rem; margin-top: 0.7rem;
+}
+@media (max-width: 620px) {
+  .line-editor__row { grid-template-columns: minmax(0, 1fr) 1fr; }
+  .line-editor__desc { grid-column: 1 / -1; }
+}
+
+/* --- Bank details on file --- */
+.bank-onfile {
+  display: flex; flex-wrap: wrap; align-items: center;
+  justify-content: space-between; gap: 0.85rem;
+  border: 1px solid var(--line); border-radius: 0.6rem;
+  background: var(--canvas-sub); padding: 0.9rem 1.05rem;
+}
+.bank-onfile strong { display: block; color: var(--ink); font-weight: 700; }
+.bank-onfile .portal-muted { display: block; margin-top: 0.15rem; font-size: 0.82rem; }
+
+/* --- Submitted timesheet: recall back to draft --- */
+.recall-bar {
+  display: flex; flex-wrap: wrap; align-items: center;
+  justify-content: space-between; gap: 0.85rem;
+  margin: 1.1rem 0; padding: 0.9rem 1.1rem;
+  border: 1px solid var(--accent-soft); border-radius: 0.7rem;
+  background: var(--accent-tint);
+}
+.recall-bar p { margin: 0; max-width: 46rem; color: var(--body); font-size: 0.88rem; }
+.recall-bar strong { color: var(--ink); }
+
+/* --- Timesheet smart actions ---
+   Previously styled with dark-theme Tailwind utilities (bg-neutral-900/40,
+   text-amber-400, hover:text-white) on a light page: the hover state painted
+   white text on a near-white bar, so the label vanished under the cursor.
+   Tokens keep it legible in both themes. */
+.smart-actions {
+  display: flex; flex-wrap: wrap; align-items: center;
+  justify-content: space-between; gap: 0.6rem 1rem;
+  margin-bottom: 0.9rem; padding: 0.6rem 0.85rem;
+  border: 1px solid var(--line); border-radius: 0.65rem;
+  background: var(--canvas-sub);
+}
+.smart-actions__label {
+  color: var(--faint); font-size: 0.68rem; font-weight: 700;
+  letter-spacing: 0.09em; text-transform: uppercase;
+}
+.smart-actions__buttons { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Notifications inbox
+
+   The previous markup used .notif-list / .notif-kind / .notif-body / .notif-when,
+   none of which had a single rule in this stylesheet — the page rendered as a
+   bare bullet list. This is the replacement: a grouped inbox where the kind is
+   carried by a coloured glyph and unread state by weight and a dot, so a full
+   inbox can be scanned rather than read.
+   ───────────────────────────────────────────────────────────────────────── */
+
+.inbox-bar {
+  display: flex; flex-wrap: wrap; align-items: center;
+  justify-content: space-between; gap: 0.6rem 1rem;
+  margin-bottom: 1.4rem; padding-bottom: 0.9rem;
+  border-bottom: 1px solid var(--line);
+}
+.inbox-bar__filters, .inbox-bar__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; }
+
+.inbox-chip {
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  border: 1px solid var(--line); border-radius: 999px;
+  background: var(--canvas); padding: 0.3rem 0.8rem;
+  color: var(--body); font-size: 0.8rem; font-weight: 600;
+  cursor: pointer; transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.inbox-chip span {
+  border-radius: 999px; background: var(--canvas-muted); padding: 0 0.35rem;
+  color: var(--faint); font-size: 0.68rem; font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.inbox-chip:hover { border-color: var(--line-strong); }
+.inbox-chip[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: #ffffff; }
+.inbox-chip[aria-pressed="true"] span { background: var(--accent); color: var(--ink); }
+
+.inbox-select {
+  border: 1px solid var(--line); border-radius: 999px;
+  background: var(--canvas); padding: 0.3rem 0.7rem;
+  color: var(--body); font-size: 0.8rem; font-weight: 600;
+}
+
+.inbox-day { margin-bottom: 1.6rem; }
+.inbox-day__label {
+  margin: 0 0 0.6rem; color: var(--faint);
+  font-size: 0.7rem; font-weight: 800;
+  letter-spacing: 0.1em; text-transform: uppercase;
+}
+
+.inbox { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.5rem; }
+.inbox-item {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 0.9rem; align-items: start;
+  border: 1px solid var(--line); border-radius: 0.75rem;
+  background: var(--canvas); padding: 0.9rem 1rem;
+  box-shadow: var(--shadow-xs);
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+}
+.inbox-item:hover { border-color: var(--line-strong); box-shadow: var(--shadow-sm); }
+/* Unread is carried by the tinted ground and the dot, never by colour alone. */
+.inbox-item.is-unread { background: var(--accent-tint); border-color: var(--accent-soft); }
+.inbox-item.is-unread .inbox-item__head strong { font-weight: 800; }
+
+.inbox-item__icon {
+  display: grid; place-items: center; flex: none;
+  width: 2.25rem; height: 2.25rem; border-radius: 0.6rem;
+  background: var(--canvas-muted); color: var(--body);
+}
+.inbox-item__icon svg { width: 1.1rem; height: 1.1rem; }
+/* One tone per kind, so the inbox is scannable by shape and colour together. */
+.inbox-item__icon--leave       { background: #eef2ff; color: #4338ca; }
+.inbox-item__icon--timesheet   { background: #ecfdf5; color: #047857; }
+.inbox-item__icon--contract    { background: #fff7ed; color: #b45309; }
+.inbox-item__icon--expense     { background: #fdf2f8; color: #be185d; }
+.inbox-item__icon--invoice     { background: #eff6ff; color: #1d4ed8; }
+.inbox-item__icon--recruitment { background: #f5f3ff; color: #6d28d9; }
+.inbox-item__icon--system      { background: var(--canvas-muted); color: var(--faint); }
+
+.inbox-item__body { min-width: 0; }
+.inbox-item__head { display: flex; align-items: center; gap: 0.5rem; }
+.inbox-item__head strong {
+  color: var(--ink); font-size: 0.94rem; font-weight: 700; line-height: 1.35;
+}
+.inbox-dot {
+  flex: none; width: 0.45rem; height: 0.45rem; border-radius: 999px;
+  background: var(--accent-deep);
+}
+.inbox-item__text {
+  margin: 0.3rem 0 0; color: var(--body); font-size: 0.86rem; line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.inbox-item__meta {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem;
+  margin: 0.45rem 0 0; color: var(--faint); font-size: 0.74rem;
+}
+.inbox-item__kind {
+  border: 1px solid var(--line); border-radius: 0.3rem;
+  padding: 0.02rem 0.35rem; font-weight: 700;
+  letter-spacing: 0.04em; text-transform: uppercase; font-size: 0.66rem;
+}
+.inbox-item__actions { display: flex; flex-wrap: wrap; gap: 0.3rem; justify-content: flex-end; }
+
+.inbox-empty {
+  display: grid; justify-items: center; gap: 0.35rem;
+  border: 1px dashed var(--line-strong); border-radius: 0.9rem;
+  background: var(--canvas-sub); padding: 3rem 1.5rem; text-align: center;
+}
+.inbox-empty svg { width: 2.4rem; height: 2.4rem; color: var(--subtle); margin-bottom: 0.4rem; }
+.inbox-empty p { margin: 0; color: var(--faint); font-size: 0.9rem; max-width: 34rem; }
+.inbox-empty strong { color: var(--ink); }
+
+@media (max-width: 640px) {
+  .inbox-item { grid-template-columns: auto minmax(0, 1fr); }
+  .inbox-item__actions { grid-column: 1 / -1; justify-content: flex-start; }
+}

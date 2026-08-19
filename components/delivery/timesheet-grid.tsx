@@ -82,22 +82,73 @@ export function TimesheetGrid({ timesheetId, weekDates, projects, initialRows, e
   const dayLabel = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", timeZone: "UTC" });
   const isWeekend = (iso: string) => [0, 6].includes(new Date(`${iso}T00:00:00Z`).getUTCDay());
 
-  const autofillStandardWeek = () => {
+  /**
+   * Fill 8h on every weekday of the week.
+   *
+   * `throughToday` stops at today, which is the safe default — booking Friday's
+   * eight hours on a Monday is claiming work nobody has done yet. The whole-week
+   * variant exists because people commonly fill the sheet in on the last day, or
+   * are completing a week that has already passed.
+   */
+  const autofillWeek = (throughToday: boolean) => {
     if (projects.length === 0) return;
     const project = projects[0];
-    const standardDurations = weekDates.map((iso) => (isWeekend(iso) ? "" : "8.0"));
-    
+    const todayIso = new Date().toISOString().slice(0, 10);
+
+    const standardDurations = weekDates.map((iso) => {
+      if (isWeekend(iso)) return "";
+      if (throughToday && iso > todayIso) return "";
+      return "8.0";
+    });
+
+    const filledDays = standardDurations.filter((d) => d === "8.0").length;
+    if (filledDays === 0) {
+      setNotice({
+        tone: "error",
+        text: throughToday
+          ? "No elapsed weekdays in this week up to today. Use “Whole week” to fill it anyway."
+          : "This week has no weekdays to fill.",
+      });
+      return;
+    }
+
+    const noteText = `Standard work (${filledDays * 8}h)`;
+
     if (rows.length === 0) {
       setRows([{
         key: `auto-${Date.now()}`,
         projectId: project.id,
         taskId: project.tasks[0]?.id ?? null,
         durations: standardDurations,
-        note: "Standard work week (40h)",
+        note: noteText,
       }]);
     } else {
-      setRows((current) => current.map((row, idx) => idx === 0 ? { ...row, durations: standardDurations } : row));
+      setRows((current) =>
+        current.map((row, idx) =>
+          idx === 0 ? { ...row, durations: standardDurations, note: row.note || noteText } : row
+        )
+      );
     }
+    setNotice({
+      tone: "success",
+      text: `Auto-filled 8h/day across ${filledDays} weekday${filledDays === 1 ? "" : "s"}${throughToday ? " up to today" : ""}.`,
+    });
+  };
+
+  /** Pull a submitted week back to draft so it can be corrected. */
+  const recall = async () => {
+    setBusy(true);
+    setNotice(null);
+    try {
+      const response = await fetch(`/api/timesheets/${timesheetId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+      });
+      const result = await response.json().catch(() => ({})) as { message?: string };
+      setNotice({ tone: response.ok ? "success" : "error", text: result.message ?? "Done." });
+      if (response.ok) router.refresh();
+    } catch { setNotice({ tone: "error", text: "Unable to reach the server." }); }
+    finally { setBusy(false); }
   };
 
   return <div>
@@ -108,31 +159,50 @@ export function TimesheetGrid({ timesheetId, weekDates, projects, initialRows, e
     {status === "APPROVED" && <p className="form-status form-status--success" role="status">
       This week has been approved and is locked.
     </p>}
+    {status === "SUBMITTED" && <div className="recall-bar">
+      <p>
+        <strong>Submitted and awaiting approval.</strong> It is locked while an approver looks at it —
+        pull it back if you need to change something.
+      </p>
+      <button type="button" className="button button-outline" onClick={recall} disabled={busy}>
+        {busy ? "Working…" : "Recall to draft"}
+      </button>
+    </div>}
 
     {projects.length === 0 ? <p className="portal-note">
       You are not assigned to any project yet, so there is nowhere to book time. Ask a project manager to add you.
     </p> : <>
       {editable && (
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-3 p-3 bg-neutral-900/40 border border-neutral-800 rounded-lg">
-          <span className="text-xs text-neutral-400 font-medium">⚡ Smart Actions:</span>
-          <div className="flex items-center gap-2">
+        <div className="smart-actions">
+          <span className="smart-actions__label">Smart actions</span>
+          <div className="smart-actions__buttons">
             <button
               type="button"
-              className="button button-outline text-xs py-1 px-2.5 text-amber-400 border-amber-500/30 hover:border-amber-400"
-              onClick={autofillStandardWeek}
+              className="row-action row-action--highlight"
+              onClick={() => autofillWeek(true)}
               disabled={busy}
-              title="Fills Mon–Fri with 8h/day (40 hours total)"
+              title="Fills weekdays up to today with 8h/day — never future dates"
             >
-              ⚡ Autofill Standard Week (40h)
+              Autofill to date
+            </button>
+            <button
+              type="button"
+              className="row-action row-action--highlight"
+              onClick={() => autofillWeek(false)}
+              disabled={busy}
+              title="Fills Monday to Friday with 8h/day, including days still to come"
+            >
+              Autofill whole week
             </button>
             {rows.length > 0 && (
               <button
                 type="button"
-                className="button button-outline text-xs py-1 px-2.5 text-neutral-400 hover:text-white"
+                className="row-action row-action--danger"
                 onClick={() => setRows([])}
                 disabled={busy}
+                title="Empties every cell on screen. Nothing is removed until you save the week."
               >
-                Clear All
+                Clear all cells
               </button>
             )}
           </div>
@@ -198,8 +268,17 @@ export function TimesheetGrid({ timesheetId, weekDates, projects, initialRows, e
         {invalid && <p className="form-error">One of the cells is not a valid duration.</p>}
         <div className="action-bar mt-4">
           <button type="button" className="button button-outline" onClick={addRow} disabled={busy}>Add a row</button>
-          <button type="button" className="button button-outline" onClick={() => save(false)} disabled={busy || invalid}>
-            {busy ? "Saving…" : "Save draft"}
+          <button
+            type="button"
+            className="button button-outline"
+            onClick={() => save(false)}
+            disabled={busy || invalid}
+            // "Save draft" read as though it kept a copy somewhere. It does not:
+            // the write replaces the week outright, so saving an emptied grid
+            // deletes that week's entries. The label says what it does.
+            title="Saves this week exactly as it appears, without sending it for approval"
+          >
+            {busy ? "Saving…" : "Save week"}
           </button>
           <button type="button" className="button button-primary" onClick={() => save(true)} disabled={busy || invalid || weekTotal === 0}>
             Submit for approval

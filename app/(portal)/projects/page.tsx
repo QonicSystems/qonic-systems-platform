@@ -12,7 +12,7 @@ const money = (minor: number | null, currency: string) =>
 export default async function ProjectsPage() {
   const context = await requirePermission("project.view");
 
-  const [projects, clients, leadershipPeople] = await Promise.all([
+  const [projects, clients, leadershipPeople, allEmployees] = await Promise.all([
     // Every status is loaded and the table filters client-side. Fetching only
     // ACTIVE would make a cancelled project vanish the moment it was cancelled,
     // with no way back to it.
@@ -20,6 +20,13 @@ export default async function ProjectsPage() {
       include: {
         client: true,
         manager: { select: { name: true } },
+        assignments: {
+          select: {
+            userId: true,
+            allocationPercent: true,
+            user: { select: { id: true, name: true, email: true, jobTitle: true, role: { select: { key: true, label: true } } } },
+          },
+        },
         _count: { select: { assignments: true, timeEntries: true, invoices: true, expenses: true } },
         timeEntries: { select: { minutes: true, billable: true } },
       },
@@ -39,6 +46,15 @@ export default async function ProjectsPage() {
       select: { id: true, name: true, role: { select: { label: true } } },
       orderBy: { name: "asc" },
     }),
+    // All active developer/staff members eligible for project allocation (strictly excludes Leadership)
+    db.user.findMany({
+      where: {
+        status: "ACTIVE",
+        role: { key: { notIn: [ROLE.CEO, ROLE.CO_FOUNDER] } },
+      },
+      select: { id: true, name: true, email: true, jobTitle: true, role: { select: { key: true, label: true } } },
+      orderBy: [{ name: "asc" }],
+    }),
   ]);
 
   const activeCount = projects.filter((project) => project.status === "ACTIVE").length;
@@ -57,6 +73,9 @@ export default async function ProjectsPage() {
       <ProjectManager
         projects={projects.map((project) => {
           const minutes = project.timeEntries.reduce((sum, entry) => sum + entry.minutes, 0);
+          const validAssignments = project.assignments.filter(
+            (a) => !["ceo", "co_founder"].includes(a.user.role.key)
+          );
           return {
             id: project.id,
             code: project.code,
@@ -75,7 +94,15 @@ export default async function ProjectsPage() {
             managerId: project.managerId ?? "",
             manager: project.manager?.name ?? "Leadership",
             notes: project.notes ?? "",
-            team: project._count.assignments,
+            team: validAssignments.length,
+            assignments: validAssignments.map((a) => ({
+              userId: a.userId,
+              allocationPercent: a.allocationPercent,
+              name: a.user.name,
+              email: a.user.email,
+              roleLabel: a.user.role.label,
+              jobTitle: a.user.jobTitle ?? "",
+            })),
             hours: (minutes / 60).toFixed(1),
             negotiationCompleted: project.negotiationCompleted,
             completedReason: project.completedReason ?? "",
@@ -88,6 +115,13 @@ export default async function ProjectsPage() {
         people={leadershipPeople.map((p) => ({
           id: p.id,
           name: `${p.name} (${p.role.label})`,
+        }))}
+        allEmployees={allEmployees.map((e) => ({
+          id: e.id,
+          name: e.name,
+          email: e.email,
+          roleLabel: e.role.label,
+          jobTitle: e.jobTitle ?? "",
         }))}
         canManage={can(context, "project.manage")}
       />

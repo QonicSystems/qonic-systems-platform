@@ -2,12 +2,12 @@ import { describe, expect, it } from "vitest";
 import type { AuthContext } from "@/lib/auth/guard";
 import {
   STANDARD_WEEK_MINUTES, canDecideTimesheet, canEditTimesheet, canSubmitTimesheet,
-  formatDuration, parseDuration, utilisation, weekDays, weekStartOf,
+  formatDuration, parseDuration, utilisation, weekDays, weekStartOf, canRecallTimesheet,
 } from "@/lib/delivery/timesheet";
 import { toMinorUnits, validateClient, validateProject } from "@/lib/delivery/validate";
 
 const actor = (id: string, permissions: string[]): AuthContext => ({
-  user: { id, name: id, email: `${id}@x.com`, phone: null, jobTitle: null, photoUrl: null, mustChangePassword: false },
+  user: { id, name: id, email: `${id}@x.com`, phone: null, jobTitle: null, photoUrl: null, mustChangePassword: false, unreadNotificationCount: 0 },
   role: { id: "r", key: id, label: id, isSuperAdmin: false, rank: 20 },
   permissions: new Set(permissions),
   sessionId: "s",
@@ -185,5 +185,49 @@ describe("validateProject", () => {
 
   it("rejects an unknown billing model", () => {
     expect(validateProject({ ...valid, billing: "BARTER" }).errors.billing).toBeDefined();
+  });
+});
+
+/**
+ * Recall: pulling a submitted week back to draft.
+ *
+ * Submitting was one-way — EDITABLE_STATUSES covers DRAFT and REJECTED only —
+ * so a week sent in with a typo could only be fixed by an approver rejecting it,
+ * which put a spurious rejection on the record.
+ */
+describe("recalling a submitted timesheet", () => {
+  const owner = { user: { id: "u1" }, permissions: new Set(["timesheet.submit"]) } as never;
+  const other = { user: { id: "u2" }, permissions: new Set(["timesheet.submit"]) } as never;
+  const noPerm = { user: { id: "u1" }, permissions: new Set<string>() } as never;
+
+  it("lets the owner pull back a week that is still awaiting approval", () => {
+    expect(canRecallTimesheet(owner, { userId: "u1", status: "SUBMITTED" })).toEqual({ ok: true });
+  });
+
+  it("refuses once the week has been approved", () => {
+    const result = canRecallTimesheet(owner, { userId: "u1", status: "APPROVED" });
+    expect(result.ok).toBe(false);
+    // Approved time is immutable; rejection is the route back, not recall.
+    if (!result.ok) expect(result.status).toBe(409);
+  });
+
+  it("refuses a week that was never submitted", () => {
+    for (const status of ["DRAFT", "REJECTED"] as const) {
+      const result = canRecallTimesheet(owner, { userId: "u1", status });
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.status).toBe(409);
+    }
+  });
+
+  it("refuses someone else's timesheet", () => {
+    const result = canRecallTimesheet(other, { userId: "u1", status: "SUBMITTED" });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.status).toBe(403);
+  });
+
+  it("refuses without permission to record time", () => {
+    const result = canRecallTimesheet(noPerm, { userId: "u1", status: "SUBMITTED" });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.status).toBe(403);
   });
 });

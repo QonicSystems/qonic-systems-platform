@@ -4,15 +4,20 @@ import { guardRoute } from "@/lib/auth/guard";
 import { formatMoney, hoursToCentihours, invoiceTotals, lineAmount, toMinor } from "@/lib/money";
 import { notifyLeadership } from "@/lib/notify";
 import { db } from "@/lib/db";
+import { nextReferenceFrom, referenceWhere } from "@/lib/reference";
 
 export const runtime = "nodejs";
 
+/** Sequential per year, e.g. QNC-INV-2026-0001 (prefix from lib/reference). */
 async function nextNumber(): Promise<string> {
   const year = new Date().getFullYear();
-  const prefix = `AVX-INV-${year}-`;
-  const latest = await db.invoice.findFirst({ where: { number: { startsWith: prefix } }, orderBy: { number: "desc" } });
-  const sequence = latest ? Number(latest.number.slice(prefix.length)) + 1 : 1;
-  return `${prefix}${String(sequence).padStart(4, "0")}`;
+  // Legacy-prefixed records are matched too, so the rename from AVX to
+  // QNC continues the year's sequence instead of restarting it at 0001.
+  const existing = await db.invoice.findMany({
+    where: { OR: referenceWhere("number", "INV", year) },
+    select: { number: true },
+  });
+  return nextReferenceFrom(existing.map((row) => row.number), "INV", year);
 }
 
 /**

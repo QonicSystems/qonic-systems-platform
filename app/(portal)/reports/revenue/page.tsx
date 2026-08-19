@@ -1,6 +1,9 @@
+import { BarChart } from "@/components/portal/bar-chart";
 import { requirePermission } from "@/lib/auth/guard";
 import { ageingBucket, formatMoney, type AgeingBucket } from "@/lib/money";
 import { db } from "@/lib/db";
+
+const BUCKET_SEVERITY: Record<AgeingBucket, 0 | 1 | 2 | 3 | 4> = { current: 0, "1-30": 1, "31-60": 2, "61-90": 3, "90+": 4 };
 
 export const metadata = { title: "Revenue" };
 
@@ -55,8 +58,36 @@ export default async function RevenuePage() {
       <article className="portal-card"><span className="portal-stat">{formatMoney(feeTotal)}</span><p>Placement fees</p></article>
     </div>
 
+    {billed > 0 && <section className="portal-section">
+      <h2 className="portal-section-title">Collected vs. outstanding</h2>
+      <div className="chart-legend">
+        <span className="chart-legend-item"><span className="chart-legend-swatch chart-legend-swatch--primary" />Collected</span>
+        <span className="chart-legend-item"><span className="chart-legend-swatch chart-legend-swatch--context" />Outstanding</span>
+      </div>
+      <div
+        className="chart-split-track chart-split-track--lg"
+        role="img"
+        aria-label={`${formatMoney(collected)} collected, ${formatMoney(outstanding)} outstanding, of ${formatMoney(billed)} billed`}
+      >
+        {collected > 0 && <span className="chart-split-fill chart-split-fill--primary" style={{ width: `${(collected / billed) * 100}%` }} />}
+        {outstanding > 0 && <span className="chart-split-fill chart-split-fill--context" style={{ width: `${(outstanding / billed) * 100}%` }} />}
+      </div>
+    </section>}
+
     <section className="portal-section">
       <h2 className="portal-section-title">Receivables ageing</h2>
+      <div className="chart-panel">
+        <BarChart
+          ariaLabel="Outstanding receivables by age"
+          items={BUCKETS.map((bucket) => ({
+            key: bucket,
+            label: BUCKET_LABELS[bucket],
+            value: ageing.get(bucket) ?? 0,
+            formattedValue: formatMoney(ageing.get(bucket) ?? 0),
+            severity: BUCKET_SEVERITY[bucket],
+          }))}
+        />
+      </div>
       <div className="matrix-scroll">
         <table className="matrix matrix--people">
           <thead><tr><th scope="col">Age</th><th scope="col">Outstanding</th></tr></thead>

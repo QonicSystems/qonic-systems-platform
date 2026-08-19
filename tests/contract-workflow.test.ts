@@ -5,7 +5,7 @@ import { validateContractPayload } from "@/lib/contracts/payload";
 import type { ContractStatus } from "@/lib/generated/prisma/enums";
 
 const actor = (id: string, permissions: string[], isSuperAdmin = false): AuthContext => ({
-  user: { id, name: id, email: `${id}@x.com`, phone: null, jobTitle: null, photoUrl: null, mustChangePassword: false },
+  user: { id, name: id, email: `${id}@x.com`, phone: null, jobTitle: null, photoUrl: null, mustChangePassword: false, unreadNotificationCount: 0 },
   role: { id: "r", key: id, label: id, isSuperAdmin, rank: 20 },
   permissions: new Set(permissions),
   sessionId: "s",
