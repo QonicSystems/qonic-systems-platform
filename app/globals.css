@@ -1976,3 +1976,14 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 }
 .bank-onfile strong { display: block; color: var(--ink); font-weight: 700; }
 .bank-onfile .portal-muted { display: block; margin-top: 0.15rem; font-size: 0.82rem; }
+
+/* --- Submitted timesheet: recall back to draft --- */
+.recall-bar {
+  display: flex; flex-wrap: wrap; align-items: center;
+  justify-content: space-between; gap: 0.85rem;
+  margin: 1.1rem 0; padding: 0.9rem 1.1rem;
+  border: 1px solid var(--accent-soft); border-radius: 0.7rem;
+  background: var(--accent-tint);
+}
+.recall-bar p { margin: 0; max-width: 46rem; color: var(--body); font-size: 0.88rem; }
+.recall-bar strong { color: var(--ink); }

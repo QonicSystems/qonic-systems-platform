@@ -82,25 +82,37 @@ export function TimesheetGrid({ timesheetId, weekDates, projects, initialRows, e
   const dayLabel = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", timeZone: "UTC" });
   const isWeekend = (iso: string) => [0, 6].includes(new Date(`${iso}T00:00:00Z`).getUTCDay());
 
-  const autofillStandardWeek = () => {
+  /**
+   * Fill 8h on every weekday of the week.
+   *
+   * `throughToday` stops at today, which is the safe default — booking Friday's
+   * eight hours on a Monday is claiming work nobody has done yet. The whole-week
+   * variant exists because people commonly fill the sheet in on the last day, or
+   * are completing a week that has already passed.
+   */
+  const autofillWeek = (throughToday: boolean) => {
     if (projects.length === 0) return;
     const project = projects[0];
     const todayIso = new Date().toISOString().slice(0, 10);
 
-    // Only fill elapsed weekdays up to today (inclusive) for the active week, never future dates or future weeks
     const standardDurations = weekDates.map((iso) => {
       if (isWeekend(iso)) return "";
-      if (iso > todayIso) return ""; // Future date - do not fill
+      if (throughToday && iso > todayIso) return "";
       return "8.0";
     });
 
     const filledDays = standardDurations.filter((d) => d === "8.0").length;
     if (filledDays === 0) {
-      setNotice({ tone: "error", text: "No elapsed weekdays in this week up to today to auto-fill." });
+      setNotice({
+        tone: "error",
+        text: throughToday
+          ? "No elapsed weekdays in this week up to today. Use “Whole week” to fill it anyway."
+          : "This week has no weekdays to fill.",
+      });
       return;
     }
 
-    const noteText = `Standard work (${filledDays * 8}h logged to date)`;
+    const noteText = `Standard work (${filledDays * 8}h)`;
 
     if (rows.length === 0) {
       setRows([{
@@ -117,7 +129,26 @@ export function TimesheetGrid({ timesheetId, weekDates, projects, initialRows, e
         )
       );
     }
-    setNotice({ tone: "success", text: `Auto-filled 8h/day for ${filledDays} elapsed weekday${filledDays === 1 ? "" : "s"} up to today.` });
+    setNotice({
+      tone: "success",
+      text: `Auto-filled 8h/day across ${filledDays} weekday${filledDays === 1 ? "" : "s"}${throughToday ? " up to today" : ""}.`,
+    });
+  };
+
+  /** Pull a submitted week back to draft so it can be corrected. */
+  const recall = async () => {
+    setBusy(true);
+    setNotice(null);
+    try {
+      const response = await fetch(`/api/timesheets/${timesheetId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+      });
+      const result = await response.json().catch(() => ({})) as { message?: string };
+      setNotice({ tone: response.ok ? "success" : "error", text: result.message ?? "Done." });
+      if (response.ok) router.refresh();
+    } catch { setNotice({ tone: "error", text: "Unable to reach the server." }); }
+    finally { setBusy(false); }
   };
 
   return <div>
@@ -128,6 +159,15 @@ export function TimesheetGrid({ timesheetId, weekDates, projects, initialRows, e
     {status === "APPROVED" && <p className="form-status form-status--success" role="status">
       This week has been approved and is locked.
     </p>}
+    {status === "SUBMITTED" && <div className="recall-bar">
+      <p>
+        <strong>Submitted and awaiting approval.</strong> It is locked while an approver looks at it —
+        pull it back if you need to change something.
+      </p>
+      <button type="button" className="button button-outline" onClick={recall} disabled={busy}>
+        {busy ? "Working…" : "Recall to draft"}
+      </button>
+    </div>}
 
     {projects.length === 0 ? <p className="portal-note">
       You are not assigned to any project yet, so there is nowhere to book time. Ask a project manager to add you.
@@ -139,11 +179,20 @@ export function TimesheetGrid({ timesheetId, weekDates, projects, initialRows, e
             <button
               type="button"
               className="button button-outline text-xs py-1 px-2.5 text-amber-400 border-amber-500/30 hover:border-amber-400"
-              onClick={autofillStandardWeek}
+              onClick={() => autofillWeek(true)}
               disabled={busy}
-              title="Fills elapsed weekdays up to today with 8h/day"
+              title="Fills weekdays up to today with 8h/day — never future dates"
             >
-              ⚡ Autofill To Date (8h/day)
+              ⚡ Autofill To Date
+            </button>
+            <button
+              type="button"
+              className="button button-outline text-xs py-1 px-2.5 text-amber-400 border-amber-500/30 hover:border-amber-400"
+              onClick={() => autofillWeek(false)}
+              disabled={busy}
+              title="Fills Monday to Friday with 8h/day, including days still to come"
+            >
+              ⚡ Whole Week
             </button>
             {rows.length > 0 && (
               <button

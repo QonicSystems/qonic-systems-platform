@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { clientIp, recordAudit } from "@/lib/audit";
 import { guardRoute } from "@/lib/auth/guard";
-import { MAX_DAY_MINUTES, canEditTimesheet, canSubmitTimesheet, parseDuration } from "@/lib/delivery/timesheet";
+import { MAX_DAY_MINUTES, canEditTimesheet, canRecallTimesheet, canSubmitTimesheet, parseDuration } from "@/lib/delivery/timesheet";
 import { notifyLeadership } from "@/lib/notify";
 import { db } from "@/lib/db";
 
@@ -116,4 +116,41 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     message: submit ? "Timesheet submitted for approval." : "Draft saved.",
     totalMinutes: total,
   });
+}
+
+/**
+ * Pull a submitted week back to draft so it can be corrected.
+ *
+ * Without this, the only way out of a mistaken submission was for an approver to
+ * reject it — which left a rejection on a week whose only fault was a typo.
+ * The entries are untouched; only the status moves.
+ */
+export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { context, response } = await guardRoute("timesheet.submit");
+  if (response) return response;
+
+  const { id } = await params;
+  const sheet = await db.timesheet.findUnique({ where: { id } });
+  if (!sheet) return NextResponse.json({ message: "That timesheet could not be found." }, { status: 404 });
+
+  const allowed = canRecallTimesheet(context, sheet);
+  if (!allowed.ok) return NextResponse.json({ message: allowed.reason }, { status: allowed.status });
+
+  await db.$transaction(async (tx) => {
+    await tx.timesheet.update({
+      where: { id: sheet.id },
+      data: { status: "DRAFT", submittedAt: null, decidedById: null, decidedAt: null, decisionNote: null },
+    });
+    await recordAudit({
+      actorId: context.user.id,
+      action: "timesheet.recall",
+      entityType: "Timesheet",
+      entityId: sheet.id,
+      before: { status: sheet.status },
+      after: { status: "DRAFT", week: sheet.weekStart.toISOString().slice(0, 10) },
+      ipAddress: clientIp(request),
+    }, tx);
+  });
+
+  return NextResponse.json({ message: "Timesheet pulled back to draft. Edit it and submit again when you are ready." });
 }

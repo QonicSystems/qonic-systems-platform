@@ -15,11 +15,20 @@ export default async function ReportsPage() {
   from.setUTCDate(from.getUTCDate() - 7 * (WEEKS - 1));
 
   const [people, entries, projects] = await Promise.all([
-    // Exclude executive leadership (Founder and Co-Founder) from billable delivery utilisation
+    // Anyone doing delivery work, by evidence rather than by job title.
+    //
+    // This used to exclude the CEO and Co-Founder outright, on the assumption
+    // that leadership does not bill. In a firm where the founders deliver, that
+    // hid the only recorded time in the system and the report read as empty and
+    // broken. Someone with neither an assignment nor booked time is still left
+    // out, so pure-admin accounts do not pad the list with permanent zeroes.
     db.user.findMany({
       where: {
         status: "ACTIVE",
-        role: { key: { notIn: ["ceo", "co_founder"] } },
+        OR: [
+          { projectAssignments: { some: {} } },
+          { timesheets: { some: { entries: { some: {} } } } },
+        ],
       },
       select: { id: true, name: true, role: { select: { label: true } } },
       orderBy: { name: "asc" },

@@ -6,10 +6,16 @@ export const metadata = { title: "Capacity" };
 export default async function CapacityPage() {
   await requirePermission("report.utilization");
 
+  // Capacity is about who is allocated to live work, not about job title. The
+  // previous filter dropped the CEO and Co-Founder, which on a founder-led team
+  // removed most of the delivery capacity from the report.
   const people = await db.user.findMany({
     where: {
       status: "ACTIVE",
-      role: { key: { notIn: ["ceo", "co_founder"] } },
+      OR: [
+        { projectAssignments: { some: {} } },
+        { timesheets: { some: { entries: { some: {} } } } },
+      ],
     },
     include: {
       role: { select: { label: true } },
