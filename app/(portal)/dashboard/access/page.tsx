@@ -14,35 +14,44 @@ export default async function AccessPage() {
   const groupNames = [...new Set(granted.map((permission) => permission.group))];
 
   return <div className="portal-page">
-    <header className="portal-page-head">
-      <p className="eyebrow">Account</p>
-      <h1 className="portal-title">Your access</h1>
-      <p className="portal-lead">
+    <div className="hero-panel">
+      <span className="hero-eyebrow">{context.role.label}</span>
+      <h1 className="hero-title">Your access</h1>
+      <p className="hero-lead">
         {context.role.isSuperAdmin
-          ? <>As <strong>{context.role.label}</strong> you hold super-admin rights — every capability is available to you, and your access cannot be switched off.</>
-          : <>Enabled for the <strong>{context.role.label}</strong> role. The CEO can change these at any time.</>}
+          ? "You hold super-admin rights — every capability is available to you, and your access cannot be switched off."
+          : "The CEO controls what your role can do, at runtime, from the permission matrix — this is exactly what's switched on for you right now."}
       </p>
-    </header>
-
-    <div className="portal-grid">
-      <article className="portal-card">
-        <span className="portal-stat">{context.role.isSuperAdmin ? "All" : granted.length}</span>
-        <p>Permissions granted</p>
-      </article>
-      <article className="portal-card"><span className="portal-stat">{context.role.label}</span><p>Your role</p></article>
-      {context.permissions.has("admin.access") && <article className="portal-card">
-        <span className="portal-stat" style={{ fontSize: "1.4rem" }}>
-          <Link className="card-link" href="/admin">Administration →</Link>
-        </span>
-        <p>Manage people & permissions</p>
-      </article>}
+      <div className="hero-stats">
+        <div>
+          <span className="hero-stat-value">{context.role.isSuperAdmin ? "All" : granted.length}</span>
+          <p className="hero-stat-label">Permissions granted</p>
+        </div>
+        <div>
+          <span className="hero-stat-value">{groupNames.length}</span>
+          <p className="hero-stat-label">Capability areas</p>
+        </div>
+        {context.permissions.has("admin.access") && <div>
+          <span className="hero-stat-value" style={{ fontSize: "1.5rem" }}><Link href="/admin" style={{ color: "inherit" }}>Manage →</Link></span>
+          <p className="hero-stat-label">Roles & permissions</p>
+        </div>}
+      </div>
     </div>
 
-    {groupNames.map((groupName) => <section className="portal-section" key={groupName}>
-      <h2 className="portal-section-title">{groupName}</h2>
-      <ul className="permission-list">
-        {granted.filter((permission) => permission.group === groupName).map((permission) => <li key={permission.key}><strong>{permission.label}</strong><span>{permission.description}</span></li>)}
-      </ul>
-    </section>)}
+    <div className="capability-grid">
+      {groupNames.map((groupName) => {
+        const items = granted.filter((permission) => permission.group === groupName);
+        return <article className="capability-tile" key={groupName}>
+          <div className="capability-tile-head">
+            <span className="capability-tile-icon" aria-hidden="true">{groupName.charAt(0)}</span>
+            <h3>{groupName}</h3>
+            <span className="capability-tile-count">{items.length}</span>
+          </div>
+          <ul>
+            {items.map((permission) => <li key={permission.key}><strong>{permission.label}</strong><span>{permission.description}</span></li>)}
+          </ul>
+        </article>;
+      })}
+    </div>
   </div>;
 }

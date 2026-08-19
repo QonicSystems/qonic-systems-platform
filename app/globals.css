@@ -1503,16 +1503,6 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
   text-transform: uppercase; letter-spacing: 0.04em;
   border: 1px solid rgba(255, 215, 0, 0.3);
 }
-.balance-card { border-top: 3px solid var(--accent); }
-.balance-label {
-  display: block; margin-bottom: 0.35rem; color: var(--ink);
-  font-family: var(--font-display), sans-serif; font-size: 0.95rem; font-weight: 700;
-}
-.leave-dot {
-  display: inline-block; width: 0.6rem; height: 0.6rem;
-  margin-right: 0.5rem; border-radius: 50%; vertical-align: middle;
-}
-
 /* --- Delivery: Timesheets, Projects, Utilisation --- */
 .sr-only {
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
@@ -1697,6 +1687,107 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 .alloc-chip--off-track { background: #fef2f2; color: #991b1b; }
 .meter span.is-over { background: linear-gradient(90deg, #f59e0b, #dc2626); }
 .text-over { color: #dc2626; font-weight: 700; }
+
+/* ── Dark hero panel ────────────────────────────────────────────────────
+   The one deliberately bold departure from the light card+table template
+   every other portal page uses — reserved for a page's single lead moment
+   (Access, Leave). Ink-to-navy gradient with a soft gold bloom, so it reads
+   as premium rather than "another card." */
+.hero-panel {
+  position: relative; overflow: hidden;
+  border-radius: 1.5rem; padding: clamp(1.75rem, 4vw, 2.75rem);
+  background: radial-gradient(120% 160% at 100% 0%, #2a2412 0%, transparent 55%), linear-gradient(150deg, var(--ink) 0%, #1a1a1a 100%);
+  box-shadow: var(--shadow-xl), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  color: #fff;
+}
+.hero-panel::before {
+  content: ""; position: absolute; inset: -40% -20% auto auto; width: 26rem; height: 26rem;
+  background: radial-gradient(circle, var(--accent-glass) 0%, transparent 70%);
+  pointer-events: none;
+}
+.hero-eyebrow {
+  display: inline-flex; align-items: center; gap: 0.5rem; border-radius: 999px;
+  border: 1px solid rgba(255, 215, 0, 0.35); background: rgba(255, 215, 0, 0.1);
+  padding: 0.3rem 0.85rem; color: var(--accent-soft); font-size: 0.74rem; font-weight: 700;
+  letter-spacing: 0.06em; text-transform: uppercase;
+}
+.hero-title {
+  position: relative; margin: 0.9rem 0 0.4rem; color: #fff;
+  font-family: var(--font-display), sans-serif; font-size: clamp(2rem, 4vw, 2.75rem);
+  font-weight: 800; letter-spacing: -0.04em;
+}
+.hero-lead { position: relative; margin: 0; max-width: 42rem; color: rgba(255, 255, 255, 0.72); font-size: 1.02rem; line-height: 1.6; }
+.hero-stats {
+  position: relative; display: flex; flex-wrap: wrap; gap: clamp(1.5rem, 4vw, 3rem);
+  margin-top: clamp(1.5rem, 3vw, 2.25rem); padding-top: clamp(1.5rem, 3vw, 2.25rem);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+.hero-stat-value {
+  display: block; background: linear-gradient(160deg, #fff, var(--accent) 140%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  font-family: var(--font-display), sans-serif; font-size: 2.15rem; font-weight: 800; letter-spacing: -0.03em;
+}
+.hero-stat-label { margin: 0.15rem 0 0; color: rgba(255, 255, 255, 0.55); font-size: 0.82rem; font-weight: 600; }
+
+/* ── Capability tiles (Access page) ────────────────────────────────────── */
+.capability-grid {
+  display: grid; gap: 1.25rem;
+  grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr));
+}
+/* Dark card, matching the hero panel above rather than sitting under it as a
+   plain white settings list — the two read as one continuous surface. */
+.capability-tile {
+  position: relative; overflow: hidden; border-radius: 1.25rem;
+  background: radial-gradient(140% 100% at 100% 0%, #241f0d 0%, transparent 50%), linear-gradient(165deg, var(--ink) 0%, #1c1c1c 100%);
+  padding: 1.6rem 1.6rem 1.5rem; color: #fff;
+  box-shadow: var(--shadow-md), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  transition: transform 0.25s var(--ease), box-shadow 0.25s;
+}
+.capability-tile:hover { transform: translateY(-3px); box-shadow: var(--shadow-xl), var(--shadow-glow); }
+.capability-tile-head { position: relative; display: flex; align-items: center; gap: 0.85rem; margin-bottom: 1.15rem; }
+.capability-tile-icon {
+  display: flex; flex: none; align-items: center; justify-content: center;
+  width: 2.6rem; height: 2.6rem; border-radius: 0.85rem;
+  background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+  color: var(--ink); font-family: var(--font-display), sans-serif; font-size: 1.05rem; font-weight: 800;
+}
+.capability-tile-head h3 {
+  flex: 1; margin: 0; color: #fff; font-family: var(--font-display), sans-serif;
+  font-size: 1.05rem; font-weight: 800; letter-spacing: -0.01em;
+}
+.capability-tile-count {
+  flex: none; border-radius: 999px; border: 1px solid rgba(255, 215, 0, 0.3);
+  background: rgba(255, 215, 0, 0.1); padding: 0.14rem 0.6rem;
+  color: var(--accent-soft); font-size: 0.72rem; font-weight: 800; font-variant-numeric: tabular-nums;
+}
+.capability-tile ul { position: relative; display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
+.capability-tile li {
+  display: grid; gap: 0.18rem; padding: 0.7rem 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.capability-tile li:first-child { border-top: none; padding-top: 0; }
+.capability-tile strong { color: #fff; font-size: 0.87rem; font-weight: 700; }
+.capability-tile span { color: rgba(255, 255, 255, 0.5); font-size: 0.79rem; line-height: 1.5; }
+
+/* ── Leave balance rings ────────────────────────────────────────────────── */
+.ring-stat-row { position: relative; display: flex; flex-wrap: wrap; gap: clamp(1.25rem, 3vw, 2rem); }
+.ring-stat { display: flex; flex-direction: column; align-items: center; gap: 0.3rem; text-align: center; }
+.ring-stat-value { fill: #fff; font-family: var(--font-display), sans-serif; font-size: 1.35rem; font-weight: 800; }
+.ring-stat-unit { fill: rgba(255, 255, 255, 0.5); font-size: 0.62rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+.ring-stat-label { margin-top: 0.35rem; color: #fff; font-size: 0.85rem; font-weight: 700; }
+.ring-stat-sub { color: rgba(255, 255, 255, 0.5); font-size: 0.74rem; font-weight: 600; }
+
+/* ── Leave type pill (upgrades the plain colour dot) ─────────────────────
+   Colour is per-type, from the database (lib/leave — LeaveType.colour), so
+   the tint is derived with color-mix() rather than a fixed palette. */
+.leave-type-pill {
+  display: inline-flex; align-items: center; gap: 0.4rem; border-radius: 999px;
+  padding: 0.2rem 0.65rem 0.2rem 0.5rem;
+  background: color-mix(in srgb, var(--dot) 14%, white);
+  color: color-mix(in srgb, var(--dot) 65%, black);
+  font-size: 0.78rem; font-weight: 700;
+}
+.leave-type-pill::before { content: ""; width: 0.5rem; height: 0.5rem; border-radius: 50%; background: var(--dot); flex: none; }
 
 /* --- Global Search Spotlight Command Palette --- */
 .global-search-trigger {
