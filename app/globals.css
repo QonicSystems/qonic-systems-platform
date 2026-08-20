@@ -1786,7 +1786,29 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 }
 .capability-tile li:first-child { border-top: none; padding-top: 0; }
 .capability-tile strong { color: #fff; font-size: 0.87rem; font-weight: 700; }
-.capability-tile span { color: rgba(255, 255, 255, 0.5); font-size: 0.79rem; line-height: 1.5; }
+/* :not(.status-chip) so this doesn't outrank .status-chip--*'s own color —
+   a status pill is self-contained (its own background *and* text color, e.g.
+   #f8fafc on #475569 for DRAFT) and must keep both together regardless of
+   surface; without the exclusion this class+element selector's higher
+   specificity overrides just the text half with translucent white, leaving
+   near-invisible text on the pill's own near-white background. */
+.capability-tile span:not(.status-chip) { color: rgba(255, 255, 255, 0.5); font-size: 0.79rem; line-height: 1.5; }
+/* BarChart/SplitBarChart (Reports pages) nested inside a tile here: label and
+   value text already pick up the dark-surface color above (both render as
+   <span>, and this selector's higher specificity wins over the chart's own
+   light-theme text color) — only the light-theme track backgrounds need an
+   explicit swap so the gold fill doesn't sit on a bright cream bar. */
+.capability-tile .chart-bar-track,
+.capability-tile .chart-split-track { background: rgba(255, 255, 255, 0.1); }
+/* .text-link's ink-on-white contrast (AA on white only) disappears on this
+   tile's near-black surface, so a tile that links out (Dashboard Overview)
+   gets its own light-gold variant instead. */
+.capability-tile-link {
+  display: inline-flex; align-items: center; gap: 0.4rem; margin-top: 1rem;
+  color: var(--accent-soft); font-size: 0.82rem; font-weight: 700; text-decoration: none;
+  transition: color 0.2s, gap 0.25s var(--ease);
+}
+.capability-tile-link:hover { color: var(--accent); gap: 0.6rem; }
 
 /* ── Leave balance rings ────────────────────────────────────────────────── */
 .ring-stat-row { position: relative; display: flex; flex-wrap: wrap; gap: clamp(1.25rem, 3vw, 2rem); }
