@@ -124,13 +124,27 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   }
 
   await db.$transaction(async (tx) => {
-    // Also clean up any unlinked/matching staff user with this email
-    await tx.user.deleteMany({
-      where: {
-        email: { equals: existing.email, mode: "insensitive" },
-        role: { key: { notIn: ["ceo", "co_founder"] } },
-      },
+    // A matching staff account is archived, never hard-deleted, here — same
+    // principle the app applies everywhere else ("removal is refused for
+    // anyone with contract letters on record; deactivate instead" —
+    // lib/auth/authority.ts). A naive delete used to sit here and silently
+    // do nothing whenever the account had contract letters, time entries, or
+    // other records referencing it, leaving an orphaned account with no
+    // audit trail explaining why. Permanently purging an account, when that
+    // is genuinely wanted, is its own deliberate, CEO-only action —
+    // DELETE /api/admin/users/[id] — not a side effect of deleting a candidate.
+    const linkedUser = await tx.user.findFirst({
+      where: { email: { equals: existing.email, mode: "insensitive" }, role: { key: { notIn: ["ceo", "co_founder"] } }, status: "ACTIVE" },
     });
+    if (linkedUser) {
+      await tx.user.update({ where: { id: linkedUser.id }, data: { status: "ARCHIVED" } });
+      await tx.session.deleteMany({ where: { userId: linkedUser.id } });
+      await recordAudit({
+        actorId: context.user.id, action: "user.deactivate", entityType: "User", entityId: linkedUser.id,
+        before: { status: "ACTIVE" }, after: { status: "ARCHIVED", reason: "linked candidate deleted" },
+        ipAddress: clientIp(request),
+      }, tx);
+    }
 
     await tx.candidate.delete({ where: { id } });
     await recordAudit({ actorId: context.user.id, action: "candidate.delete", entityType: "Candidate", entityId: id, ipAddress: clientIp(request) }, tx);

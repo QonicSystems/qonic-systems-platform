@@ -1,8 +1,18 @@
+import { recordAudit } from "@/lib/audit";
 import { db } from "@/lib/db";
 
 /**
  * Ensures all non-global candidate pool resources are synced into User (Admin People)
  * and all non-leadership staff Users are synced into Candidate (Candidate Pool).
+ *
+ * This runs automatically (no permission gate, no human in the loop) and can
+ * create a real, login-capable account or change one's status — including
+ * archiving it, which blocks sign-in. `actorId: null` marks these as
+ * system-initiated in the audit log, same convention as the CLI password-reset
+ * script, so "why did this account get archived" has an answer instead of a
+ * silent gap — this same silent gap is exactly what made a real bug (an
+ * archived Candidate quietly disabling the matching employee's account)
+ * untraceable until someone dug through the code.
  */
 export async function syncCandidateAndUsers(): Promise<void> {
   try {
@@ -35,7 +45,7 @@ export async function syncCandidateAndUsers(): Promise<void> {
       if (c && !u) {
         // Candidate exists without User: create User if active
         if (c.status === "ARCHIVED") continue;
-        await db.user.create({
+        const created = await db.user.create({
           data: {
             email,
             name: c.name,
@@ -47,11 +57,14 @@ export async function syncCandidateAndUsers(): Promise<void> {
             mustChangePassword: true,
             passwordHash: "INVITED_CANDIDATE_NO_LOGIN_YET",
           },
-        }).catch(() => {});
+        }).catch(() => null);
+        if (created) {
+          await recordAudit({ actorId: null, action: "sync.user.create", entityType: "User", entityId: created.id, after: { email, fromCandidateId: c.id } });
+        }
       } else if (u && !c) {
         // User exists without Candidate: create Candidate if active
         if (u.status === "ARCHIVED") continue;
-        await db.candidate.create({
+        const created = await db.candidate.create({
           data: {
             email,
             name: u.name,
@@ -64,17 +77,22 @@ export async function syncCandidateAndUsers(): Promise<void> {
             status: "ACTIVE",
             consentAt: new Date(),
           },
-        }).catch(() => {});
+        }).catch(() => null);
+        if (created) {
+          await recordAudit({ actorId: null, action: "sync.candidate.create", entityType: "Candidate", entityId: created.id, after: { email, fromUserId: u.id } });
+        }
       } else if (c && u) {
         // Both exist: reconcile based on which record was updated more recently
         if (c.updatedAt >= u.updatedAt) {
           // Candidate is newer -> update User
+          const nextStatus = c.status === "ACTIVE" ? "ACTIVE" : "ARCHIVED";
           if (
             u.name !== c.name ||
             u.phone !== (c.phone || null) ||
             u.techStack !== (c.techStack || c.skills) ||
-            u.status !== c.status
+            u.status !== nextStatus
           ) {
+            const statusChanged = u.status !== nextStatus;
             await db.user.update({
               where: { id: u.id },
               data: {
@@ -82,9 +100,17 @@ export async function syncCandidateAndUsers(): Promise<void> {
                 phone: c.phone || null,
                 jobTitle: c.headline || u.jobTitle || "Employee (Dev)",
                 techStack: c.techStack || c.skills || u.techStack,
-                status: c.status === "ACTIVE" ? "ACTIVE" : "ARCHIVED",
+                status: nextStatus,
               },
             }).catch(() => {});
+            // A status flip changes login access — this is the one field
+            // worth an audit entry on its own; a synced name/phone edit isn't.
+            if (statusChanged) {
+              await recordAudit({
+                actorId: null, action: "sync.user.status", entityType: "User", entityId: u.id,
+                before: { status: u.status }, after: { status: nextStatus, fromCandidateId: c.id },
+              });
+            }
           }
         } else {
           // User is newer -> update Candidate

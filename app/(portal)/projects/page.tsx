@@ -24,7 +24,7 @@ export default async function ProjectsPage() {
           select: {
             userId: true,
             allocationPercent: true,
-            user: { select: { id: true, name: true, email: true, jobTitle: true, role: { select: { key: true, label: true } } } },
+            user: { select: { id: true, name: true, email: true, jobTitle: true, status: true, role: { select: { key: true, label: true } } } },
           },
         },
         _count: { select: { assignments: true, timeEntries: true, invoices: true, expenses: true } },
@@ -73,8 +73,12 @@ export default async function ProjectsPage() {
       <ProjectManager
         projects={projects.map((project) => {
           const minutes = project.timeEntries.reduce((sum, entry) => sum + entry.minutes, 0);
+          // Deactivated/archived people keep their historical assignment row
+          // (it's what their already-booked time, invoices, and payout
+          // ledger entries key off) but no longer show as "currently
+          // assigned" — that reads as an active team member when they're not.
           const validAssignments = project.assignments.filter(
-            (a) => !["ceo", "co_founder"].includes(a.user.role.key)
+            (a) => !["ceo", "co_founder"].includes(a.user.role.key) && a.user.status === "ACTIVE"
           );
           return {
             id: project.id,
