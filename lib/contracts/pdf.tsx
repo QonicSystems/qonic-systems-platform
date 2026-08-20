@@ -1,5 +1,5 @@
 import { Document, Image, Page, StyleSheet, Text, View, renderToBuffer } from "@react-pdf/renderer";
-import { formatDate, formatSalary, type ContractPayload } from "@/lib/contracts/payload";
+import { formatCompensation, formatDate, type ContractPayload } from "@/lib/contracts/payload";
 import { PdfLockup, PdfParentMark } from "@/lib/pdf-brand";
 import { FIELD_LABELS, findTemplate, type LetterTemplate } from "@/lib/contracts/templates";
 
@@ -41,7 +41,7 @@ function Field({ label, value }: { label: string; value: string }) {
 
 function valueFor(field: keyof ContractPayload, payload: ContractPayload): string {
   if (field === "startDate") return formatDate(payload.startDate);
-  if (field === "annualSalary") return formatSalary(payload);
+  if (field === "annualSalary" || field === "monthlyCompensation") return formatCompensation(payload).value;
   return payload[field] ?? "";
 }
 

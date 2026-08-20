@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { clientIp, recordAudit } from "@/lib/audit";
 import { guardRoute } from "@/lib/auth/guard";
-import { MAX_DAY_MINUTES, canEditTimesheet, canRecallTimesheet, canSubmitTimesheet, parseDuration } from "@/lib/delivery/timesheet";
+import { MAX_DAY_MINUTES, canEditTimesheet, canRecallTimesheet, canSubmitTimesheet, isDayBookable, parseDuration } from "@/lib/delivery/timesheet";
 import { notifyLeadership } from "@/lib/notify";
 import { db } from "@/lib/db";
 
@@ -27,15 +27,26 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     return NextResponse.json({ message: "That week can no longer be edited." }, { status: 409 });
   }
 
+  const today = new Date();
+
   let body: unknown;
   try { body = await request.json(); } catch { return NextResponse.json({ message: "Please submit a valid request." }, { status: 400 }); }
   const input = typeof body === "object" && body !== null ? body as Record<string, unknown> : {};
   const submit = input.submit === true;
   const rows = Array.isArray(input.entries) ? input.entries as IncomingEntry[] : [];
 
-  // Only projects the person is actually assigned to may receive time.
-  const assignments = await db.projectAssignment.findMany({ where: { userId: context.user.id }, select: { projectId: true } });
+  // Only projects the *sheet's owner* is assigned to may receive time — this
+  // is deliberately `sheet.userId`, not `context.user.id`: an approver can be
+  // backfilling on behalf of someone else (see canEditTimesheet), and it's
+  // always that person's assignments that matter, never the actor's own.
+  // Each project's own startDate is the per-project bookable floor — see the
+  // matching comment in app/(portal)/timesheets/page.tsx.
+  const assignments = await db.projectAssignment.findMany({
+    where: { userId: sheet.userId },
+    select: { projectId: true, createdAt: true, project: { select: { startDate: true } } },
+  });
   const allowedProjects = new Set(assignments.map((assignment) => assignment.projectId));
+  const bookableFrom = new Map(assignments.map((assignment) => [assignment.projectId, assignment.project.startDate ?? assignment.createdAt]));
 
   const prepared: { projectId: string; taskId: string | null; workDate: Date; minutes: number; billable: boolean; note: string | null }[] = [];
   const dayTotals = new Map<string, number>();
@@ -59,6 +70,10 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     if (offsetDays < 0 || offsetDays > 6) return NextResponse.json({ message: "An entry falls outside this week." }, { status: 422 });
 
     const key = workDate.toISOString().slice(0, 10);
+    if (!isDayBookable(workDate, today, bookableFrom.get(projectId) ?? null)) {
+      return NextResponse.json({ message: `${key} is outside the range you can log time for on that project.` }, { status: 422 });
+    }
+
     const dayTotal = (dayTotals.get(key) ?? 0) + minutes;
     if (dayTotal > MAX_DAY_MINUTES) {
       return NextResponse.json({ message: `More than ${MAX_DAY_MINUTES / 60} hours booked on ${key}. Please check the entries.` }, { status: 422 });

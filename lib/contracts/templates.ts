@@ -28,25 +28,55 @@ const EMPLOYMENT_FIELDS: ReadonlyArray<TemplateField> = [
   "jobTitle", "employmentType", "startDate", "annualSalary", "location", "reportingTo", "noticePeriod",
 ];
 
+// Same field set, but monthlyCompensation instead of annualSalary — the
+// figure per-day payout is now calculated from (see lib/delivery/payout.ts).
+// A new key, not an edit to EMPLOYMENT_FIELDS/standard-employment-v1: that
+// template has already been used to issue real letters, and its wording
+// (including which fields it prints) must never change under those letters —
+// see the file-level comment above.
+const EMPLOYMENT_FIELDS_V2: ReadonlyArray<TemplateField> = [
+  "jobTitle", "employmentType", "startDate", "monthlyCompensation", "location", "reportingTo", "noticePeriod",
+];
+
 export const LETTER_TEMPLATES: ReadonlyArray<LetterTemplate> = [
   {
     key: "standard-employment-v1",
-    label: "Employment Contract",
+    label: "Employment Contract (Legacy)",
     title: "Contract of Employment",
-    description: "The standard contract of employment for full-time and part-time developer engagements.",
+    description: "Legacy — annual compensation. Superseded by the monthly-compensation version below for new letters.",
     intro: "Dear {first}, we are delighted to confirm your engagement with QONIC Systems Platform. This letter sets out the principal terms of your contract. Please review it carefully and confirm your acceptance in the staff portal.",
     closing: "Acknowledging this letter in the QONIC staff portal constitutes your acceptance of the terms above. This document supersedes any prior representations relating to the role.",
     fields: EMPLOYMENT_FIELDS,
     requiresAcknowledgement: true,
   },
   {
+    key: "standard-employment-v2",
+    label: "Employment Contract",
+    title: "Contract of Employment",
+    description: "The standard contract of employment for full-time and part-time developer engagements.",
+    intro: "Dear {first}, we are delighted to confirm your engagement with QONIC Systems Platform. This letter sets out the principal terms of your contract. Please review it carefully and confirm your acceptance in the staff portal.",
+    closing: "Acknowledging this letter in the QONIC staff portal constitutes your acceptance of the terms above. This document supersedes any prior representations relating to the role.",
+    fields: EMPLOYMENT_FIELDS_V2,
+    requiresAcknowledgement: true,
+  },
+  {
     key: "consulting-services-v1",
+    label: "Consulting Services Agreement (Legacy)",
+    title: "Consulting Agreement",
+    description: "Legacy — annual compensation. Superseded by the monthly-compensation version below for new letters.",
+    intro: "Dear {first}, this agreement confirms the terms of your consulting engagement with QONIC Systems Platform for client delivery.",
+    closing: "Acknowledging this agreement in the QONIC portal confirms your acceptance of the project delivery terms.",
+    fields: EMPLOYMENT_FIELDS,
+    requiresAcknowledgement: true,
+  },
+  {
+    key: "consulting-services-v2",
     label: "Consulting Services Agreement",
     title: "Consulting Agreement",
     description: "Independent contractor and consulting agreement for project execution.",
     intro: "Dear {first}, this agreement confirms the terms of your consulting engagement with QONIC Systems Platform for client delivery.",
     closing: "Acknowledging this agreement in the QONIC portal confirms your acceptance of the project delivery terms.",
-    fields: EMPLOYMENT_FIELDS,
+    fields: EMPLOYMENT_FIELDS_V2,
     requiresAcknowledgement: true,
   },
   {
@@ -103,10 +133,10 @@ export const LETTER_TEMPLATES: ReadonlyArray<LetterTemplate> = [
 ];
 
 export const ACTIVE_LETTER_TEMPLATES: ReadonlyArray<LetterTemplate> = LETTER_TEMPLATES.filter(
-  (t) => !t.key.includes("legacy") && ["standard-employment-v1", "consulting-services-v1", "nda-v1"].includes(t.key)
+  (t) => ["standard-employment-v2", "consulting-services-v2", "nda-v1"].includes(t.key)
 );
 
-export const DEFAULT_TEMPLATE_KEY = "standard-employment-v1";
+export const DEFAULT_TEMPLATE_KEY = "standard-employment-v2";
 
 export function findTemplate(key: string): LetterTemplate {
   // Falling back keeps an unknown key rendering rather than 500ing, which matters
@@ -120,6 +150,7 @@ export const FIELD_LABELS: Record<TemplateField, string> = {
   startDate: "Effective date",
   endDate: "Duration / End Date",
   annualSalary: "Annual salary",
+  monthlyCompensation: "Monthly compensation",
   currency: "Currency",
   location: "Location",
   reportingTo: "Reporting to",

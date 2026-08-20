@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { clientIp, recordAudit } from "@/lib/audit";
 import { guardRoute } from "@/lib/auth/guard";
 import { canDecideTimesheet } from "@/lib/delivery/timesheet";
+import { payoutLinesFor } from "@/lib/delivery/payout";
+import type { ContractPayload } from "@/lib/contracts/payload";
+import { toMinor } from "@/lib/money";
 import { notify, notifyLeadership } from "@/lib/notify";
 import { db } from "@/lib/db";
 
@@ -13,7 +16,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (response) return response;
 
   const { id } = await params;
-  const sheet = await db.timesheet.findUnique({ where: { id }, include: { user: { select: { name: true } } } });
+  const sheet = await db.timesheet.findUnique({ where: { id }, include: { user: { select: { name: true } }, entries: true } });
   if (!sheet) return NextResponse.json({ message: "That timesheet could not be found." }, { status: 404 });
 
   let body: unknown;
@@ -39,6 +42,59 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       where: { id: sheet.id },
       data: { status: decision, decidedById: context.user.id, decidedAt: new Date(), decisionNote: note || null },
     });
+
+    if (decision === "APPROVED") {
+      // The payout ledger is generated the same moment time becomes "real"
+      // for client billing — see lib/delivery/payout.ts for the day-based,
+      // backfill-vs-actual rule this applies. The daily rate comes from the
+      // person's own employment contract, not the project — see the module
+      // comment in lib/delivery/payout.ts for why that's per-person.
+      const projectIds = [...new Set(sheet.entries.map((entry) => entry.projectId))];
+      const [assignments, latestLetter] = await Promise.all([
+        tx.projectAssignment.findMany({
+          where: { userId: sheet.userId, projectId: { in: projectIds } },
+          select: { projectId: true, createdAt: true },
+        }),
+        tx.contractLetter.findFirst({
+          where: { subjectUserId: sheet.userId, status: { in: ["RELEASED", "ACKNOWLEDGED"] } },
+          orderBy: { updatedAt: "desc" },
+          select: { payload: true },
+        }),
+      ]);
+      const monthlyCompensationRaw = latestLetter ? (latestLetter.payload as unknown as ContractPayload).monthlyCompensation : null;
+      const monthlyCompensation = monthlyCompensationRaw ? toMinor(monthlyCompensationRaw) : null;
+
+      const lines = payoutLinesFor(
+        sheet.entries,
+        assignments.map((assignment) => ({ projectId: assignment.projectId, assignmentStartedAt: assignment.createdAt })),
+        monthlyCompensation && !Number.isNaN(monthlyCompensation) ? monthlyCompensation : null,
+      );
+
+      for (const line of lines) {
+        await tx.payoutLedgerEntry.upsert({
+          where: { userId_projectId_workDate: { userId: sheet.userId, projectId: line.projectId, workDate: line.workDate } },
+          // A recall→re-approve cycle must not drift the frozen amount/category
+          // from an earlier approval — only create is meaningful here, not update.
+          update: {},
+          create: {
+            userId: sheet.userId, projectId: line.projectId, timesheetId: sheet.id,
+            workDate: line.workDate, amount: line.amount, category: line.category,
+          },
+        });
+      }
+
+      if (lines.length > 0) {
+        await recordAudit({
+          actorId: context.user.id,
+          action: "payout.ledger.generate",
+          entityType: "Timesheet",
+          entityId: sheet.id,
+          after: { week: sheet.weekStart.toISOString().slice(0, 10), employee: sheet.user.name, lines: lines.length },
+          ipAddress: clientIp(request),
+        }, tx);
+      }
+    }
+
     await notify({
       userId: sheet.userId, kind: "TIMESHEET",
       title: decision === "APPROVED" ? "Your timesheet was approved" : "Your timesheet needs changes",

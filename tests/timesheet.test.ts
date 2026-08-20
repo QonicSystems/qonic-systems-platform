@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { AuthContext } from "@/lib/auth/guard";
 import {
   STANDARD_WEEK_MINUTES, canDecideTimesheet, canEditTimesheet, canSubmitTimesheet,
-  formatDuration, parseDuration, utilisation, weekDays, weekStartOf, canRecallTimesheet,
+  formatDuration, isDayBookable, parseDuration, utilisation, weekDays, weekStartOf, canRecallTimesheet,
 } from "@/lib/delivery/timesheet";
 import { toMinorUnits, validateClient, validateProject } from "@/lib/delivery/validate";
 
@@ -36,6 +36,35 @@ describe("weekStartOf", () => {
   });
 });
 
+describe("isDayBookable", () => {
+  const today = utc("2026-08-20"); // a Thursday
+
+  it("is not bookable when no assignment has ever existed", () => {
+    expect(isDayBookable(utc("2026-08-20"), today, null)).toBe(false);
+  });
+
+  it("is bookable today", () => {
+    expect(isDayBookable(utc("2026-08-20"), today, utc("2026-01-01"))).toBe(true);
+  });
+
+  it("is not bookable for any day after today", () => {
+    expect(isDayBookable(utc("2026-08-21"), today, utc("2026-01-01"))).toBe(false);
+  });
+
+  it("is bookable on the day someone was first assigned", () => {
+    expect(isDayBookable(utc("2026-08-14"), today, utc("2026-08-14"))).toBe(true);
+  });
+
+  it("is not bookable for a day before the first assignment, even within the same week", () => {
+    // Assigned Friday the 14th — Monday-Thursday of that same week are still locked.
+    expect(isDayBookable(utc("2026-08-10"), today, utc("2026-08-14"))).toBe(false);
+  });
+
+  it("ignores the time-of-day component of the assignment timestamp", () => {
+    expect(isDayBookable(utc("2026-08-14"), today, new Date("2026-08-14T23:59:00.000Z"))).toBe(true);
+  });
+});
+
 describe("parseDuration", () => {
   it.each([
     ["7.5", 450], ["7,5", 450], ["8", 480], ["8h", 480],
@@ -56,16 +85,26 @@ describe("parseDuration", () => {
 });
 
 describe("canEditTimesheet", () => {
-  it.each(["DRAFT", "REJECTED"] as const)("allows editing a %s week", (status) => {
+  it.each(["DRAFT", "REJECTED"] as const)("allows editing your own %s week", (status) => {
     expect(canEditTimesheet(EMPLOYEE, { userId: EMPLOYEE.user.id, status })).toBe(true);
   });
 
-  it.each(["SUBMITTED", "APPROVED"] as const)("locks a %s week", (status) => {
+  it.each(["SUBMITTED", "APPROVED"] as const)("locks your own %s week", (status) => {
     expect(canEditTimesheet(EMPLOYEE, { userId: EMPLOYEE.user.id, status })).toBe(false);
   });
 
-  it("never lets someone edit another person's week", () => {
-    expect(canEditTimesheet(MANAGER, { userId: EMPLOYEE.user.id, status: "DRAFT" })).toBe(false);
+  it("does not let a plain employee edit someone else's week, even a draft", () => {
+    expect(canEditTimesheet(EMPLOYEE, { userId: "someone-else", status: "DRAFT" })).toBe(false);
+  });
+
+  it("lets an approver backfill another person's still-open week — the offboarding handover path", () => {
+    expect(canEditTimesheet(MANAGER, { userId: EMPLOYEE.user.id, status: "DRAFT" })).toBe(true);
+    expect(canEditTimesheet(MANAGER, { userId: EMPLOYEE.user.id, status: "REJECTED" })).toBe(true);
+  });
+
+  it("an approver still cannot touch a week that is already submitted or approved", () => {
+    expect(canEditTimesheet(MANAGER, { userId: EMPLOYEE.user.id, status: "SUBMITTED" })).toBe(false);
+    expect(canEditTimesheet(MANAGER, { userId: EMPLOYEE.user.id, status: "APPROVED" })).toBe(false);
   });
 });
 

@@ -44,6 +44,9 @@ export const PERMISSIONS = [
   { key: "expense.submit", group: "Finance", label: "Claim expenses", description: "Submit your own expense claims.", sortOrder: 70 },
   { key: "expense.approve", group: "Finance", label: "Approve expenses", description: "Approve, reject, and mark expenses reimbursed.", sortOrder: 72 },
   { key: "report.finance", group: "Finance", label: "View finance reports", description: "Revenue, receivables ageing, and placement fees.", sortOrder: 74 },
+  { key: "payout.view_own", group: "Finance", label: "View own payout breakdown", description: "See your own earnings, split between actual payout and company-billed backfill.", sortOrder: 75 },
+  { key: "payout.view_all", group: "Finance", label: "View all payout & deal data", description: "See every resource's payout breakdown and deal financials.", sortOrder: 76 },
+  { key: "payout.manage", group: "Finance", label: "Manage rates & reclassify payouts", description: "Edit deal amounts and assignment rates, and override a payout entry's classification.", sortOrder: 77 },
 
   // Leave
   { key: "leave.request", group: "Leave", label: "Request leave", description: "Submit leave requests and see your own balances.", sortOrder: 82 },
@@ -83,11 +86,12 @@ export const DEFAULT_ROLE_PERMISSIONS: Readonly<Record<Exclude<RoleKey, "ceo">, 
     "timesheet.submit", "timesheet.approve", "report.utilization",
     "job.view", "job.manage", "candidate.view", "candidate.manage", "placement.manage",
     "invoice.view", "invoice.manage", "payment.record", "report.finance",
+    "payout.view_own", "payout.view_all", "payout.manage",
     "leave.request", "leave.approve", "leave.manage",
     "admin.access", "user.view", "user.manage", "user.deactivate", "audit.view",
   ],
   [ROLE.EMPLOYEE]: [
-    "portal.access", "directory.view", "contract.view_own", "leave.request", "timesheet.submit",
+    "portal.access", "directory.view", "contract.view_own", "leave.request", "timesheet.submit", "payout.view_own",
   ],
 };
 

@@ -197,17 +197,19 @@ export function ContractForm({
             </select>
           </div>
           <div>
-            <label htmlFor="annualSalary">
-              Annual Compensation <em>*</em>
+            <label htmlFor="monthlyCompensation">
+              Monthly Compensation <em>*</em>
             </label>
             <input
-              id="annualSalary"
+              id="monthlyCompensation"
               inputMode="numeric"
-              value={data.annualSalary}
-              onChange={(event) => update("annualSalary", event.target.value)}
-              aria-invalid={Boolean(errors.annualSalary)}
+              value={data.monthlyCompensation ?? ""}
+              onChange={(event) => update("monthlyCompensation", event.target.value)}
+              aria-invalid={Boolean(errors.monthlyCompensation)}
             />
-            {errors.annualSalary && <p className="form-error">{errors.annualSalary}</p>}
+            {errors.monthlyCompensation
+              ? <p className="form-error">{errors.monthlyCompensation}</p>
+              : <p className="field-hint">Per-day payout is calculated from this figure once timesheets are approved.</p>}
           </div>
         </div>
         <div>

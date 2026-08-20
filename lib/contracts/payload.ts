@@ -3,7 +3,17 @@ export type ContractPayload = {
   employmentType: string;
   startDate: string;
   endDate?: string;
-  annualSalary: string;
+  /**
+   * Legacy — letters issued before the switch to monthly compensation still
+   * carry this key and must keep rendering with it. Never written by new
+   * drafts; kept only so old payloads still typecheck and print correctly.
+   * See docs at the top of lib/contracts/templates.ts on why the old
+   * standard-employment-v1/consulting-services-v1 templates were left in
+   * place rather than edited.
+   */
+  annualSalary?: string;
+  /** The figure per-day payout is calculated from — see lib/delivery/payout.ts. */
+  monthlyCompensation?: string;
   currency: string;
   location: string;
   reportingTo: string;
@@ -21,7 +31,7 @@ export const emptyContractPayload: ContractPayload = {
   employmentType: "Full-time Contract",
   startDate: "",
   endDate: "Till project is running",
-  annualSalary: "",
+  monthlyCompensation: "",
   currency: "INR",
   location: "",
   reportingTo: "Founder & Co-Founder",
@@ -53,7 +63,7 @@ export function validateContractPayload(value: unknown): { data?: ContractPayloa
     employmentType: String(input.employmentType ?? "").trim(),
     startDate: String(input.startDate ?? "").trim(),
     endDate: String(input.endDate ?? "Till project is running").trim(),
-    annualSalary: String(input.annualSalary ?? "").trim(),
+    monthlyCompensation: String(input.monthlyCompensation ?? "").trim(),
     currency: String(input.currency ?? "").trim(),
     location: String(input.location ?? "").trim(),
     reportingTo: String(input.reportingTo ?? "Founder & Co-Founder").trim(),
@@ -65,7 +75,7 @@ export function validateContractPayload(value: unknown): { data?: ContractPayloa
   if (data.jobTitle.length < 2) errors.jobTitle = "Please enter the job title.";
   if (!EMPLOYMENT_TYPES.includes(data.employmentType as typeof EMPLOYMENT_TYPES[number])) errors.employmentType = "Please choose an employment type.";
   if (!isRealDate(data.startDate)) errors.startDate = "Please enter a valid start date.";
-  if (!/^\d[\d,]*(\.\d{1,2})?$/.test(data.annualSalary)) errors.annualSalary = "Please enter the salary as a number.";
+  if (!/^\d[\d,]*(\.\d{1,2})?$/.test(data.monthlyCompensation ?? "")) errors.monthlyCompensation = "Please enter the monthly compensation as a number.";
   if (!CURRENCIES.includes(data.currency as typeof CURRENCIES[number])) errors.currency = "Please choose a currency.";
   if (data.location.length < 2) errors.location = "Please enter a work location.";
   if (!data.noticePeriod) errors.noticePeriod = "Please enter a notice period.";
@@ -73,10 +83,17 @@ export function validateContractPayload(value: unknown): { data?: ContractPayloa
   return Object.keys(errors).length ? { errors } : { data, errors };
 }
 
-export function formatSalary(payload: ContractPayload): string {
-  const amount = Number(payload.annualSalary.replace(/,/g, ""));
-  if (Number.isNaN(amount)) return `${payload.currency} ${payload.annualSalary}`;
-  return `${payload.currency} ${amount.toLocaleString("en-IN")}`;
+/**
+ * Formats whichever compensation figure a letter's payload actually carries.
+ * New letters (standard-employment-v2 onward) always have monthlyCompensation;
+ * letters issued before that switch only ever have annualSalary — never both.
+ */
+export function formatCompensation(payload: ContractPayload): { label: string; value: string } {
+  const raw = payload.monthlyCompensation ?? payload.annualSalary ?? "";
+  const label = payload.monthlyCompensation ? "Monthly compensation" : "Annual salary";
+  const amount = Number(raw.replace(/,/g, ""));
+  const value = Number.isNaN(amount) ? `${payload.currency} ${raw}` : `${payload.currency} ${amount.toLocaleString("en-IN")}`;
+  return { label, value };
 }
 
 export function formatDate(value: string): string {

@@ -9,6 +9,7 @@ export function ContractDispatch({
   subjectPhone,
   subjectEmail,
   status,
+  origin,
 }: {
   letterId: string;
   reference: string;
@@ -16,12 +17,20 @@ export function ContractDispatch({
   subjectPhone?: string | null;
   subjectEmail?: string | null;
   status: string;
+  /**
+   * Resolved server-side (lib/app-origin.ts), not from `window.location` —
+   * the same value on the server-rendered HTML and the client hydration
+   * pass, which a `typeof window` branch here previously was not: the server
+   * always fell back to the hardcoded production URL while the client used
+   * whatever origin the browser was actually on (localhost in dev), so the
+   * two renders produced different hrefs and React flagged a hydration
+   * mismatch on every WhatsApp/email link.
+   */
+  origin: string;
 }) {
   const [copied, setCopied] = useState(false);
 
-  // The direct review / signing URL
-  const host = typeof window !== "undefined" ? window.location.origin : "https://consulting.qonicsystems.com";
-  const signingUrl = `${host}/contracts/${letterId}`;
+  const signingUrl = `${origin}/contracts/${letterId}`;
 
   const messageText = `Hello ${subjectName}! Your official contract letter (${reference}) from Qonic Systems is ready for your review and digital signature: ${signingUrl}`;
 

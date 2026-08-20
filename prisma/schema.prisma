@@ -62,6 +62,9 @@ model User {
   projectAssignments ProjectAssignment[]
   timesheets         Timesheet[]          @relation("TimesheetOwner")
   timesheetDecisions Timesheet[]          @relation("TimesheetApprover")
+  payoutsReceived    PayoutLedgerEntry[]  @relation("PayoutRecipient")
+  payoutOverrides    PayoutLedgerEntry[]  @relation("PayoutOverrideActor")
+  resourceDeals      ResourceDeal[]
   leaveRequests      LeaveRequest[]       @relation("LeaveRequester")
   leaveDecisions     LeaveRequest[]       @relation("LeaveDecider")
   leaveBalances      LeaveBalance[]
@@ -455,12 +458,14 @@ model Project {
   managerId String?
   manager   User?   @relation("ProjectManager", fields: [managerId], references: [id], onDelete: SetNull)
 
-  assignments ProjectAssignment[]
-  tasks       ProjectTask[]
-  timeEntries TimeEntry[]
-  milestones  ProjectMilestone[]
-  invoices    Invoice[]
-  expenses    Expense[]
+  assignments  ProjectAssignment[]
+  tasks        ProjectTask[]
+  timeEntries  TimeEntry[]
+  milestones   ProjectMilestone[]
+  invoices     Invoice[]
+  expenses     Expense[]
+  payoutLedger PayoutLedgerEntry[]
+  deals        ResourceDeal[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -525,7 +530,8 @@ model Timesheet {
   decidedAt    DateTime?
   decisionNote String?
 
-  entries TimeEntry[]
+  entries      TimeEntry[]
+  payoutLedger PayoutLedgerEntry[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -566,6 +572,81 @@ model TimeEntry {
   @@index([projectId, workDate])
   @@index([workDate])
   @@index([invoiceId])
+}
+
+// -------------------------------------------------- Payout ledger & deals --
+//
+// A separate ledger from Invoice/Payment: those bill the CLIENT, this tracks
+// what a resource is owed. The two are related (both driven by approved,
+// billable time) but deliberately not the same model — an invoice line is a
+// claim on the client, a payout ledger row is a claim from the resource, and
+// conflating them would make "backfilled days billed to the client but not
+// paid to the resource" impossible to represent cleanly.
+
+enum PayoutCategory {
+  /// workDate >= this resource's own assignment start.
+  ACTUAL_PAYOUT
+  /// workDate before their own start but on/after Project.startDate — a
+  /// backfilled day, billed to the client but not (by default) paid out.
+  BILLED_TO_COMPANY
+}
+
+/// One row per (person, project, day) that was ever approved with billable
+/// time — the payout equivalent of an invoice line. Generated automatically
+/// when a timesheet is approved (app/api/timesheets/[id]/decision/route.ts),
+/// never entered by hand except through the override fields below.
+model PayoutLedgerEntry {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation("PayoutRecipient", fields: [userId], references: [id], onDelete: Cascade)
+  projectId   String
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  timesheetId String
+  timesheet   Timesheet @relation(fields: [timesheetId], references: [id], onDelete: Cascade)
+
+  workDate DateTime @db.Date
+  /// Minor units — the day's rate frozen at approval time, so a later rate
+  /// change never rewrites already-earned history (same reasoning as
+  /// Placement.feeAmount).
+  amount   Int
+  currency String         @default("INR")
+  category PayoutCategory
+
+  /// Admin reclassification. `category` above is never overwritten — this is
+  /// a separate, audited override so the computed value is always
+  /// recoverable even after an admin corrects it.
+  overrideCategory PayoutCategory?
+  overriddenById   String?
+  overriddenBy     User?     @relation("PayoutOverrideActor", fields: [overriddenById], references: [id], onDelete: SetNull)
+  overriddenAt     DateTime?
+  overrideNote     String?
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, projectId, workDate])
+  @@index([userId, workDate])
+  @@index([projectId])
+}
+
+/// The client-facing monthly deal value for one person on one project —
+/// distinct from what the person is paid. Admin-managed; feeds the founder
+/// dashboard's "closed deal amount" figure.
+model ResourceDeal {
+  id        String  @id @default(cuid())
+  userId    String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  /// Minor units.
+  monthlyAmount Int
+  currency      String   @default("INR")
+  effectiveFrom DateTime @db.Date
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, projectId])
 }
 
 // -------------------------------------------- Phase 4 completion: delivery --

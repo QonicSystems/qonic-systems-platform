@@ -9,7 +9,7 @@ import { GlobalSearch } from "@/components/portal/global-search";
 import { Breadcrumbs } from "@/components/portal/breadcrumbs";
 import { isGroup, type NavGroup, type NavItem } from "@/lib/portal-nav";
 
-export type PortalUser = { name: string; email: string; roleLabel: string; photoUrl: string | null };
+export type PortalUser = { name: string; email: string; roleLabel: string; photoUrl: string | null; employmentType: string | null };
 
 
 export function PortalShell({ user, links, unreadCount, children }: {
@@ -85,6 +85,7 @@ export function PortalShell({ user, links, unreadCount, children }: {
               <strong>{user.name}</strong>
               <span>{user.email}</span>
               <span className="portal-role-chip">{user.roleLabel}</span>
+              {user.employmentType && <span className="portal-role-chip portal-role-chip--muted">{user.employmentType}</span>}
             </div>
             <Link href="/profile" className="portal-menu-item" role="menuitem" onClick={() => setOpen(false)}>My Profile</Link>
             <Link href="/profile/security" className="portal-menu-item" role="menuitem" onClick={() => setOpen(false)}>Change Password</Link>

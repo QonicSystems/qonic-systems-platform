@@ -2,9 +2,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ContractForm } from "@/components/contracts/contract-form";
 import { TransitionActions, type Action } from "@/components/contracts/transition-actions";
+import { appOrigin } from "@/lib/app-origin";
 import { requireAuth } from "@/lib/auth/guard";
-import { formatDate, formatSalary, type ContractPayload } from "@/lib/contracts/payload";
-import { availableTransitions, canDeleteLetter, canEditContent, canViewLetter, describeStatus } from "@/lib/contracts/workflow";
+import { formatCompensation, formatDate, type ContractPayload } from "@/lib/contracts/payload";
+import { availableTransitions, canDeleteLetter, canDispatchLetter, canEditContent, canViewLetter, describeStatus } from "@/lib/contracts/workflow";
 import { db } from "@/lib/db";
 import { StatusChip } from "@/components/status-chip";
 
@@ -47,14 +48,15 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
 
     <TransitionActions letterId={letter.id} actions={actions} canDelete={canDeleteLetter(context, letter)} />
 
-    <ContractDispatch
+    {canDispatchLetter(context, letter) && <ContractDispatch
       letterId={letter.id}
       reference={letter.reference}
       subjectName={letter.subject.name}
       subjectPhone={letter.subject.phone}
       subjectEmail={letter.subject.email}
       status={letter.status}
-    />
+      origin={appOrigin()}
+    />}
 
     {letter.status === "RELEASED" || letter.status === "ACKNOWLEDGED" ? <p className="mb-4">
       {/* A plain link, not fetch: the route either streams the PDF or 302s to a
@@ -71,7 +73,7 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
             <tr><th scope="row">Position</th><td>{payload.jobTitle}</td></tr>
             <tr><th scope="row">Employment type</th><td>{payload.employmentType}</td></tr>
             <tr><th scope="row">Start date</th><td>{formatDate(payload.startDate)}</td></tr>
-            <tr><th scope="row">Annual salary</th><td>{formatSalary(payload)}</td></tr>
+            <tr><th scope="row">{formatCompensation(payload).label}</th><td>{formatCompensation(payload).value}</td></tr>
             <tr><th scope="row">Location</th><td>{payload.location}</td></tr>
             {payload.reportingTo ? <tr><th scope="row">Reporting to</th><td>{payload.reportingTo}</td></tr> : null}
             <tr><th scope="row">Notice period</th><td>{payload.noticePeriod}</td></tr>

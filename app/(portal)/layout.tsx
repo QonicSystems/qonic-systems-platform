@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import { ErrorPage } from "@/components/error-page";
 import { PortalShell } from "@/components/portal/portal-shell";
 import { can, requireAuth } from "@/lib/auth/guard";
+import type { ContractPayload } from "@/lib/contracts/payload";
+import { db } from "@/lib/db";
 import { isGroup, portalNavigation, type NavGroup, type NavItem } from "@/lib/portal-nav";
 
 const SECURITY_PATH = "/profile/security";
@@ -39,8 +41,18 @@ export default async function PortalLayout({ children }: Readonly<{ children: Re
     if (items.length > 0) links.push({ label: entry.label, items });
   }
 
+  // Employment type is a term of the contract, not a field on the person — it
+  // lives in the frozen payload of whichever letter last set it (see
+  // docs/ROADMAP.md: letters are immutable once issued), not on User.
+  const latestLetter = await db.contractLetter.findFirst({
+    where: { subjectUserId: context.user.id, status: { in: ["RELEASED", "ACKNOWLEDGED"] } },
+    orderBy: { updatedAt: "desc" },
+    select: { payload: true },
+  });
+  const employmentType = latestLetter ? (latestLetter.payload as unknown as ContractPayload).employmentType : null;
+
   return <PortalShell
-    user={{ name: context.user.name, email: context.user.email, roleLabel: context.role.label, photoUrl: context.user.photoUrl }}
+    user={{ name: context.user.name, email: context.user.email, roleLabel: context.role.label, photoUrl: context.user.photoUrl, employmentType }}
     links={links}
     unreadCount={context.user.unreadNotificationCount}
   >{children}</PortalShell>;

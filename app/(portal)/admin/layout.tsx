@@ -5,6 +5,7 @@ const tabs = [
   { label: "People", href: "/admin", permission: "user.view" },
   { label: "Global Candidates", href: "/admin/candidates", permission: "candidate.view" },
   { label: "Roles & Permissions", href: "/admin/permissions", permission: "rbac.manage" },
+  { label: "Rate Management", href: "/admin/rates", permission: "payout.manage" },
   { label: "Holidays", href: "/admin/holidays", permission: "admin.access" },
   { label: "Audit Log", href: "/admin/audit", permission: "audit.view" },
 ];

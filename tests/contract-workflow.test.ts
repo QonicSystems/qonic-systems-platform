@@ -135,7 +135,7 @@ describe("visibility and editing", () => {
 describe("validateContractPayload", () => {
   const valid = {
     jobTitle: "Senior Developer", employmentType: "Full-time Contract", startDate: "2026-09-01",
-    annualSalary: "1800000", currency: "INR", location: "Bengaluru",
+    monthlyCompensation: "150000", currency: "INR", location: "Bengaluru",
     reportingTo: "", noticePeriod: "60 days", additionalTerms: "",
   };
 
@@ -146,7 +146,7 @@ describe("validateContractPayload", () => {
   it.each([
     ["jobTitle", ""],
     ["startDate", "not-a-date"],
-    ["annualSalary", "lots"],
+    ["monthlyCompensation", "lots"],
     ["currency", "XYZ"],
     ["location", ""],
     ["employmentType", "Freelance-ish"],

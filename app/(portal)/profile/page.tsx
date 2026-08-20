@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { BankForm } from "@/components/portal/bank-form";
 import { ProfileForm } from "@/components/portal/profile-form";
+import type { ContractPayload } from "@/lib/contracts/payload";
 import { requireAuth } from "@/lib/auth/guard";
 import { db } from "@/lib/db";
 
@@ -12,6 +13,17 @@ export default async function ProfilePage() {
     where: { id: context.user.id },
     select: { address: true, emergencyName: true, emergencyPhone: true, emergencyRelation: true },
   });
+
+  // Employment type is a term of the contract, not a field on the person —
+  // it lives in the frozen payload of whichever letter last set it, not on
+  // User (see docs/ROADMAP.md: letters are immutable once issued). Read-only
+  // here; changing it means issuing a new letter, not editing a profile field.
+  const latestLetter = await db.contractLetter.findFirst({
+    where: { subjectUserId: context.user.id, status: { in: ["RELEASED", "ACKNOWLEDGED"] } },
+    orderBy: { updatedAt: "desc" },
+    select: { id: true, payload: true },
+  });
+  const employmentType = latestLetter ? (latestLetter.payload as unknown as ContractPayload).employmentType : null;
 
   // Only the non-secret half is ever loaded — the encrypted columns are not
   // selected, so an account number cannot leak into a page payload.
@@ -25,6 +37,10 @@ export default async function ProfilePage() {
       <p className="eyebrow">{context.role.label}</p>
       <h1 className="portal-title">My Profile</h1>
       <p className="portal-lead">Update how you appear to the rest of the team.</p>
+      {employmentType && <p className="portal-note">
+        Employment type: <strong>{employmentType}</strong> — from your{" "}
+        <Link className="text-link" href={`/contracts/${latestLetter!.id}`}>most recent contract letter</Link>.
+      </p>}
     </header>
 
     <section className="portal-panel">
