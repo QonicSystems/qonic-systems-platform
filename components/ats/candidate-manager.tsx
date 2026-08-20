@@ -44,6 +44,7 @@ type Row = {
   linkedinUrl?: string;
   hasConsent: boolean;
   applications: string[];
+  linkedUserName: string | null;
 };
 type Errors = Record<string, string>;
 
@@ -259,7 +260,7 @@ export function CandidateManager({
     });
 
   const remove = async (candidate: Row) => {
-    if (await act(`/api/admin/candidates/${candidate.id}`, { method: "DELETE" })) setDeleting(null);
+    if (await act(`/api/candidates/${candidate.id}`, { method: "DELETE" })) setDeleting(null);
   };
 
   return (
@@ -428,6 +429,7 @@ export function CandidateManager({
                                 {c.email} {c.location && `· ${c.location}`}
                               </span>
                               {!c.hasConsent && <span className="portal-muted">No consent recorded</span>}
+                              {c.linkedUserName && <span className="portal-muted">Linked employee: {c.linkedUserName}</span>}
                             </th>
                             <td>
                               <div className="flex flex-col items-start gap-1">
@@ -641,6 +643,7 @@ export function CandidateManager({
                                 <span className="text-xs text-slate-500 font-mono">SSN: {c.ssn}</span>
                               )}
                               {!c.hasConsent && <span className="portal-muted">No consent recorded</span>}
+                              {c.linkedUserName && <span className="portal-muted">Linked employee: {c.linkedUserName}</span>}
                             </th>
                             <td>
                               <div className="flex flex-col items-start gap-1">

@@ -58,6 +58,7 @@ model User {
   expenseDecisions   Expense[]            @relation("ExpenseApprover")
   notifications      Notification[]       @relation("NotificationRecipient")
   bankDetail         BankDetail?
+  linkedCandidate    Candidate?           @relation("CandidateLink")
   projectsManaged    Project[]            @relation("ProjectManager")
   projectAssignments ProjectAssignment[]
   timesheets         Timesheet[]          @relation("TimesheetOwner")
@@ -770,6 +771,16 @@ model Candidate {
   archivedAt DateTime?
 
   applications Application[]
+
+  /// Set only at the one deliberate moment a candidate becomes a real
+  /// employee — drafting their first contract letter (app/(portal)/contracts/new).
+  /// Never written by a background job: this used to be guessed live by
+  /// matching email strings between Candidate and User, which had no audit
+  /// trail and could silently archive the wrong account. `onDelete: SetNull`
+  /// because purging a User must never be blocked by, or cascade into,
+  /// this candidate's history — see the ARCHIVED comment above.
+  linkedUserId String? @unique
+  linkedUser   User?   @relation("CandidateLink", fields: [linkedUserId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

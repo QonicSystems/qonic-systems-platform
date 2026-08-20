@@ -4,7 +4,6 @@ import { guardRoute } from "@/lib/auth/guard";
 import { emailPattern } from "@/lib/contact";
 import { toMinor } from "@/lib/money";
 import { resourceTypeOf, RESOURCE_TYPE } from "@/lib/ats/resource-type";
-import { syncCandidateAndUsers } from "@/lib/ats/sync";
 import { db } from "@/lib/db";
 
 export const runtime = "nodejs";
@@ -100,8 +99,6 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return candidate;
   });
 
-  await syncCandidateAndUsers();
-
   return NextResponse.json({ message: `${updated.name} updated successfully.`, id: updated.id });
 }
 
@@ -111,7 +108,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   if (response) return response;
 
   const { id } = await params;
-  const existing = await db.candidate.findUnique({ where: { id }, include: { applications: true } });
+  const existing = await db.candidate.findUnique({ where: { id }, include: { applications: true, linkedUser: { include: { role: true } } } });
   if (!existing) return NextResponse.json({ message: "That candidate no longer exists." }, { status: 404 });
 
   if (existing.applications.length > 0) {
@@ -124,7 +121,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   }
 
   await db.$transaction(async (tx) => {
-    // A matching staff account is archived, never hard-deleted, here — same
+    // A linked staff account is archived, never hard-deleted, here — same
     // principle the app applies everywhere else ("removal is refused for
     // anyone with contract letters on record; deactivate instead" —
     // lib/auth/authority.ts). A naive delete used to sit here and silently
@@ -133,9 +130,13 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
     // audit trail explaining why. Permanently purging an account, when that
     // is genuinely wanted, is its own deliberate, CEO-only action —
     // DELETE /api/admin/users/[id] — not a side effect of deleting a candidate.
-    const linkedUser = await tx.user.findFirst({
-      where: { email: { equals: existing.email, mode: "insensitive" }, role: { key: { notIn: ["ceo", "co_founder"] } }, status: "ACTIVE" },
-    });
+    // The link is a real FK (Candidate.linkedUserId) set only when someone
+    // deliberately drafts this person's first contract letter — no more
+    // guessing by email, so an unlinked candidate's deletion never touches
+    // any User account, however similar the names or emails look.
+    const linkedUser = existing.linkedUser && !["ceo", "co_founder"].includes(existing.linkedUser.role.key) && existing.linkedUser.status === "ACTIVE"
+      ? existing.linkedUser
+      : null;
     if (linkedUser) {
       await tx.user.update({ where: { id: linkedUser.id }, data: { status: "ARCHIVED" } });
       await tx.session.deleteMany({ where: { userId: linkedUser.id } });

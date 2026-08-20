@@ -2,7 +2,6 @@ import { CandidateManager } from "@/components/ats/candidate-manager";
 import { can, requirePermission } from "@/lib/auth/guard";
 import { STAGE_LABELS } from "@/lib/ats/pipeline";
 import { resourceTypeOf } from "@/lib/ats/resource-type";
-import { syncCandidateAndUsers } from "@/lib/ats/sync";
 import { db } from "@/lib/db";
 
 export const metadata = { title: "Candidate Pool" };
@@ -13,15 +12,13 @@ const money = (minor: number | null) =>
 export default async function CandidatesPage() {
   const context = await requirePermission("candidate.view");
 
-  // Sync any staff users into Candidate pool
-  await syncCandidateAndUsers();
-
   const [candidates, activeAssignments] = await Promise.all([
     db.candidate.findMany({
       include: {
         applications: {
           include: { job: { select: { title: true, reference: true } } },
         },
+        linkedUser: { select: { name: true } },
       },
       // Active first, then most recently added — archived records stay reachable
       // through the filter without crowding the top of the pool.
@@ -97,6 +94,7 @@ export default async function CandidatesPage() {
             linkedinUrl: candidate.linkedinUrl ?? "",
             hasConsent: candidate.consentAt !== null,
             applications: candidate.applications.map((a) => `${a.job.title} (${STAGE_LABELS[a.stage]})`),
+            linkedUserName: candidate.linkedUser?.name ?? null,
           };
         })}
         canManage={can(context, "candidate.manage")}
