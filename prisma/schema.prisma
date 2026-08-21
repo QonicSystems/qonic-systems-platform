@@ -487,6 +487,12 @@ model ProjectAssignment {
   rate              Int?
   /// Planned share of a working week, for capacity reporting.
   allocationPercent Int     @default(100)
+  /// The day this person actually began working on this project — set
+  /// deliberately by an admin (Rate Management), distinct from `createdAt`
+  /// (just when this row was inserted) and from `Project.startDate` (the
+  /// project's own date, not any one person's). Null until someone sets it;
+  /// callers fall back through `?? Project.startDate ?? createdAt`.
+  startedOn         DateTime? @db.Date
 
   createdAt DateTime @default(now())
 

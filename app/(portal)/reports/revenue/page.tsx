@@ -45,17 +45,28 @@ export default async function RevenuePage() {
   }
 
   return <div className="portal-page">
-    <header className="portal-page-head">
-      <p className="eyebrow">Reports</p>
-      <h1 className="portal-title">Revenue</h1>
-      <p className="portal-lead">Billed work and placement fees. Draft and void invoices are excluded.</p>
-    </header>
-
-    <div className="portal-grid">
-      <article className="portal-card"><span className="portal-stat">{formatMoney(billed)}</span><p>Billed</p></article>
-      <article className="portal-card"><span className="portal-stat">{formatMoney(collected)}</span><p>Collected</p></article>
-      <article className="portal-card"><span className="portal-stat">{formatMoney(outstanding)}</span><p>Outstanding</p></article>
-      <article className="portal-card"><span className="portal-stat">{formatMoney(feeTotal)}</span><p>Placement fees</p></article>
+    <div className="hero-panel">
+      <span className="hero-eyebrow">Reports</span>
+      <h1 className="hero-title">Revenue</h1>
+      <p className="hero-lead">Billed work and placement fees. Draft and void invoices are excluded.</p>
+      <div className="hero-stats">
+        <div>
+          <span className="hero-stat-value" style={{ fontSize: "1.6rem" }}>{formatMoney(billed)}</span>
+          <p className="hero-stat-label">Billed</p>
+        </div>
+        <div>
+          <span className="hero-stat-value" style={{ fontSize: "1.6rem" }}>{formatMoney(collected)}</span>
+          <p className="hero-stat-label">Collected</p>
+        </div>
+        <div>
+          <span className="hero-stat-value" style={{ fontSize: "1.6rem" }}>{formatMoney(outstanding)}</span>
+          <p className="hero-stat-label">Outstanding</p>
+        </div>
+        <div>
+          <span className="hero-stat-value" style={{ fontSize: "1.6rem" }}>{formatMoney(feeTotal)}</span>
+          <p className="hero-stat-label">Placement fees</p>
+        </div>
+      </div>
     </div>
 
     {billed > 0 && <section className="portal-section">

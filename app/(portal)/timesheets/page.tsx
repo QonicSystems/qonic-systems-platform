@@ -69,6 +69,20 @@ export default async function TimesheetsPage({ searchParams }: { searchParams: P
     if (index >= 0) grouped.get(key)!.durations[index] = (entry.minutes / 60).toFixed(2).replace(/\.00$/, "");
   }
 
+  // A week with nothing saved yet would otherwise render zero input cells at
+  // all — "Add a row" and the two Autofill buttons were the only way to make
+  // one appear. One blank, directly-typeable row per assigned project is
+  // there from the start instead, same as "Add a row" would produce.
+  const defaultRows: GridRow[] = grouped.size === 0
+    ? projects.map((project) => ({
+        key: `default-${project.id}`,
+        projectId: project.id,
+        taskId: project.tasks[0]?.id ?? null,
+        durations: Array(7).fill(""),
+        note: "",
+      }))
+    : [...grouped.values()];
+
   const total = sheetEntries.reduce((sum, entry) => sum + entry.minutes, 0);
   const previous = new Date(weekStart.getTime()); previous.setUTCDate(previous.getUTCDate() - 7);
   const next = new Date(weekStart.getTime()); next.setUTCDate(next.getUTCDate() + 7);
@@ -107,7 +121,7 @@ export default async function TimesheetsPage({ searchParams }: { searchParams: P
       timesheetId={sheetId}
       weekDates={dates}
       projects={projects}
-      initialRows={[...grouped.values()]}
+      initialRows={defaultRows}
       editable={canEditTimesheet(context, { userId: context.user.id, status: sheetStatus }) && anyBookable}
       status={sheetStatus}
       decisionNote={sheetDecisionNote}

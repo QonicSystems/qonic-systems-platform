@@ -51,17 +51,28 @@ export default async function AnalyticsPage() {
   const attrition = headcount === 0 ? 0 : leavers / headcount;
 
   return <div className="portal-page">
-    <header className="portal-page-head">
-      <p className="eyebrow">Reports</p>
-      <h1 className="portal-title">Analytics</h1>
-      <p className="portal-lead">Recruitment, delivery, and people metrics in one place.</p>
-    </header>
-
-    <div className="portal-grid">
-      <article className="portal-card"><span className="portal-stat">{medianFill === null ? "—" : `${medianFill}d`}</span><p>Median time to fill</p></article>
-      <article className="portal-card"><span className="portal-stat">{formatMoney(billed + feeRevenue)}</span><p>Revenue booked</p></article>
-      <article className="portal-card"><span className="portal-stat">{totalMinutes === 0 ? "—" : percent(billableMinutes / totalMinutes)}</span><p>Billable share of time</p></article>
-      <article className="portal-card"><span className="portal-stat">{percent(attrition)}</span><p>Attrition, rolling year</p></article>
+    <div className="hero-panel">
+      <span className="hero-eyebrow">Reports</span>
+      <h1 className="hero-title">Analytics</h1>
+      <p className="hero-lead">Recruitment, delivery, and people metrics in one place.</p>
+      <div className="hero-stats">
+        <div>
+          <span className="hero-stat-value">{medianFill === null ? "—" : `${medianFill}d`}</span>
+          <p className="hero-stat-label">Median time to fill</p>
+        </div>
+        <div>
+          <span className="hero-stat-value" style={{ fontSize: "1.6rem" }}>{formatMoney(billed + feeRevenue)}</span>
+          <p className="hero-stat-label">Revenue booked</p>
+        </div>
+        <div>
+          <span className="hero-stat-value">{totalMinutes === 0 ? "—" : percent(billableMinutes / totalMinutes)}</span>
+          <p className="hero-stat-label">Billable share of time</p>
+        </div>
+        <div>
+          <span className="hero-stat-value">{percent(attrition)}</span>
+          <p className="hero-stat-label">Attrition, rolling year</p>
+        </div>
+      </div>
     </div>
 
     <section className="portal-section">

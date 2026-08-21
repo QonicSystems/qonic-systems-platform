@@ -1,5 +1,6 @@
-import { requirePermission } from "@/lib/auth/guard";
+import { can, requirePermission } from "@/lib/auth/guard";
 import { formatMoney } from "@/lib/money";
+import { AnimatedNumber } from "@/components/portal/animated-number";
 import { StatusChip } from "@/components/status-chip";
 import { db } from "@/lib/db";
 
@@ -32,18 +33,47 @@ export default async function EarningsPage({ searchParams }: { searchParams: Pro
   const billedToCompany = lines.filter((line) => category(line) === "BILLED_TO_COMPANY");
   const sum = (rows: typeof lines) => rows.reduce((total, line) => total + line.amount, 0);
 
+  // Billed-to-company is a company-vs-client accounting split, not something
+  // that changes what an Employee is owed — only payout.view_all (Co-Founder,
+  // and the CEO by super-admin default) sees it. An Employee's own page shows
+  // only their actual payout, both in the stats and the per-day rows below,
+  // so nothing here can leak that a backfilled/billed-to-company day even
+  // happened.
+  const canViewAll = can(context, "payout.view_all");
+  const visibleLines = canViewAll ? lines : actual;
+
   const previousMonth = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() - 1, 1));
   const nextMonth = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 1));
   const monthLabel = start.toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" });
 
   return <div className="portal-page">
-    <header className="portal-page-head">
-      <p className="eyebrow">My Work</p>
-      <h1 className="portal-title">My Earnings</h1>
-      <p className="portal-lead">
-        {monthLabel} · per-day earnings, split between what you&apos;re actually paid and what&apos;s billed to the company on your behalf.
+    <div className="hero-panel">
+      <span className="hero-eyebrow">My Work</span>
+      <h1 className="hero-title">My Earnings</h1>
+      <p className="hero-lead">
+        {monthLabel} · {canViewAll
+          ? "per-day earnings, split between what you're actually paid and what's billed to the company on your behalf."
+          : "your per-day earnings."}
       </p>
-    </header>
+      <div className="hero-stats">
+        <div>
+          <span className="hero-stat-value" style={{ fontSize: "2rem" }}>
+            <AnimatedNumber value={sum(actual)} />
+          </span>
+          <p className="hero-stat-label">Actual payout</p>
+        </div>
+        {canViewAll && (
+          <div>
+            <span className="hero-stat-value" style={{ fontSize: "1.6rem" }}>{formatMoney(sum(billedToCompany))}</span>
+            <p className="hero-stat-label">Billed to company (not paid out)</p>
+          </div>
+        )}
+        <div>
+          <span className="hero-stat-value">{visibleLines.length}</span>
+          <p className="hero-stat-label">Active billing days</p>
+        </div>
+      </div>
+    </div>
 
     <div className="action-bar">
       <a className="button button-outline" href={`/earnings?month=${iso(previousMonth).slice(0, 7)}`}>← Previous month</a>
@@ -51,35 +81,29 @@ export default async function EarningsPage({ searchParams }: { searchParams: Pro
       <a className="button button-outline" href={`/earnings?month=${iso(nextMonth).slice(0, 7)}`}>Next month →</a>
     </div>
 
-    <div className="portal-grid">
-      <article className="portal-card"><span className="portal-stat">{formatMoney(sum(actual))}</span><p>Actual payout</p></article>
-      <article className="portal-card"><span className="portal-stat">{formatMoney(sum(billedToCompany))}</span><p>Billed to company (not paid out)</p></article>
-      <article className="portal-card"><span className="portal-stat">{lines.length}</span><p>Active billing days</p></article>
-    </div>
-
     <section className="portal-section">
       <h2 className="portal-section-title">Per-day breakdown</h2>
-      {lines.length === 0 ? <p className="portal-note">No approved billing days recorded for {monthLabel} yet.</p> : <div className="matrix-scroll">
+      {visibleLines.length === 0 ? <p className="portal-note">No approved billing days recorded for {monthLabel} yet.</p> : <div className="matrix-scroll">
         <table className="matrix matrix--people">
-          <thead><tr><th scope="col">Date</th><th scope="col">Project</th><th scope="col">Category</th><th scope="col">Amount</th></tr></thead>
+          <thead><tr><th scope="col">Date</th><th scope="col">Project</th>{canViewAll && <th scope="col">Category</th>}<th scope="col">Amount</th></tr></thead>
           <tbody>
-            {lines.map((line) => <tr key={line.id}>
+            {visibleLines.map((line) => <tr key={line.id}>
               <th scope="row">{line.workDate.toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" })}</th>
               <td>{line.project.client.name} — {line.project.name}</td>
-              <td>
+              {canViewAll && <td>
                 <StatusChip status={category(line)} />
                 {line.overrideCategory && <span className="portal-muted">Reclassified{line.overrideNote ? `: ${line.overrideNote}` : ""}</span>}
-              </td>
+              </td>}
               <td>{formatMoney(line.amount, line.currency)}</td>
             </tr>)}
           </tbody>
         </table>
       </div>}
-      <p className="portal-note">
+      {canViewAll && <p className="portal-note">
         A backfilled day — one worked before your assignment officially began, but on or after the project&apos;s own start date —
         is billed to the client like any other day, but is not included in your actual payout unless an admin has
         specifically reclassified it above.
-      </p>
+      </p>}
     </section>
   </div>;
 }

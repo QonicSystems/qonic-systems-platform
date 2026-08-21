@@ -19,7 +19,7 @@ export type PayoutCategory = "ACTUAL_PAYOUT" | "BILLED_TO_COMPANY";
 
 export type AssignmentStartInfo = {
   projectId: string;
-  /** ProjectAssignment.createdAt — when this resource's own assignment to this project began. */
+  /** `ProjectAssignment.startedOn ?? ProjectAssignment.createdAt` — when this resource's own assignment to this project began. Never `Project.startDate`: that's the project's own date, not this person's, and would misclassify every backfilled day as actual payout. */
   assignmentStartedAt: Date;
 };
 

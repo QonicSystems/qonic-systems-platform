@@ -13,6 +13,8 @@ export type AssignmentRateRow = {
   userId: string;
   projectId: string;
   deal: { monthlyAmount: number; effectiveFrom: string } | null;
+  /** ISO date, or null if never deliberately set — see ProjectAssignment.startedOn. */
+  startedOn: string | null;
 };
 
 export type LedgerRow = {
@@ -46,6 +48,9 @@ export function RateManager({ assignments, ledger }: { assignments: AssignmentRa
   const saveRate = (id: string, rate: string) =>
     call(`/api/admin/rates/assignment/${id}`, { method: "PATCH", body: JSON.stringify({ rate }) });
 
+  const saveStartedOn = (id: string, startedOn: string) =>
+    call(`/api/admin/rates/assignment/${id}`, { method: "PATCH", body: JSON.stringify({ startedOn }) });
+
   const saveDeal = (row: AssignmentRateRow, monthlyAmount: string, effectiveFrom: string) =>
     call("/api/admin/rates/deal", {
       method: "PATCH",
@@ -61,15 +66,15 @@ export function RateManager({ assignments, ledger }: { assignments: AssignmentRa
     {notice && <p className={`form-status form-status--${notice.tone}`} role="status">{notice.text}</p>}
 
     <h3 className="portal-section-title" style={{ fontSize: "1.05rem" }}>Assignments &amp; deals</h3>
-    <p className="field-hint mb-3">Rate and deal amount save on blur. Enter money as a plain number, e.g. 500.</p>
+    <p className="field-hint mb-3">Rate, deal amount, and start date save on blur. Enter money as a plain number, e.g. 500.</p>
     <div className="matrix-scroll">
       <table className="matrix matrix--people">
         <thead>
-          <tr><th scope="col">Person</th><th scope="col">Project</th><th scope="col">Client hourly rate</th><th scope="col">Monthly deal</th><th scope="col">Effective from</th></tr>
+          <tr><th scope="col">Person</th><th scope="col">Project</th><th scope="col">Started on</th><th scope="col">Client hourly rate</th><th scope="col">Monthly deal</th><th scope="col">Effective from</th></tr>
         </thead>
         <tbody>
-          {assignments.map((row) => <AssignmentRow key={row.id} row={row} busy={busy} onSaveRate={saveRate} onSaveDeal={saveDeal} />)}
-          {assignments.length === 0 && <tr><td colSpan={5}>No project assignments yet.</td></tr>}
+          {assignments.map((row) => <AssignmentRow key={row.id} row={row} busy={busy} onSaveRate={saveRate} onSaveDeal={saveDeal} onSaveStartedOn={saveStartedOn} />)}
+          {assignments.length === 0 && <tr><td colSpan={6}>No project assignments yet.</td></tr>}
         </tbody>
       </table>
     </div>
@@ -114,15 +119,17 @@ export function RateManager({ assignments, ledger }: { assignments: AssignmentRa
   </div>;
 }
 
-function AssignmentRow({ row, busy, onSaveRate, onSaveDeal }: {
+function AssignmentRow({ row, busy, onSaveRate, onSaveDeal, onSaveStartedOn }: {
   row: AssignmentRateRow;
   busy: boolean;
   onSaveRate: (id: string, value: string) => void;
   onSaveDeal: (row: AssignmentRateRow, monthlyAmount: string, effectiveFrom: string) => void;
+  onSaveStartedOn: (id: string, value: string) => void;
 }) {
   const [rate, setRate] = useState(row.rate !== null ? (row.rate / 100).toFixed(2) : "");
   const [dealAmount, setDealAmount] = useState(row.deal ? (row.deal.monthlyAmount / 100).toFixed(2) : "");
   const [effectiveFrom, setEffectiveFrom] = useState(row.deal?.effectiveFrom ?? "");
+  const [startedOn, setStartedOn] = useState(row.startedOn ?? "");
 
   const saveDealIfComplete = () => {
     if (dealAmount.trim() !== "" && effectiveFrom.trim() !== "") onSaveDeal(row, dealAmount, effectiveFrom);
@@ -131,6 +138,15 @@ function AssignmentRow({ row, busy, onSaveRate, onSaveDeal }: {
   return <tr>
     <th scope="row">{row.userName}</th>
     <td>{row.projectLabel}</td>
+    <td>
+      <input
+        type="date" value={startedOn} disabled={busy}
+        aria-label={`Date ${row.userName} started on ${row.projectLabel}`}
+        title="When this person actually began working on this project — drives actual-payout vs billed-to-company categorization. Leave blank to fall back to the assignment's creation date."
+        onChange={(event) => setStartedOn(event.target.value)}
+        onBlur={() => onSaveStartedOn(row.id, startedOn)}
+      />
+    </td>
     <td>
       <input
         className="duration-input" style={{ width: "6rem" }} value={rate} disabled={busy}

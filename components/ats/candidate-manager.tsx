@@ -45,6 +45,8 @@ type Row = {
   hasConsent: boolean;
   applications: string[];
   linkedUserName: string | null;
+  contractStatus: string | null;
+  contractId: string | null;
 };
 type Errors = Record<string, string>;
 
@@ -526,7 +528,12 @@ export function CandidateManager({
                                     Edit
                                   </button>
                                 )}
-                                {canDraftContract && c.status === "ACTIVE" && (
+                                {c.contractStatus && c.contractId && (
+                                  <Link href={`/contracts/${c.contractId}`} className="row-action" title="View this candidate's contract letter">
+                                    <StatusChip status={c.contractStatus} />
+                                  </Link>
+                                )}
+                                {canDraftContract && c.status === "ACTIVE" && !c.contractStatus && (
                                   <Link
                                     href={`/contracts/new?candidateId=${c.id}&name=${encodeURIComponent(c.name)}&email=${encodeURIComponent(c.email)}`}
                                     className="row-action row-action--highlight"
@@ -735,7 +742,12 @@ export function CandidateManager({
                                     Edit
                                   </button>
                                 )}
-                                {canDraftContract && c.status === "ACTIVE" && (
+                                {c.contractStatus && c.contractId && (
+                                  <Link href={`/contracts/${c.contractId}`} className="row-action" title="View this candidate's contract letter">
+                                    <StatusChip status={c.contractStatus} />
+                                  </Link>
+                                )}
+                                {canDraftContract && c.status === "ACTIVE" && !c.contractStatus && (
                                   <Link
                                     href={`/contracts/new?candidateId=${c.id}&name=${encodeURIComponent(c.name)}&email=${encodeURIComponent(c.email)}`}
                                     className="row-action row-action--highlight"

@@ -13,12 +13,32 @@ export default async function DirectoryPage() {
     orderBy: [{ role: { rank: "asc" } }, { name: "asc" }],
   });
 
+  // Rank order (already the query's own sort) doubles as a sensible display
+  // order for the hero-stats — leadership first, then descending seniority.
+  const roleCounts: { label: string; count: number }[] = [];
+  for (const person of people) {
+    const existing = roleCounts.find((r) => r.label === person.role.label);
+    if (existing) existing.count += 1; else roleCounts.push({ label: person.role.label, count: 1 });
+  }
+
   return <div className="portal-page">
-    <header className="portal-page-head">
-      <p className="eyebrow">Team</p>
-      <h1 className="portal-title">Directory</h1>
-      <p className="portal-lead">Everyone currently active in the workspace — {people.length} {people.length === 1 ? "person" : "people"}.</p>
-    </header>
+    <div className="hero-panel">
+      <span className="hero-eyebrow">Team</span>
+      <h1 className="hero-title">Directory</h1>
+      <p className="hero-lead">Everyone currently active in the workspace.</p>
+      <div className="hero-stats">
+        <div>
+          <span className="hero-stat-value">{people.length}</span>
+          <p className="hero-stat-label">{people.length === 1 ? "Person" : "People"}</p>
+        </div>
+        {roleCounts.map((role) => (
+          <div key={role.label}>
+            <span className="hero-stat-value">{role.count}</span>
+            <p className="hero-stat-label">{role.label}</p>
+          </div>
+        ))}
+      </div>
+    </div>
 
     <DirectoryList people={people.map((person) => ({
       id: person.id,

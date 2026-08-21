@@ -1,5 +1,6 @@
 import { BarChart } from "@/components/portal/bar-chart";
 import { requirePermission } from "@/lib/auth/guard";
+import { ROLE } from "@/lib/auth/roles";
 import { db } from "@/lib/db";
 import { statusSlug } from "@/lib/ui/status";
 
@@ -8,12 +9,13 @@ export const metadata = { title: "Capacity" };
 export default async function CapacityPage() {
   await requirePermission("report.utilization");
 
-  // Capacity is about who is allocated to live work, not about job title. The
-  // previous filter dropped the CEO and Co-Founder, which on a founder-led team
-  // removed most of the delivery capacity from the report.
+  // Leadership's own name against a delivery allocation bar reads as
+  // "the CEO is 100% booked," which isn't a capacity-planning fact anyone
+  // acts on — this report is for staffing the bench, not tracking founders.
   const people = await db.user.findMany({
     where: {
       status: "ACTIVE",
+      role: { key: { notIn: [ROLE.CEO, ROLE.CO_FOUNDER] } },
       OR: [
         { projectAssignments: { some: {} } },
         { timesheets: { some: { entries: { some: {} } } } },
@@ -41,16 +43,24 @@ export default async function CapacityPage() {
   const over = rows.filter((row) => row.allocated > 100);
 
   return <div className="portal-page">
-    <header className="portal-page-head">
-      <p className="eyebrow">Reports</p>
-      <h1 className="portal-title">Capacity</h1>
-      <p className="portal-lead">Planned allocation across live projects. This is intent, not recorded time.</p>
-    </header>
-
-    <div className="portal-grid">
-      <article className="portal-card"><span className="portal-stat">{rows.length}</span><p>Active people</p></article>
-      <article className="portal-card"><span className="portal-stat">{bench.length}</span><p>On the bench</p></article>
-      <article className="portal-card"><span className="portal-stat">{over.length}</span><p>Over-allocated</p></article>
+    <div className="hero-panel">
+      <span className="hero-eyebrow">Reports</span>
+      <h1 className="hero-title">Capacity</h1>
+      <p className="hero-lead">Planned allocation across live projects. This is intent, not recorded time.</p>
+      <div className="hero-stats">
+        <div>
+          <span className="hero-stat-value">{rows.length}</span>
+          <p className="hero-stat-label">Active people</p>
+        </div>
+        <div>
+          <span className="hero-stat-value">{bench.length}</span>
+          <p className="hero-stat-label">On the bench</p>
+        </div>
+        <div>
+          <span className="hero-stat-value">{over.length}</span>
+          <p className="hero-stat-label">Over-allocated</p>
+        </div>
+      </div>
     </div>
 
     <section className="portal-section">

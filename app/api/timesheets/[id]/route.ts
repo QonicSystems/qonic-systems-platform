@@ -41,6 +41,12 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   // always that person's assignments that matter, never the actor's own.
   // Each project's own startDate is the per-project bookable floor — see the
   // matching comment in app/(portal)/timesheets/page.tsx.
+  // Bookability (how far back time can be entered) intentionally stays keyed
+  // on Project.startDate, not the new per-assignment startedOn — that field
+  // exists to categorize payout (see payoutCategoryFor), and using it here
+  // too would break the deliberate handover/backfill allowance below: someone
+  // can log time from the project's own start even if their own assignment
+  // (or its startedOn) came later.
   const assignments = await db.projectAssignment.findMany({
     where: { userId: sheet.userId },
     select: { projectId: true, createdAt: true, project: { select: { startDate: true } } },

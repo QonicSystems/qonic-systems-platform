@@ -11,6 +11,10 @@ const money = (minor: number | null) =>
 
 export default async function CandidatesPage() {
   const context = await requirePermission("candidate.view");
+  // A candidate's real contract status is HR/leadership scope — a plain
+  // candidate.view holder (e.g. a recruiter) shouldn't newly see contract
+  // internals just because the pool page grew a status badge.
+  const canViewContractStatus = can(context, "contract.view_all");
 
   const [candidates, activeAssignments] = await Promise.all([
     db.candidate.findMany({
@@ -18,7 +22,7 @@ export default async function CandidatesPage() {
         applications: {
           include: { job: { select: { title: true, reference: true } } },
         },
-        linkedUser: { select: { name: true } },
+        linkedUser: { select: { id: true, name: true } },
       },
       // Active first, then most recently added — archived records stay reachable
       // through the filter without crowding the top of the pool.
@@ -33,6 +37,21 @@ export default async function CandidatesPage() {
       },
     }),
   ]);
+
+  // "Draft Contract" on this page is a static button label for CREATING a
+  // letter — it used to read the same whether one already existed or not.
+  // One row per linked user's most recent letter, so a candidate who already
+  // has a contract shows its real status instead.
+  const linkedUserIds = candidates.map((c) => c.linkedUser?.id).filter((id): id is string => Boolean(id));
+  const latestContracts = canViewContractStatus && linkedUserIds.length > 0
+    ? await db.contractLetter.findMany({
+        where: { subjectUserId: { in: linkedUserIds } },
+        orderBy: { updatedAt: "desc" },
+        distinct: ["subjectUserId"],
+        select: { id: true, subjectUserId: true, status: true },
+      })
+    : [];
+  const contractByUserId = new Map(latestContracts.map((c) => [c.subjectUserId, c]));
 
   const assignmentByEmail = new Map<string, Array<{ projectName: string; projectCode: string; allocationPercent: number }>>();
   for (const a of activeAssignments) {
@@ -95,6 +114,8 @@ export default async function CandidatesPage() {
             hasConsent: candidate.consentAt !== null,
             applications: candidate.applications.map((a) => `${a.job.title} (${STAGE_LABELS[a.stage]})`),
             linkedUserName: candidate.linkedUser?.name ?? null,
+            contractStatus: candidate.linkedUser ? contractByUserId.get(candidate.linkedUser.id)?.status ?? null : null,
+            contractId: candidate.linkedUser ? contractByUserId.get(candidate.linkedUser.id)?.id ?? null : null,
           };
         })}
         canManage={can(context, "candidate.manage")}

@@ -53,7 +53,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       const [assignments, latestLetter] = await Promise.all([
         tx.projectAssignment.findMany({
           where: { userId: sheet.userId, projectId: { in: projectIds } },
-          select: { projectId: true, createdAt: true },
+          select: { projectId: true, startedOn: true, createdAt: true },
         }),
         tx.contractLetter.findFirst({
           where: { subjectUserId: sheet.userId, status: { in: ["RELEASED", "ACKNOWLEDGED"] } },
@@ -66,7 +66,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
       const lines = payoutLinesFor(
         sheet.entries,
-        assignments.map((assignment) => ({ projectId: assignment.projectId, assignmentStartedAt: assignment.createdAt })),
+        // Deliberately just these two tiers, not Project.startDate: this date
+        // decides ACTUAL_PAYOUT vs BILLED_TO_COMPANY, i.e. when THIS
+        // person's own assignment truly began — Project.startDate answers a
+        // different question (when the project itself began) and, being
+        // earlier by construction, would silently reclassify every backfilled
+        // day as ACTUAL_PAYOUT the moment it was consulted as a fallback.
+        assignments.map((assignment) => ({
+          projectId: assignment.projectId,
+          assignmentStartedAt: assignment.startedOn ?? assignment.createdAt,
+        })),
         monthlyCompensation && !Number.isNaN(monthlyCompensation) ? monthlyCompensation : null,
       );
 
