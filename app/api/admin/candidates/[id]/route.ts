@@ -95,37 +95,7 @@ export async function PATCH(
   return NextResponse.json({ message: `${updated.name} updated.`, candidate: updated });
 }
 
-export async function DELETE(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const { context, response } = await guardRoute("candidate.manage");
-  if (response) return response;
-
-  const { id } = await params;
-  const candidate = await db.candidate.findUnique({
-    where: { id },
-    include: { applications: true },
-  });
-
-  if (!candidate) {
-    return NextResponse.json({ message: "Candidate not found." }, { status: 404 });
-  }
-
-  await db.$transaction(async (tx) => {
-    await recordAudit(
-      {
-        actorId: context.user.id,
-        action: "candidate.delete",
-        entityType: "Candidate",
-        entityId: id,
-        before: { name: candidate.name, email: candidate.email },
-        ipAddress: clientIp(request),
-      },
-      tx
-    );
-    await tx.candidate.delete({ where: { id } });
-  });
-
-  return NextResponse.json({ message: `${candidate.name} removed.` });
-}
+// Deleting is handled by DELETE /api/candidates/[id] — it guards against
+// deleting a candidate with applications on file (archives instead) and
+// safely archives a linked employee account instead of leaving it orphaned.
+// This route used to duplicate that logic with neither safeguard.

@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 export type NotificationItem = {
@@ -164,13 +163,21 @@ export function NotificationList({ items }: { items: ReadonlyArray<NotificationI
 
               <div className="inbox-item__actions">
                 {item.link && (
-                  <Link
+                  <button
+                    type="button"
                     className="row-action row-action--highlight"
-                    href={item.link}
-                    onClick={() => item.unread && markRead([item.id])}
+                    disabled={busy}
+                    onClick={async () => {
+                      // Marking read must complete before navigating away, or
+                      // the page we land on renders its header with the
+                      // still-stale unread count — a Link's default
+                      // navigation doesn't wait for this onClick's fetch.
+                      if (item.unread) await markRead([item.id]);
+                      router.push(item.link!);
+                    }}
                   >
                     Open
-                  </Link>
+                  </button>
                 )}
                 {item.unread && (
                   <button type="button" className="row-action" onClick={() => markRead([item.id])} disabled={busy}>

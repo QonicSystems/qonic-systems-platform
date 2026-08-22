@@ -47,3 +47,43 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   return NextResponse.json({ message: "That is not a valid action." }, { status: 400 });
 }
+
+/** Permanently remove an invoice. Only a draft or already-voided invoice qualifies. */
+export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { context, response } = await guardRoute("invoice.manage");
+  if (response) return response;
+
+  const { id } = await params;
+  const invoice = await db.invoice.findUnique({ where: { id }, include: { payments: true, creditNotes: true } });
+  if (!invoice) return NextResponse.json({ message: "That invoice could not be found." }, { status: 404 });
+
+  // A SENT/PART_PAID/OVERDUE/PAID invoice is a live financial claim — it must
+  // be Voided first (which itself refuses once a payment exists) before it can
+  // be deleted, never removed in one step. DRAFT and VOID are the only two
+  // states the UI already guarantees are payment- and credit-note-free, but
+  // both are re-checked here rather than trusted, since nothing in the schema
+  // stops a payment or credit note from being recorded against either.
+  if (!["DRAFT", "VOID"].includes(invoice.status)) {
+    return NextResponse.json({ message: "Only a draft or voided invoice can be deleted. Void it first." }, { status: 409 });
+  }
+  if (invoice.payments.length > 0) {
+    return NextResponse.json({ message: "This invoice has payments recorded against it and cannot be deleted." }, { status: 409 });
+  }
+  if (invoice.creditNotes.length > 0) {
+    return NextResponse.json({ message: "This invoice has credit notes on record and cannot be deleted." }, { status: 409 });
+  }
+
+  await db.$transaction(async (tx) => {
+    // Voiding already does this, but a DRAFT invoice raised from timesheets
+    // never went through Void — its hours would otherwise stay stamped
+    // "invoiced" against a row that no longer exists, permanently unbillable.
+    await tx.timeEntry.updateMany({ where: { invoiceId: id }, data: { invoicedAt: null, invoiceId: null } });
+    await recordAudit({
+      actorId: context.user.id, action: "invoice.delete", entityType: "Invoice", entityId: id,
+      before: { number: invoice.number, status: invoice.status, total: invoice.total }, ipAddress: clientIp(request),
+    }, tx);
+    await tx.invoice.delete({ where: { id } });
+  });
+
+  return NextResponse.json({ message: `${invoice.number} deleted.` });
+}

@@ -1,5 +1,6 @@
 import { BarChart, SplitBarChart } from "@/components/portal/bar-chart";
 import { requirePermission } from "@/lib/auth/guard";
+import { ROLE } from "@/lib/auth/roles";
 import { STANDARD_WEEK_MINUTES, formatDuration, utilisation, weekStartOf } from "@/lib/delivery/timesheet";
 import { db } from "@/lib/db";
 
@@ -16,16 +17,17 @@ export default async function ReportsPage() {
   from.setUTCDate(from.getUTCDate() - 7 * (WEEKS - 1));
 
   const [people, entries, projects] = await Promise.all([
-    // Anyone doing delivery work, by evidence rather than by job title.
-    //
-    // This used to exclude the CEO and Co-Founder outright, on the assumption
-    // that leadership does not bill. In a firm where the founders deliver, that
-    // hid the only recorded time in the system and the report read as empty and
-    // broken. Someone with neither an assignment nor booked time is still left
-    // out, so pure-admin accounts do not pad the list with permanent zeroes.
+    // Team-level utilisation reporting, not leadership's own billable time —
+    // the CEO/Co-Founder's row previously halved the team-utilisation figure
+    // by counting toward the headcount denominator without logging time
+    // themselves (2 people, 1 logging → the true 30% individual figure read
+    // as a 15% "team" figure). If leadership's own delivery time ever needs
+    // tracking, it belongs in a founders-specific view, not blended into the
+    // team's rate.
     db.user.findMany({
       where: {
         status: "ACTIVE",
+        role: { key: { notIn: [ROLE.CEO, ROLE.CO_FOUNDER] } },
         OR: [
           { projectAssignments: { some: {} } },
           { timesheets: { some: { entries: { some: {} } } } },
@@ -70,19 +72,27 @@ export default async function ReportsPage() {
   const percent = (value: number) => `${Math.round(value * 100)}%`;
 
   return <div className="portal-page">
-    <header className="portal-page-head">
-      <p className="eyebrow">Delivery</p>
-      <h1 className="portal-title">Utilisation</h1>
-      <p className="portal-lead">
+    <div className="hero-panel">
+      <span className="hero-eyebrow">Delivery</span>
+      <h1 className="hero-title">Utilisation</h1>
+      <p className="hero-lead">
         Last {WEEKS} weeks from {from.toLocaleDateString("en-GB", { day: "numeric", month: "long", timeZone: "UTC" })}.
         Draft timesheets are excluded.
       </p>
-    </header>
-
-    <div className="portal-grid">
-      <article className="portal-card"><span className="portal-stat">{percent(totals.utilisation)}</span><p>Team utilisation</p></article>
-      <article className="portal-card"><span className="portal-stat">{percent(totals.billableRatio)}</span><p>Billable share of booked time</p></article>
-      <article className="portal-card"><span className="portal-stat">{formatDuration(totals.totalMinutes)}</span><p>Total time recorded</p></article>
+      <div className="hero-stats">
+        <div>
+          <span className="hero-stat-value">{percent(totals.utilisation)}</span>
+          <p className="hero-stat-label">Team utilisation</p>
+        </div>
+        <div>
+          <span className="hero-stat-value">{percent(totals.billableRatio)}</span>
+          <p className="hero-stat-label">Billable share of booked time</p>
+        </div>
+        <div>
+          <span className="hero-stat-value" style={{ fontSize: "1.6rem" }}>{formatDuration(totals.totalMinutes)}</span>
+          <p className="hero-stat-label">Total time recorded</p>
+        </div>
+      </div>
     </div>
 
     <section className="portal-section">

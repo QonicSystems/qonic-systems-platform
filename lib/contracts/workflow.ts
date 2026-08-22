@@ -88,6 +88,18 @@ export function canViewLetter(actor: AuthContext, letter: LetterFacts): boolean 
   return actor.permissions.has("contract.view_all");
 }
 
+/**
+ * Whoever is acting for the company toward this letter — HR who can draft it,
+ * or leadership who can release it — may dispatch its signing link to the
+ * subject. The subject themselves never sees this: dispatching is "notify
+ * someone else", and showing it to the person the letter is *about* reads as
+ * the app inviting them to WhatsApp the link to themselves.
+ */
+export function canDispatchLetter(actor: AuthContext, letter: LetterFacts): boolean {
+  if (actor.user.id === letter.subjectUserId) return false;
+  return actor.permissions.has("contract.generate") || actor.permissions.has("contract.release");
+}
+
 export function canDeleteLetter(actor: AuthContext, letter: LetterFacts): boolean {
   if (letter.status !== "REVOKED" && letter.status !== "DRAFT") return false;
   if (actor.role.isSuperAdmin) return true;

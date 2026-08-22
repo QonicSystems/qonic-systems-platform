@@ -17,7 +17,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (response) return response;
 
   const { id } = await params;
-  const candidate = await db.candidate.findUnique({ where: { id } });
+  const candidate = await db.candidate.findUnique({ where: { id }, include: { linkedUser: { select: { name: true, status: true } } } });
   if (!candidate) return NextResponse.json({ message: "Candidate not found." }, { status: 404 });
 
   let body: unknown;
@@ -50,12 +50,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       where: { id },
       data: { status, archivedAt: input.active ? null : new Date() },
     });
-    if (candidate.source !== "Global Visa Resource") {
-      await tx.user.updateMany({
-        where: { email: candidate.email },
-        data: { status: input.active ? "ACTIVE" : "ARCHIVED" },
-      });
-    }
+    // A candidate's pipeline status is never allowed to reach across into a
+    // linked employee's login access — that used to happen here by guessing
+    // off a matching email, with no audit trail, no role exclusion, and no
+    // way back except finding it in code. Account access is exclusively
+    // POST /api/admin/users/[id]/status's call, made on purpose by someone
+    // with user.deactivate.
     await recordAudit(
       {
         actorId: context.user.id,
@@ -70,9 +70,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     );
   });
 
+  const linkedNote = candidate.linkedUser && candidate.linkedUser.status === "ACTIVE"
+    ? ` This candidate is linked to an active employee account (${candidate.linkedUser.name}) — manage their access from Administration → People.`
+    : "";
+
   return NextResponse.json({
-    message: input.active
+    message: (input.active
       ? `${candidate.name} is active again.`
-      : `${candidate.name} has been archived. Their record and history are kept.`,
+      : `${candidate.name} has been archived. Their record and history are kept.`) + linkedNote,
   });
 }

@@ -4,7 +4,6 @@ import { guardRoute } from "@/lib/auth/guard";
 import { emailPattern } from "@/lib/contact";
 import { toMinor } from "@/lib/money";
 import { resourceTypeOf, RESOURCE_TYPE } from "@/lib/ats/resource-type";
-import { syncCandidateAndUsers } from "@/lib/ats/sync";
 import { db } from "@/lib/db";
 
 export const runtime = "nodejs";
@@ -78,8 +77,6 @@ export async function POST(request: Request) {
     await recordAudit({ actorId: context.user.id, action: "candidate.create", entityType: "Candidate", entityId: candidate.id, after: { name, email, visaType: candidate.visaType, source: candidate.source }, ipAddress: clientIp(request) }, tx);
     return candidate;
   });
-
-  await syncCandidateAndUsers();
 
   return NextResponse.json({ message: `${created.name} added to the talent pool.`, id: created.id });
 }

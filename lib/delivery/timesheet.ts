@@ -60,10 +60,40 @@ export function formatHours(minutes: number): string {
 /** Only a draft or a rejected week may be edited — approved time is immutable. */
 export const EDITABLE_STATUSES: ReadonlyArray<TimesheetStatus> = ["DRAFT", "REJECTED"];
 
+/**
+ * Own timesheet: the normal case, requires `timesheet.submit`. Someone
+ * else's: only an approver may enter or correct it directly, and only while
+ * it's still open — this is the handover path (an offboarded resource can no
+ * longer log in to backfill their own gap days, so someone with authority
+ * over approvals does it instead), not a general "edit anyone's time" grant.
+ */
 export function canEditTimesheet(actor: AuthContext, sheet: { userId: string; status: TimesheetStatus }): boolean {
-  if (sheet.userId !== actor.user.id) return false;
-  if (!actor.permissions.has("timesheet.submit")) return false;
-  return EDITABLE_STATUSES.includes(sheet.status);
+  if (!EDITABLE_STATUSES.includes(sheet.status)) return false;
+  if (sheet.userId === actor.user.id) return actor.permissions.has("timesheet.submit");
+  return actor.permissions.has("timesheet.approve");
+}
+
+/** Midnight UTC of the calendar day `date` falls on — strips any time-of-day component so two dates compare on the day alone. */
+export function utcDay(date: Date): number {
+  return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+}
+
+/**
+ * Whether someone could legitimately have booked time on this specific
+ * calendar day: on or after the day they were first assigned to *any*
+ * project, and not later than today.
+ *
+ * Day-level, not week-level — the week containing either boundary (the week
+ * someone joined, or the current week) is a mix of bookable and locked days,
+ * not all-or-nothing. Before the earliest assignment there is nothing to
+ * log — the API already refuses time entries against a project you aren't
+ * assigned to. After today would be claiming work that has not happened yet.
+ * `null` means no assignment has ever existed, so no day is bookable.
+ */
+export function isDayBookable(day: Date, today: Date, earliestAssignmentAt: Date | null): boolean {
+  if (!earliestAssignmentAt) return false;
+  const value = utcDay(day);
+  return value >= utcDay(earliestAssignmentAt) && value <= utcDay(today);
 }
 
 export type TimesheetFacts = { userId: string; status: TimesheetStatus };

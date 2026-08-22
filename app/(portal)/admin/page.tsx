@@ -1,16 +1,12 @@
 import { PeopleTable, type PersonRow } from "@/components/admin/people-table";
 import { canAdminister, canAssignRole, canEditIdentity, describeAuthority } from "@/lib/auth/authority";
 import { can, requirePermission } from "@/lib/auth/guard";
-import { syncCandidateAndUsers } from "@/lib/ats/sync";
 import { db } from "@/lib/db";
 
 export const metadata = { title: "People" };
 
 export default async function AdminPeoplePage() {
   const context = await requirePermission("user.view");
-
-  // Sync any non-global candidates into Users table
-  await syncCandidateAndUsers();
 
   const [users, roles, permissions] = await Promise.all([
     // Overrides are per-person exceptions to the role matrix. The guard has

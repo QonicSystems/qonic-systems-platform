@@ -4,7 +4,18 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { formatDuration, parseDuration } from "@/lib/delivery/timesheet";
 
-export type GridProject = { id: string; label: string; tasks: { id: string; name: string; billable: boolean }[] };
+export type GridProject = {
+  id: string;
+  label: string;
+  tasks: { id: string; name: string; billable: boolean }[];
+  /**
+   * ISO date: the earliest day time may be booked against this project —
+   * `Project.startDate` when set, otherwise the day this person was
+   * assigned. Per-project, not per-person: someone on two projects can have
+   * one week partly open and partly locked depending which row it's on.
+   */
+  bookableFrom: string;
+};
 export type GridRow = { key: string; projectId: string; taskId: string | null; durations: string[]; note: string };
 
 export function TimesheetGrid({ timesheetId, weekDates, projects, initialRows, editable, status, decisionNote }: {
@@ -79,25 +90,36 @@ export function TimesheetGrid({ timesheetId, weekDates, projects, initialRows, e
     finally { setBusy(false); }
   };
 
+  const todayIso = new Date().toISOString().slice(0, 10);
   const dayLabel = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", timeZone: "UTC" });
   const isWeekend = (iso: string) => [0, 6].includes(new Date(`${iso}T00:00:00Z`).getUTCDay());
 
+  /** Why (if at all) `iso` is locked for `projectId` — null means bookable. */
+  const lockReasonFor = (projectId: string, iso: string): string | null => {
+    const project = projects.find((candidate) => candidate.id === projectId);
+    if (!project) return "Not assigned to this project.";
+    if (iso > todayIso) return "Can't fill a future timesheet.";
+    if (iso < project.bookableFrom) return "Before this project's start date.";
+    return null;
+  };
+
   /**
-   * Fill 8h on every weekday of the week.
+   * Fill 8h on every bookable weekday of the week, for the row's own project.
    *
-   * `throughToday` stops at today, which is the safe default — booking Friday's
-   * eight hours on a Monday is claiming work nobody has done yet. The whole-week
-   * variant exists because people commonly fill the sheet in on the last day, or
-   * are completing a week that has already passed.
+   * The lock is the hard boundary — a locked day is never filled, by either
+   * button. `throughToday` only changes the wording of the "nothing to fill"
+   * message; it used to also change which days got filled, but that would
+   * let "Whole week" stuff a value into a disabled cell's state that "Save"
+   * would then silently submit — the input being disabled must mean the
+   * value can never change, not just that it looks that way.
    */
   const autofillWeek = (throughToday: boolean) => {
     if (projects.length === 0) return;
     const project = projects[0];
-    const todayIso = new Date().toISOString().slice(0, 10);
 
     const standardDurations = weekDates.map((iso) => {
       if (isWeekend(iso)) return "";
-      if (throughToday && iso > todayIso) return "";
+      if (lockReasonFor(project.id, iso)) return "";
       return "8.0";
     });
 
@@ -106,8 +128,8 @@ export function TimesheetGrid({ timesheetId, weekDates, projects, initialRows, e
       setNotice({
         tone: "error",
         text: throughToday
-          ? "No elapsed weekdays in this week up to today. Use “Whole week” to fill it anyway."
-          : "This week has no weekdays to fill.",
+          ? "No bookable weekdays in this week up to today."
+          : "This week has no bookable weekdays to fill.",
       });
       return;
     }
@@ -181,7 +203,7 @@ export function TimesheetGrid({ timesheetId, weekDates, projects, initialRows, e
               className="row-action row-action--highlight"
               onClick={() => autofillWeek(true)}
               disabled={busy}
-              title="Fills weekdays up to today with 8h/day — never future dates"
+              title="Fills weekdays up to today with 8h/day — never future or before the project's start"
             >
               Autofill to date
             </button>
@@ -190,7 +212,7 @@ export function TimesheetGrid({ timesheetId, weekDates, projects, initialRows, e
               className="row-action row-action--highlight"
               onClick={() => autofillWeek(false)}
               disabled={busy}
-              title="Fills Monday to Friday with 8h/day, including days still to come"
+              title="Fills the whole week's bookable weekdays with 8h/day"
             >
               Autofill whole week
             </button>
@@ -237,12 +259,17 @@ export function TimesheetGrid({ timesheetId, weekDates, projects, initialRows, e
                     {project.tasks.map((task) => <option key={task.id} value={task.id}>{task.name}{task.billable ? "" : " (non-billable)"}</option>)}
                   </select>}
                 </th>
-                {row.durations.map((value, index) => <td key={index} className={isWeekend(weekDates[index]) ? "is-weekend" : ""}>
-                  <input className="duration-input" inputMode="decimal" placeholder="—" value={value} disabled={!editable}
-                    aria-label={`${project?.label ?? "Project"} on ${dayLabel(weekDates[index])}`}
-                    aria-invalid={parseDuration(value) === null}
-                    onChange={(event) => setDuration(row.key, index, event.target.value)} />
-                </td>)}
+                {row.durations.map((value, index) => {
+                  const lockReason = lockReasonFor(row.projectId, weekDates[index]);
+                  return <td key={index} className={`${isWeekend(weekDates[index]) ? "is-weekend" : ""}${lockReason ? " is-locked" : ""}`}>
+                    <input className="duration-input" inputMode="decimal" placeholder={lockReason ? "🔒" : "—"} value={value}
+                      disabled={!editable || Boolean(lockReason)}
+                      title={lockReason ?? undefined}
+                      aria-label={`${project?.label ?? "Project"} on ${dayLabel(weekDates[index])}${lockReason ? ` — ${lockReason}` : ""}`}
+                      aria-invalid={parseDuration(value) === null}
+                      onChange={(event) => setDuration(row.key, index, event.target.value)} />
+                  </td>;
+                })}
                 <td className="timesheet-total">{formatDuration(rowMinutes)}</td>
                 {editable && <td>
                   <button type="button" className="row-action row-action--danger"

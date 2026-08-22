@@ -21,6 +21,7 @@ export const portalNavigation: ReadonlyArray<NavItem | NavGroup> = [
     label: "My Work",
     items: [
       { label: "Timesheets", href: "/timesheets", permission: "timesheet.submit" },
+      { label: "My Earnings", href: "/earnings", permission: "payout.view_own" },
       { label: "Leave", href: "/leave", permission: "leave.request" },
       { label: "Contract Letters", href: "/contracts", permission: "contract.view_own" },
     ],
@@ -51,6 +52,7 @@ export const portalNavigation: ReadonlyArray<NavItem | NavGroup> = [
       { label: "Utilisation", href: "/reports", permission: "report.utilization" },
       { label: "Capacity", href: "/reports/capacity", permission: "report.utilization" },
       { label: "Revenue", href: "/reports/revenue", permission: "report.finance" },
+      { label: "Deal Financials", href: "/reports/deals", permission: "payout.view_all" },
     ],
   },
   { label: "Directory", href: "/directory", permission: "directory.view" },

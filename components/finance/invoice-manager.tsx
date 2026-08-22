@@ -114,6 +114,20 @@ export function InvoiceManager({ invoices, clients, projects, canManage, canReco
                 <a className="row-action" href={`/api/invoices/${invoice.id}/pdf`} target="_blank" rel="noreferrer noopener">PDF</a>
                 {canManage && invoice.status === "DRAFT" && <button type="button" className="row-action" disabled={busy} onClick={() => call(`/api/invoices/${invoice.id}`, { action: "send" })}>Issue</button>}
                 {canManage && !["PAID", "VOID"].includes(invoice.status) && <button type="button" className="row-action row-action--danger" disabled={busy} onClick={() => call(`/api/invoices/${invoice.id}`, { action: "void" })}>Void</button>}
+                {canManage && ["DRAFT", "VOID"].includes(invoice.status) && (
+                  <button
+                    type="button"
+                    className="row-action row-action--danger"
+                    disabled={busy}
+                    onClick={() => {
+                      if (window.confirm(`Permanently delete ${invoice.number}? This cannot be undone.`)) {
+                        call(`/api/invoices/${invoice.id}`, {}, "DELETE");
+                      }
+                    }}
+                  >
+                    Delete
+                  </button>
+                )}
                 {canRecordPayment && ["SENT", "PART_PAID", "OVERDUE"].includes(invoice.status) && <button type="button" className="row-action" disabled={busy} onClick={() => { setPaying(invoice); setPayment({ ...payment, amount: "" }); }}>Record payment</button>}
                 {canManage && !["DRAFT", "VOID"].includes(invoice.status) && <button type="button" className="row-action" disabled={busy} onClick={() => { setCrediting(invoice); setCredit({ amount: "", reason: "" }); }}>Credit note</button>}
               </div>

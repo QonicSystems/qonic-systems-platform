@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ContractForm } from "@/components/contracts/contract-form";
+import { recordAudit } from "@/lib/audit";
 import { canAdminister } from "@/lib/auth/authority";
 import { requirePermission } from "@/lib/auth/guard";
 import { db } from "@/lib/db";
@@ -46,6 +47,21 @@ export default async function NewContractPage({
       }
       if (candidateUser) {
         initialSubjectId = candidateUser.id;
+
+        // This is the one deliberate moment a Candidate becomes a linked User —
+        // drafting their first contract letter — so it's recorded here, once,
+        // rather than guessed later by matching email strings.
+        if (candidate && candidate.linkedUserId !== candidateUser.id) {
+          await db.candidate.update({ where: { id: candidate.id }, data: { linkedUserId: candidateUser.id } });
+          await recordAudit({
+            actorId: context.user.id,
+            action: "candidate.link",
+            entityType: "Candidate",
+            entityId: candidate.id,
+            before: { linkedUserId: candidate.linkedUserId },
+            after: { linkedUserId: candidateUser.id },
+          });
+        }
       }
     }
   }

@@ -3,7 +3,6 @@ import { clientIp, recordAudit } from "@/lib/audit";
 import { canAdminister, canAssignRole, canChangeOwnRole, canEditIdentity } from "@/lib/auth/authority";
 import { guardRoute } from "@/lib/auth/guard";
 import { emailPattern } from "@/lib/contact";
-import { syncCandidateAndUsers } from "@/lib/ats/sync";
 import { db } from "@/lib/db";
 import { isForeignKeyViolation, isRecordNotFound, isUniqueEmailViolation } from "@/lib/db-errors";
 import { notify } from "@/lib/notify";
@@ -110,8 +109,6 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     }
     throw error;
   }
-
-  await syncCandidateAndUsers();
 
   return NextResponse.json({ message: roleChanged ? `${data.name} updated and signed out to re-authenticate.` : `${data.name} updated.` });
 }

@@ -955,11 +955,16 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 .portal-menu-head strong { color: var(--ink); font-family: var(--font-display), sans-serif; font-size: 0.95rem; font-weight: 700; }
 .portal-menu-head span { color: var(--faint); font-size: 0.82rem; word-break: break-all; }
 .portal-role-chip {
-  display: inline-block; width: fit-content; margin-top: 0.45rem;
+  display: inline-block; width: fit-content; margin-top: 0.45rem; margin-right: 0.4rem;
   border-radius: 999px; background: var(--accent-tint);
   padding: 0.22rem 0.7rem; color: var(--accent-dark);
   font-size: 0.72rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
   border: 1px solid rgba(255, 215, 0, 0.35);
+}
+/* A second, secondary fact (employment type) — distinct from the role, so it
+   doesn't read as if the person has two roles. */
+.portal-role-chip--muted {
+  background: var(--canvas-muted); color: var(--faint); border-color: var(--line);
 }
 .portal-menu-item {
   display: block; width: 100%; border: 0; background: none;
@@ -1216,7 +1221,8 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 .status-chip--reimbursed,
 .status-chip--advance,
 .status-chip--filled,
-.status-chip--on-track {
+.status-chip--on-track,
+.status-chip--actual-payout {
   background: #f0fdf4; color: #166534; border-color: #bbf7d0;
 }
 
@@ -1246,7 +1252,8 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 .status-chip--acknowledged,
 .status-chip--screened,
 .status-chip--in-progress,
-.status-chip--part-paid {
+.status-chip--part-paid,
+.status-chip--billed-to-company {
   background: #eff6ff; color: #1e40af; border-color: #bfdbfe;
 }
 
@@ -1519,6 +1526,11 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 .timesheet th[scope="row"] select { width: 100%; font-size: 0.84rem; padding: 0.45rem 0.6rem; }
 .timesheet td { text-align: center; padding: 0.6rem 0.45rem; }
 .timesheet .is-weekend { background: rgba(15, 20, 25, 0.025); }
+/* A day outside the bookable window — before the person's earliest project
+   assignment, or not yet arrived. The input itself carries `disabled`, this
+   is just the visual cue that it's locked rather than merely blank. */
+.timesheet .is-locked { background: var(--canvas-muted); }
+.timesheet .is-locked .duration-input { cursor: not-allowed; opacity: 0.55; }
 .timesheet tfoot tr { border-top: 2px solid var(--line); font-weight: 700; background: var(--canvas-sub); }
 .timesheet tfoot td { color: var(--ink); }
 .duration-input {
@@ -1774,7 +1786,29 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 }
 .capability-tile li:first-child { border-top: none; padding-top: 0; }
 .capability-tile strong { color: #fff; font-size: 0.87rem; font-weight: 700; }
-.capability-tile span { color: rgba(255, 255, 255, 0.5); font-size: 0.79rem; line-height: 1.5; }
+/* :not(.status-chip) so this doesn't outrank .status-chip--*'s own color —
+   a status pill is self-contained (its own background *and* text color, e.g.
+   #f8fafc on #475569 for DRAFT) and must keep both together regardless of
+   surface; without the exclusion this class+element selector's higher
+   specificity overrides just the text half with translucent white, leaving
+   near-invisible text on the pill's own near-white background. */
+.capability-tile span:not(.status-chip) { color: rgba(255, 255, 255, 0.5); font-size: 0.79rem; line-height: 1.5; }
+/* BarChart/SplitBarChart (Reports pages) nested inside a tile here: label and
+   value text already pick up the dark-surface color above (both render as
+   <span>, and this selector's higher specificity wins over the chart's own
+   light-theme text color) — only the light-theme track backgrounds need an
+   explicit swap so the gold fill doesn't sit on a bright cream bar. */
+.capability-tile .chart-bar-track,
+.capability-tile .chart-split-track { background: rgba(255, 255, 255, 0.1); }
+/* .text-link's ink-on-white contrast (AA on white only) disappears on this
+   tile's near-black surface, so a tile that links out (Dashboard Overview)
+   gets its own light-gold variant instead. */
+.capability-tile-link {
+  display: inline-flex; align-items: center; gap: 0.4rem; margin-top: 1rem;
+  color: var(--accent-soft); font-size: 0.82rem; font-weight: 700; text-decoration: none;
+  transition: color 0.2s, gap 0.25s var(--ease);
+}
+.capability-tile-link:hover { color: var(--accent); gap: 0.6rem; }
 
 /* ── Leave balance rings ────────────────────────────────────────────────── */
 .ring-stat-row { position: relative; display: flex; flex-wrap: wrap; gap: clamp(1.25rem, 3vw, 2rem); }

@@ -12,6 +12,7 @@ import {
 import { EmptyState } from "@/components/portal/empty-state";
 import { StatusChip } from "@/components/status-chip";
 import { TableToolbar } from "@/components/portal/table-toolbar";
+import { formatProjectDate } from "@/lib/dates";
 import { useFilter } from "@/lib/ui/filter";
 
 export type Assignment = {
@@ -302,6 +303,8 @@ export function ProjectManager({
               <tr>
                 <th scope="col">Project</th>
                 <th scope="col">Client</th>
+                <th scope="col">Start date</th>
+                <th scope="col">End date</th>
                 <th scope="col">Billing</th>
                 <th scope="col">Budget</th>
                 <th scope="col">Project Manager</th>
@@ -319,6 +322,8 @@ export function ProjectManager({
                     <span>{project.code}</span>
                   </th>
                   <td>{project.client}</td>
+                  <td>{project.startDate ? formatProjectDate(new Date(`${project.startDate}T00:00:00Z`)) : <span className="portal-muted">—</span>}</td>
+                  <td>{project.endDate ? formatProjectDate(new Date(`${project.endDate}T00:00:00Z`)) : <span className="portal-muted">—</span>}</td>
                   <td>{project.billing}</td>
                   <td>{project.budget}</td>
                   <td>{project.manager}</td>
