@@ -88,7 +88,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Readonly<Record<Exclude<RoleKey, "ceo">, 
     "leave.request", "leave.approve", "leave.manage",
     "admin.access", "user.view", "user.manage", "user.deactivate", "audit.view",
   ],
-  [ROLE.EMPLOYEE]: [
+  [ROLE.DEVELOPER]: [
     "portal.access", "directory.view", "contract.view_own", "leave.request", "timesheet.submit", "payout.view_own",
   ],
 };

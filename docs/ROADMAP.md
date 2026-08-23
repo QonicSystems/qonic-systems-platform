@@ -70,7 +70,7 @@ names. The only legitimate role checks are `isSuperAdmin` (the CEO bypass) and
 - Audit logging on every auth and RBAC mutation
 - Route-group restructure — all seven marketing URLs unchanged
 
-**Roles seeded:** CEO & Founder (super admin, rank 0) · Co-Founder (10) · HR (20) · Accounts (20) · Projects (20) · Employee (50)
+**Roles seeded:** CEO & Founder (super admin, rank 0) · Co-Founder (10) · Developer (50). HR, Accounts and Projects were retired in the platform refactor.
 
 ---
 
@@ -289,21 +289,29 @@ Roles created this way are `isSystem: false`, which is what keeps
 
 ### Deleting a role
 
-Deletion is permanent, built-in roles included. Because the seed upserts every
-`SEEDED_ROLES` entry on each run, deleting one used to last only until the next
-deploy recreated it — so `DELETE /api/admin/roles/[id]` writes a `RetiredRole`
-tombstone that the seed consults first. Creating the same key again lifts it.
+Custom roles only, and only once nobody holds them. Three refusals:
 
-Two refusals remain: the **super-admin** role, because `isSuperAdmin` is the
-unconditional allow-all and its holder is the caller; and any role somebody still
-holds, because `User.roleId` is required — the CEO decides where those people go
-rather than the app reassigning them silently.
+- **Built-in roles** (CEO & Founder, Co-Founder, Developer). The seed upserts all
+  three on every run, so a delete would be undone by the next deploy — but the
+  real reason is Developer: it is the role the Candidate Pool assigns, and
+  without it staff onboarding has nothing to hand out.
+- The **super-admin** role, because `isSuperAdmin` is the unconditional allow-all
+  and its holder is the caller.
+- Any role **somebody still holds**, because `User.roleId` is required — the CEO
+  decides where those people go rather than the app reassigning them silently.
 
 ### Where accounts in a role come from
 
 `Role.viaCandidatePool` says an account in this role starts in the **Candidate
 Pool** — add the candidate, then use **Create Employee Account** — rather than in
-Administration → People. Employee is flagged this way, so every delivery
-account has a candidate record behind it. `POST /api/admin/users` and the role
-change on `PATCH /api/admin/users/[id]` both refuse a flagged role; the People
+Administration → People. **Developer** is the only role flagged this way, so
+every delivery account has a candidate record behind it. `POST /api/admin/users`
+and the role change on `PATCH /api/admin/users/[id]` both refuse it; the People
 dialogs leave it out of the dropdown, which is cosmetic.
+
+The flag is **seed-owned, not a per-role switch**. It was briefly settable when
+creating a role, and a custom role created with it ticked both vanished from
+People *and* became what "Create Employee Account" handed out — so onboarding a
+developer could silently assign a completely different role. Every role created
+through the console is a People role; the seed clears the flag from anything that
+is not a `viaCandidatePool` entry in `SEEDED_ROLES`.

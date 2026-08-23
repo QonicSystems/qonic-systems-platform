@@ -47,14 +47,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }, { status: 409 });
   }
 
-  // The delivery role, found by its flag rather than by key, so a workspace that
-  // renamed or replaced Employee still resolves. Falls back to the seeded
-  // key for a database migrated before the flag existed.
-  const role = await db.role.findFirst({ where: { viaCandidatePool: true }, orderBy: { rank: "asc" } })
-    ?? await db.role.findUnique({ where: { key: ROLE.EMPLOYEE } });
+  // Developer, by key. This used to be `findFirst({ viaCandidatePool: true })`,
+  // which was a mistake twice over: the flag was briefly settable when creating
+  // a role, so any custom role could claim it, and `findFirst` then handed out
+  // whichever one happened to sort first. Deleting the Developer role once was
+  // enough to make onboarding silently assign "Marketers" instead. Developer is
+  // a protected built-in and the seed re-creates it, so this always resolves.
+  const role = await db.role.findUnique({ where: { key: ROLE.DEVELOPER } });
   if (!role) {
     return NextResponse.json({
-      message: "No role is configured for Candidate Pool accounts. Mark one in Administration → People → Roles.",
+      message: "The Developer role is missing from this workspace. Run the database seed to restore it.",
     }, { status: 409 });
   }
 

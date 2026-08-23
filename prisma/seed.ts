@@ -18,13 +18,7 @@ const db = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
  * using the defaults as the initial value.
  */
 async function main() {
-  // Roles the CEO has deleted through the admin console. Recreating one here
-  // would silently undo a deliberate deletion on the next deploy, which is the
-  // bug this table exists to fix — "delete" has to mean deleted.
-  const retired = new Set((await db.retiredRole.findMany({ select: { key: true } })).map((row) => row.key));
-  const wanted = SEEDED_ROLES.filter((role) => !retired.has(role.key));
-
-  for (const role of wanted) {
+  for (const role of SEEDED_ROLES) {
     await db.role.upsert({
       where: { key: role.key },
       // `label`/`description` are CEO-editable, so only sync the structural fields.
@@ -32,10 +26,18 @@ async function main() {
       create: { key: role.key, label: role.label, description: role.description, isSuperAdmin: role.isSuperAdmin, isSystem: true, rank: role.rank, viaCandidatePool: role.viaCandidatePool },
     });
   }
-  console.log(`✔ ${wanted.length} roles`);
-  if (retired.size > 0) {
-    console.log(`  • skipped ${retired.size} role(s) deleted in the admin console: ${[...retired].join(", ")}`);
-  }
+  console.log(`✔ ${SEEDED_ROLES.length} roles`);
+
+  // `viaCandidatePool` is seed-owned, not a per-role switch: only Developer
+  // carries it. It was briefly settable when creating a role, which is how a
+  // custom role could claim it — and a custom role holding that flag both
+  // disappeared from Administration → People and became what the Candidate Pool
+  // handed out. Anything else claiming it is corrected here.
+  const strays = await db.role.updateMany({
+    where: { viaCandidatePool: true, key: { notIn: SEEDED_ROLES.filter((r) => r.viaCandidatePool).map((r) => r.key) } },
+    data: { viaCandidatePool: false },
+  });
+  if (strays.count > 0) console.log(`✔ ${strays.count} role(s) cleared of the Candidate Pool flag`);
 
   for (const permission of PERMISSIONS) {
     await db.permission.upsert({
@@ -116,11 +118,12 @@ async function pruneRetiredRoles() {
 
   const retiredIds = new Set(retired.map((role) => role.id));
 
-  // Employee by preference, but it is deletable from the admin console now, so
-  // fall back to the most junior surviving role rather than throwing — this runs
-  // unattended at deploy time and must not take the deploy down.
+  // Developer by preference. The fallback is belt-and-braces: Developer is a
+  // protected built-in and the upsert above has just re-created it, but this
+  // runs unattended at deploy time and must not take a deploy down if the row
+  // is somehow missing.
   const fallback =
-    (await db.role.findUnique({ where: { key: ROLE.EMPLOYEE } }))
+    (await db.role.findUnique({ where: { key: ROLE.DEVELOPER } }))
     ?? (await db.role.findFirst({
       where: { isSuperAdmin: false, id: { notIn: [...retiredIds] } },
       orderBy: { rank: "desc" },

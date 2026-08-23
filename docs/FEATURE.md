@@ -43,11 +43,11 @@ container: `docker compose -f docker/docker-compose.local.yml exec app npx tsx p
 |---|---|---|---|
 | Founder | `founder@qonicsystems.com` | CEO & Founder — super admin | 0 |
 | Priya Raman | `cofounder@qonicsystems.com` | Co-Founder | 10 |
-| Ananya Sharma | `hr@qonicsystems.com` | Employee, with recruitment overrides | 50 |
-| Neha Kulkarni | `lead-dev@qonicsystems.com` | Employee | 50 |
-| Rahul Mehta | `backend-dev@qonicsystems.com` | Employee | 50 |
-| Sana Iqbal | `cloud-dev@qonicsystems.com` | Employee | 50 |
-| Arjun Nair | `developer@qonicsystems.com` | Employee | 50 |
+| Ananya Sharma | `hr@qonicsystems.com` | Developer, with recruitment overrides | 50 |
+| Neha Kulkarni | `lead-dev@qonicsystems.com` | Developer | 50 |
+| Rahul Mehta | `backend-dev@qonicsystems.com` | Developer | 50 |
+| Sana Iqbal | `cloud-dev@qonicsystems.com` | Developer | 50 |
+| Arjun Nair | `developer@qonicsystems.com` | Developer | 50 |
 
 > The separate HR, Accounts and Projects roles were retired in the platform
 > refactor; `prisma/seed-demo.ts` now grants the HR account its extra capabilities
@@ -211,13 +211,13 @@ Legend: 🟢 covered by an automated test · ⚪ manual check only.
 - **Then** the others end and my current session stays alive.
 
 ### 2.14 People refuses a Candidate Pool role ⚪
-- **Given** Employee, whose `Role.viaCandidatePool` is true
+- **Given** Developer, the one role whose `Role.viaCandidatePool` is true
 - **When** I try to create a person in it from Administration → People, or edit an
   existing person into it
 - **Then** both are refused with a 422 naming the Candidate Pool. The dialogs omit
   the option entirely, but the refusal is server-side — forging the request past
   the dropdown fails the same way.
-- **And** an existing Employee is still editable for name, email, phone, job title
+- **And** an existing Developer is still editable for name, email, phone, job title
   and tech stack, because the guard is gated on the role actually changing.
 
 ### 2.15 The CEO creates a role at runtime ⚪
@@ -229,18 +229,21 @@ Legend: 🟢 covered by an automated test · ⚪ manual check only.
   People role picker.
 - **And** `npm run db:seed` afterwards **leaves it intact**: `pruneRetiredRoles()`
   only deletes `isSystem: true` roles the code no longer defines.
+- **And** it is assigned from **People**, never the Candidate Pool — that flag
+  belongs to the seeded Developer role alone and is not offered when creating a
+  role.
 - **And** rank 0 is refused (it is the CEO tier), a colliding key is suffixed
   rather than rejected, and nobody may create a role at or above their own rank.
 
 ### 2.16 Deleting a role is permanent ⚪
-- **Given** any role nobody holds, built-in included
+- **Given** a role I created that nobody holds
 - **When** I delete it
-- **Then** it is gone, and `npm run db:seed` does **not** bring it back — the
-  delete writes a `RetiredRole` tombstone the seed consults before recreating
-  anything from `SEEDED_ROLES`. Creating the same key again lifts the tombstone.
-- **And** a role somebody still holds is refused, naming how many accounts hold
-  it — deliberately *not* reassigning them, unlike the deploy seed's unattended
-  prune — as is the super-admin role.
+- **Then** it is gone for good.
+- **And** the three built-ins (CEO & Founder, Co-Founder, Developer) are refused:
+  the seed recreates them anyway, and deleting Developer would leave the Candidate
+  Pool with no role to assign. A role somebody still holds is refused too, naming
+  how many accounts hold it — deliberately *not* reassigning them, unlike the
+  deploy seed's unattended prune.
 - **And** changing a role's rank signs its holders out and notifies them, while a
   rename does not.
 

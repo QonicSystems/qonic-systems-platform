@@ -22,7 +22,7 @@ connected story, or jump to any part.
 | Neha | `hr@qonicsystems.com` | HR | People, leave, draft contracts |
 | Rahul | `accounts@qonicsystems.com` | Accounts | Invoices, payments, expenses |
 | Sana | `projects@qonicsystems.com` | Projects | Clients, projects, timesheet approval |
-| Arjun | `developer@qonicsystems.com` | Employee | Own timesheet, leave, profile |
+| Arjun | `developer@qonicsystems.com` | Developer | Own timesheet, leave, profile |
 
 **Where to sign in:**
 - Docker stack (what's running now): **http://consulting.qonicsystems.localhost** → *Sign In*
@@ -104,7 +104,7 @@ Open **Administration → People** (`/admin`) → **Add a person**. Create:
 - Job title, phone, and a **photo URL** (a link to an `https` image — nothing is
   uploaded; a broken link just falls back to initials)
 
-> **Employee is not on this list.** Those accounts start in the Candidate Pool
+> **Developer is not on this list.** Those accounts start in the Candidate Pool
 > (§4.2) so that every delivery account has a candidate record and a contract
 > letter behind it. The option is left out of the dropdown entirely, and the API
 > refuses it too — the restriction is not just a hidden menu entry.
@@ -116,10 +116,9 @@ Set its seniority rank (lower is more senior; 10 or lower counts as leadership),
 then switch its capabilities on in **Roles & Permissions**. A new role starts with
 none.
 
-Deleting a role removes it **for good**: built-in roles can go too, and a
-tombstone stops the deploy seed recreating them. The only refusals are the
-super-admin role (the one access that can never be locked out) and any role
-somebody still holds — move those people first.
+Deleting a role removes it **for good** — but only roles you created. The three
+built-ins (CEO & Founder, Co-Founder, Developer) are permanent, and a role
+somebody still holds is refused until you move those people.
 
 > **Rank guard in action:** HR can create and edit people *junior* to HR, but not
 > peers or seniors. As HR you can edit Anusha (Employee); you'll find no edit

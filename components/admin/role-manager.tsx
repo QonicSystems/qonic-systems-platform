@@ -22,13 +22,16 @@ export type RoleRow = {
 type Errors = Partial<Record<"label" | "description" | "rank", string>>;
 type ActResult = { ok: boolean; errors?: Errors };
 
-type RoleDraft = { label: string; description: string; rank: string; viaCandidatePool: boolean };
+type RoleDraft = { label: string; description: string; rank: string };
 
-const NEW_ROLE: RoleDraft = { label: "", description: "", rank: "20", viaCandidatePool: false };
+const NEW_ROLE: RoleDraft = { label: "", description: "", rank: "20" };
 
 /** Shown in place of the Delete button when the server would refuse it. */
 function deleteBlockedReason(role: RoleRow): string {
-  if (role.isSuperAdmin) return "Super admin — cannot be deleted";
+  // Stated in the row rather than hidden in a `title` on a disabled button —
+  // browsers frequently do not show a tooltip on a disabled control at all, so
+  // that reads as broken.
+  if (role.isSystem) return "Built-in — cannot be deleted";
   if (role.userCount > 0) {
     return role.userCount === 1
       ? "1 account holds this — move them first"
@@ -91,7 +94,8 @@ export function RoleManager({ roles }: { roles: ReadonlyArray<RoleRow> }) {
     <div className="flex items-center justify-between gap-3 mb-3">
       <p className="portal-note m-0">
         A role is a row, not code — create one here, then switch its capabilities on in{" "}
-        <Link className="text-link" href="/admin/permissions">Roles &amp; Permissions</Link>.
+        <Link className="text-link" href="/admin/permissions">Roles &amp; Permissions</Link>. Roles you create are
+        assigned from People. Developer is the one exception: it comes from the Candidate Pool.
       </p>
       <button type="button" className="button button-primary" onClick={() => { setCreating(true); setNotice(null); }} disabled={busy}>
         Create a role
@@ -172,12 +176,11 @@ export function RoleManager({ roles }: { roles: ReadonlyArray<RoleRow> }) {
         label: editing.label,
         description: editing.description,
         rank: String(editing.rank),
-        viaCandidatePool: editing.viaCandidatePool,
       }}
       busy={busy}
-      // Built-in roles have their rank and account source re-applied by the
-      // deploy seed, so the API refuses those edits — say so up front rather
-      // than letting the CEO fill the field in and be rejected.
+      // A built-in role's rank is re-applied by the deploy seed, so the API
+      // refuses that edit — say so up front rather than letting the CEO fill the
+      // field in and be rejected. Renaming a built-in is still allowed.
       rankLocked={editing.isSystem}
       holders={editing.userCount}
       onClose={() => setEditing(null)}
@@ -194,14 +197,6 @@ export function RoleManager({ roles }: { roles: ReadonlyArray<RoleRow> }) {
         <p className="portal-note">
           The role and its capability toggles are removed permanently. Nobody holds it, so no account is affected.
         </p>
-        {deleting.isSystem && <p className="portal-note mt-2">
-          This is a <strong>built-in</strong> role. Deleting it also marks it retired, so the deploy seed will not
-          recreate it — that is what makes the deletion stick. To bring it back, create it again here.
-        </p>}
-        {deleting.viaCandidatePool && <p className="portal-note mt-2">
-          It is the role the <strong>Candidate Pool</strong> uses for new staff accounts. With it gone, &ldquo;Create
-          Employee Account&rdquo; has nothing to assign until another role is marked the same way.
-        </p>}
         <div className="dialog-actions">
           <button type="button" className="button button-outline" onClick={() => setDeleting(null)} disabled={busy}>Cancel</button>
           <button type="button" className="button button-danger" onClick={() => remove(deleting)} disabled={busy}>
@@ -283,22 +278,6 @@ function RoleDialog({ title, submitLabel, initial, busy, rankLocked, holders = 0
                     Lower is more senior. CEO is 0, Co-Founder 10, Employee 50. Rank {LEADERSHIP_MAX_RANK} or
                     lower counts as leadership: approval notifications, client ownership, and no delivery allocation.
                   </p>}
-          </div>
-
-          <div className="sm:col-span-2">
-            <label className="inline-check" htmlFor="role-via-pool">
-              <input
-                id="role-via-pool"
-                type="checkbox"
-                checked={data.viaCandidatePool}
-                onChange={(event) => update("viaCandidatePool", event.target.checked)}
-                disabled={rankLocked}
-              />
-              <span>
-                Accounts in this role are added from the Candidate Pool, not from People. Administration &rarr; People
-                will refuse to create or move anyone into it.
-              </span>
-            </label>
           </div>
         </div>
 

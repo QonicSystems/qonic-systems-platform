@@ -59,7 +59,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const label = String(input.label ?? role.label).trim().slice(0, ROLE_LABEL_MAX);
   const description = String(input.description ?? role.description ?? "").trim().slice(0, ROLE_DESCRIPTION_MAX);
   const rank = input.rank === undefined ? role.rank : Number(input.rank);
-  const viaCandidatePool = input.viaCandidatePool === undefined ? role.viaCandidatePool : input.viaCandidatePool === true;
+  // `viaCandidatePool` is deliberately not readable from the request. It marks
+  // the one role the Candidate Pool assigns, it is owned by the seed, and it is
+  // not something an edit here can move onto another role.
 
   const errors: RoleFieldErrors = {};
   const labelProblem = validateRoleLabel(label);
@@ -72,15 +74,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   }
 
   const rankChanged = rank !== role.rank;
-  const flagChanged = viaCandidatePool !== role.viaCandidatePool;
 
-  // A built-in role's structural fields are re-applied by the deploy seed
-  // (prisma/seed.ts syncs rank and viaCandidatePool on upsert), so accepting an
+  // A built-in role's rank is re-applied by the deploy seed, so accepting an
   // edit here would silently revert on the next deploy. `label` and
   // `description` are deliberately left out of that sync and stay editable.
-  if (role.isSystem && (rankChanged || flagChanged)) {
+  if (role.isSystem && rankChanged) {
     return NextResponse.json({
-      message: "Rank and account source are fixed for built-in roles — the deploy seed re-applies them. You can still rename this role.",
+      message: "Rank is fixed for built-in roles — the deploy seed re-applies it. You can still rename this role.",
     }, { status: 409 });
   }
 
@@ -95,7 +95,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   await db.$transaction(async (tx) => {
     await tx.role.update({
       where: { id: role.id },
-      data: { label, description: description || null, rank, viaCandidatePool },
+      data: { label, description: description || null, rank },
     });
 
     // Only a rank change alters what its holders may do — it is the input to
@@ -118,8 +118,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       action: "rbac.role.update",
       entityType: "Role",
       entityId: role.id,
-      before: { label: role.label, description: role.description, rank: role.rank, viaCandidatePool: role.viaCandidatePool },
-      after: { label, description: description || null, rank, viaCandidatePool },
+      before: { label: role.label, description: role.description, rank: role.rank },
+      after: { label, description: description || null, rank },
       ipAddress: clientIp(request),
     }, tx);
   });
@@ -134,17 +134,17 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 /**
  * Deletes a role, permanently.
  *
- * A built-in role can go too. The catch is that prisma/seed.ts upserts every
- * SEEDED_ROLES entry on each run, so deleting one used to last only until the
- * next deploy quietly recreated it — the delete appeared to work and then undid
- * itself. A `RetiredRole` tombstone is written here and consulted by the seed,
- * which is what makes the deletion actually stick.
+ * Custom roles only. Three cases are refused:
  *
- * Two cases are still refused:
- *
- * - The **super-admin** role: `isSuperAdmin` is the unconditional allow-all in
- *   resolvePermissions, so deleting it removes the one access that can never be
- *   locked out — and it belongs to the person making the request.
+ * - A **built-in** role (CEO & Founder, Co-Founder, Developer). prisma/seed.ts
+ *   upserts all three on every run, so a delete would be undone by the next
+ *   deploy anyway — but the real reason is Developer: it is the role the
+ *   Candidate Pool assigns, and without it staff onboarding has nothing to hand
+ *   out. Deleting it once already left onboarding silently pointing at whichever
+ *   other role happened to carry the flag.
+ * - The **super-admin** role, which is also built-in: `isSuperAdmin` is the
+ *   unconditional allow-all in resolvePermissions, so deleting it removes the one
+ *   access that can never be locked out — and it belongs to the caller.
  * - A role **somebody still holds**: `User.roleId` is a required relation, so the
  *   delete would fail on the foreign key regardless. Silently reassigning them,
  *   as the unattended deploy seed must, is the wrong call for a deliberate
@@ -161,6 +161,11 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   if (role.isSuperAdmin) {
     return NextResponse.json({
       message: "The super-admin role cannot be deleted — it is the only access that can never be locked out, and it is yours.",
+    }, { status: 409 });
+  }
+  if (role.isSystem) {
+    return NextResponse.json({
+      message: `${role.label} is a built-in role and cannot be deleted. Only roles you create here can be.`,
     }, { status: 409 });
   }
 
@@ -184,30 +189,15 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
       action: "rbac.role.delete",
       entityType: "Role",
       entityId: role.id,
-      before: { key: role.key, label: role.label, rank: role.rank, isSystem: role.isSystem },
+      before: { key: role.key, label: role.label, rank: role.rank },
       after: null,
       ipAddress: clientIp(request),
     }, tx);
-
-    // Only a code-defined role can be resurrected by the seed, so only that case
-    // needs a tombstone. Upserted, not created: the same key may have been
-    // deleted, re-created from the console, and deleted again.
-    if (role.isSystem) {
-      await tx.retiredRole.upsert({
-        where: { key: role.key },
-        update: { retiredAt: new Date(), retiredById: context.user.id },
-        create: { key: role.key, retiredById: context.user.id },
-      });
-    }
 
     // RolePermission cascades with the role. UserPermissionOverride is keyed on
     // userId, not roleId, so nothing dangles once the holder count is zero.
     await tx.role.delete({ where: { id: role.id } });
   });
 
-  return NextResponse.json({
-    message: role.isSystem
-      ? `${role.label} deleted. It is a built-in role, so it is also marked retired and will not come back on the next deploy.`
-      : `${role.label} deleted.`,
-  });
+  return NextResponse.json({ message: `${role.label} deleted.` });
 }

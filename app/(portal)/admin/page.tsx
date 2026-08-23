@@ -64,9 +64,9 @@ export default async function AdminPeoplePage() {
     id: role.id,
     label: role.label,
     assignable: canAssignRole(context, role).ok,
-    // Employee, and anything else flagged the same way, is created from the
-    // Candidate Pool. Both user endpoints re-check this; the flag is here only
-    // so the dialogs can say why the option is unavailable.
+    // Developer is assigned by the Candidate Pool, so People leaves it out of
+    // the role dropdown. Both user endpoints re-check this; the flag is carried
+    // here only so the dialogs know what to omit.
     viaCandidatePool: role.viaCandidatePool,
   }));
 
@@ -87,13 +87,11 @@ export default async function AdminPeoplePage() {
     viaCandidatePool: role.viaCandidatePool,
     userCount: role._count.users,
     canEdit: mayEditRole(role),
-    // Deleting is refused while anyone still holds the role, so the button is
-    // disabled rather than the request being sent and rejected.
-    // Built-in roles are deletable too — the seed keeps a tombstone so they do
-    // not come back. Only the super admin (the one access that can never be
-    // locked out) and a role somebody still holds are refused; the latter would
-    // violate User.roleId anyway.
-    canDelete: mayEditRole(role) && role._count.users === 0,
+    // Built-in roles are permanent — CEO & Founder, Co-Founder and Developer.
+    // Developer in particular is what the Candidate Pool assigns, so deleting it
+    // would leave staff onboarding with no role to hand out. Only roles created
+    // here can be deleted, and only once nobody holds them.
+    canDelete: mayEditRole(role) && !role.isSystem && role._count.users === 0,
   }));
 
   return <section className="portal-section">

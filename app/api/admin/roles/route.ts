@@ -53,7 +53,6 @@ export async function POST(request: Request) {
   const label = String(input.label ?? "").trim().slice(0, ROLE_LABEL_MAX);
   const description = String(input.description ?? "").trim().slice(0, ROLE_DESCRIPTION_MAX);
   const rank = Number(input.rank);
-  const viaCandidatePool = input.viaCandidatePool === true;
 
   const errors: RoleFieldErrors = {};
   const labelProblem = validateRoleLabel(label);
@@ -84,15 +83,23 @@ export async function POST(request: Request) {
         label,
         description: description || null,
         rank,
-        viaCandidatePool,
-        // Never settable by a caller. `isSuperAdmin` is an unconditional
-        // allow-all in resolvePermissions, and `isSystem: true` would put the
-        // role in pruneRetiredRoles' sights — that function deletes every
-        // system role absent from SEEDED_ROLES and moves its holders to
-        // Employee, so a hand-made role marked system is destroyed by the next
-        // `npm run db:seed`.
+        // None of these three is settable by a caller.
+        //
+        // `isSuperAdmin` is an unconditional allow-all in resolvePermissions.
+        //
+        // `isSystem: true` would put the role in pruneRetiredRoles' sights —
+        // that function deletes every system role absent from SEEDED_ROLES and
+        // moves its holders to Developer, so a hand-made role marked system is
+        // destroyed by the next `npm run db:seed`.
+        //
+        // `viaCandidatePool` belongs to the seeded Developer role alone. It was
+        // briefly offered as a checkbox here, and a role created with it ticked
+        // vanished from Administration → People (that dropdown hides Candidate
+        // Pool roles) *and* became what "Create Employee Account" handed out.
+        // Every role created here is a People role.
         isSuperAdmin: false,
         isSystem: false,
+        viaCandidatePool: false,
       },
     });
 
@@ -105,17 +112,12 @@ export async function POST(request: Request) {
     // say) brought it back permanently stripped of the defaults the seed would
     // otherwise have given it.
 
-    // Re-creating a key that was deleted lifts its tombstone. Leaving it would
-    // make the seed skip a key that now exists — harmless today, but it would
-    // silently stop the role being re-adopted as a built-in later.
-    await tx.retiredRole.deleteMany({ where: { key } });
-
     await recordAudit({
       actorId: context.user.id,
       action: "rbac.role.create",
       entityType: "Role",
       entityId: created.id,
-      after: { key, label, rank, viaCandidatePool },
+      after: { key, label, rank },
       ipAddress: clientIp(request),
     }, tx);
 
