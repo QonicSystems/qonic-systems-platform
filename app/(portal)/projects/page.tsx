@@ -1,6 +1,7 @@
 import { ProjectManager } from "@/components/delivery/project-manager";
 import { can, requirePermission } from "@/lib/auth/guard";
-import { isLeadershipRank, leadershipRoleWhere, nonLeadershipRoleWhere } from "@/lib/auth/roles";
+import { isLeadershipRank, leadershipRoleWhere } from "@/lib/auth/roles";
+import { ACCEPTED_CONTRACT_STATUS } from "@/lib/contracts/eligibility";
 import { BILLING_LABELS } from "@/lib/delivery/validate";
 import { db } from "@/lib/db";
 
@@ -24,6 +25,7 @@ export default async function ProjectsPage() {
           select: {
             userId: true,
             allocationPercent: true,
+            startedOn: true,
             user: { select: { id: true, name: true, email: true, jobTitle: true, status: true, role: { select: { key: true, label: true, rank: true } } } },
           },
         },
@@ -48,12 +50,14 @@ export default async function ProjectsPage() {
       select: { id: true, name: true, role: { select: { label: true } } },
       orderBy: { name: "asc" },
     }),
-    // Everyone eligible for a project allocation — delivery and support staff,
-    // never leadership.
+    // Only Developers who have personally accepted a released contract letter
+    // may be allocated. The relation filter protects the UI, while the API
+    // repeats the same rule to protect against a forged request.
     db.user.findMany({
       where: {
         status: "ACTIVE",
-        role: nonLeadershipRoleWhere,
+        role: { viaCandidatePool: true },
+        contractsSubject: { some: { status: ACCEPTED_CONTRACT_STATUS } },
       },
       select: { id: true, name: true, email: true, jobTitle: true, role: { select: { key: true, label: true } } },
       orderBy: [{ name: "asc" }],
@@ -103,8 +107,9 @@ export default async function ProjectsPage() {
             notes: project.notes ?? "",
             team: validAssignments.length,
             assignments: validAssignments.map((a) => ({
-              userId: a.userId,
-              allocationPercent: a.allocationPercent,
+            userId: a.userId,
+            allocationPercent: a.allocationPercent,
+            startedOn: a.startedOn ? a.startedOn.toISOString().slice(0, 10) : "",
               name: a.user.name,
               email: a.user.email,
               roleLabel: a.user.role.label,

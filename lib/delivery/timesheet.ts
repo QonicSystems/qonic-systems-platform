@@ -78,20 +78,26 @@ export function utcDay(date: Date): number {
 
 /**
  * Whether someone could legitimately have booked time on this specific
- * calendar day: on or after the day they were first assigned to *any*
- * project, and not later than today.
+ * calendar day: on or after that project's start date, and not later than
+ * today. The Developer's Actual Start Date intentionally does not lock time:
+ * it controls payout classification, not the project's client billing window.
  *
  * Day-level, not week-level — the week containing either boundary (the week
  * someone joined, or the current week) is a mix of bookable and locked days,
  * not all-or-nothing. Before the earliest assignment there is nothing to
  * log — the API already refuses time entries against a project you aren't
  * assigned to. After today would be claiming work that has not happened yet.
- * `null` means no assignment has ever existed, so no day is bookable.
+ * `null` means no project booking boundary is known, so no day is bookable.
  */
-export function isDayBookable(day: Date, today: Date, earliestAssignmentAt: Date | null): boolean {
-  if (!earliestAssignmentAt) return false;
+export function isDayBookable(day: Date, today: Date, projectStartedAt: Date | null): boolean {
+  if (!projectStartedAt) return false;
   const value = utcDay(day);
-  return value >= utcDay(earliestAssignmentAt) && value <= utcDay(today);
+  return value >= utcDay(projectStartedAt) && value <= utcDay(today);
+}
+
+/** A legacy project without a start date remains bookable from assignment creation. */
+export function projectBookingStart(projectStartedAt: Date | null, assignmentCreatedAt: Date): Date {
+  return projectStartedAt ?? assignmentCreatedAt;
 }
 
 export type TimesheetFacts = { userId: string; status: TimesheetStatus };

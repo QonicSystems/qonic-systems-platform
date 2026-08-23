@@ -6,6 +6,7 @@ import { EmptyState } from "@/components/portal/empty-state";
 import { StatusChip } from "@/components/status-chip";
 import { TableToolbar } from "@/components/portal/table-toolbar";
 import { useFilter } from "@/lib/ui/filter";
+import { COMMERCIAL_INVOICE_LABEL } from "@/lib/finance/c2c";
 
 export type InvoiceLine = { id: string; description: string; quantity: string; unitRate: string; amount: string };
 export type InvoicePayment = { id: string; amount: string; paidOn: string; method: string; reference: string };
@@ -13,8 +14,10 @@ export type InvoiceCreditNote = { id: string; number: string; amount: string; re
 
 type Row = {
   id: string; number: string; client: string; project: string; status: string;
+  commercialKind: string; billingRecipient: string;
   issued: string; due: string; total: string; outstanding: string; ageing: string;
   subtotal: string; taxPercent: number; taxAmount: string; notes: string;
+  grossClientAmount: string; vendorCommissionAmount: string; globalCandidateCommissionAmount: string; qonicRevenueAmount: string;
   lines: ReadonlyArray<InvoiceLine>;
   payments: ReadonlyArray<InvoicePayment>;
   creditNotes: ReadonlyArray<InvoiceCreditNote>;
@@ -36,7 +39,7 @@ export function InvoiceManager({ invoices, clients, projects, canManage, canReco
 }) {
   const router = useRouter();
   const empty = { clientId: clients[0]?.id ?? "", projectId: "", issueDate: today, dueDate: dueDefault, taxPercent: "18", fromTimesheets: true, notes: "", currency: "INR" };
-  const { query, setQuery, rows, isFiltered } = useFilter(invoices, (invoice) => [invoice.number, invoice.client, invoice.project, invoice.status]);
+  const { query, setQuery, rows, isFiltered } = useFilter(invoices, (invoice) => [invoice.number, invoice.client, invoice.billingRecipient, invoice.project, invoice.status, invoice.commercialKind]);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(empty);
   // Manual lines. The API has always accepted them when `fromTimesheets` is
@@ -92,18 +95,18 @@ export function InvoiceManager({ invoices, clients, projects, canManage, canReco
       ? <EmptyState message="No invoices yet." filteredMessage="Nothing matches that search." isFiltered={isFiltered} />
       : <div className="matrix-scroll">
       <table className="matrix matrix--people">
-        <thead><tr><th scope="col">Invoice</th><th scope="col">Client</th><th scope="col">Due</th><th scope="col">Total</th><th scope="col">Outstanding</th><th scope="col">Status</th><th scope="col">Actions</th></tr></thead>
+        <thead><tr><th scope="col">Invoice</th><th scope="col">Client / Recipient</th><th scope="col">Due</th><th scope="col">Total</th><th scope="col">Outstanding</th><th scope="col">Status</th><th scope="col">Actions</th></tr></thead>
         <tbody>
           {rows.map((invoice) => <tr key={invoice.id}>
             <th scope="row">
               <strong>{invoice.number}</strong>
-              <span>{invoice.project} · issued {invoice.issued}</span>
+              <span>{COMMERCIAL_INVOICE_LABEL[invoice.commercialKind] ?? invoice.commercialKind} · {invoice.project} · issued {invoice.issued}</span>
               <span className="matrix-tags">
                 {invoice.payments.length > 0 && <span className="pill">{invoice.payments.length} payment{invoice.payments.length === 1 ? "" : "s"}</span>}
                 {invoice.creditNotes.length > 0 && <span className="pill pill--warn">{invoice.creditNotes.length} credit note{invoice.creditNotes.length === 1 ? "" : "s"}</span>}
               </span>
             </th>
-            <td>{invoice.client}</td>
+            <td>{invoice.client}{invoice.billingRecipient && <span className="portal-muted">To: {invoice.billingRecipient}</span>}</td>
             <td>{invoice.due}{invoice.ageing !== "—" && invoice.ageing !== "current" && <span className="portal-muted text-over">{invoice.ageing} days late</span>}</td>
             <td>{invoice.total}</td>
             <td>{invoice.outstanding}</td>
@@ -141,7 +144,7 @@ export function InvoiceManager({ invoices, clients, projects, canManage, canReco
     {detail && <div className="dialog-backdrop" role="dialog" aria-modal="true" aria-labelledby="inv-detail-title">
       <div className="dialog dialog--wide">
         <h3 id="inv-detail-title" className="dialog-title">{detail.number}</h3>
-        <p className="portal-note">{detail.client}{detail.project !== "—" && ` · ${detail.project}`} · issued {detail.issued} · due {detail.due}</p>
+        <p className="portal-note">{COMMERCIAL_INVOICE_LABEL[detail.commercialKind] ?? detail.commercialKind} · {detail.client}{detail.billingRecipient && ` → ${detail.billingRecipient}`}{detail.project !== "—" && ` · ${detail.project}`} · issued {detail.issued} · due {detail.due}</p>
 
         <section className="panel-block">
           <div className="panel-block__head"><h4>Lines</h4></div>
@@ -164,6 +167,11 @@ export function InvoiceManager({ invoices, clients, projects, canManage, canReco
             <span>Total <b>{detail.total}</b></span>
           </p>
         </section>
+
+        {detail.grossClientAmount && <section className="panel-block">
+          <div className="panel-block__head"><h4>C2C reconciliation</h4></div>
+          <p className="portal-note">Gross client amount {detail.grossClientAmount} = Qonic revenue {detail.qonicRevenueAmount} + vendor commission {detail.vendorCommissionAmount} + Global Candidate commission {detail.globalCandidateCommissionAmount}.</p>
+        </section>}
 
         <section className="panel-block">
           <div className="panel-block__head"><h4>Payments received</h4></div>

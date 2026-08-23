@@ -109,7 +109,7 @@ export function resolveBreadcrumbs(pathname: string): Crumb[] {
   }
 
   if (path === "/reports/revenue") {
-    return [{ label: "Home", href: "/dashboard" }, { label: "Finance" }, { label: "Revenue" }];
+    return [{ label: "Home", href: "/dashboard" }, { label: "Finance" }, { label: "Company Finance" }];
   }
 
   // Directory

@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { clientIp, recordAudit } from "@/lib/audit";
 import { guardRoute } from "@/lib/auth/guard";
-import { CLIENT_STATUSES, validateClient } from "@/lib/delivery/validate";
+import { CLIENT_STATUSES, toMinorUnits, validateClient } from "@/lib/delivery/validate";
+import { isLeadershipRank } from "@/lib/auth/roles";
 import { db } from "@/lib/db";
+import { c2cCommissionBreakdown } from "@/lib/finance/c2c";
 
 export const runtime = "nodejs";
 
@@ -50,6 +52,38 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     }, { status: 422 });
   }
 
+  const [vendor, globalCandidate, owner, policy] = await Promise.all([
+    data.vendorId ? db.vendor.findUnique({ where: { id: data.vendorId } }) : Promise.resolve(null),
+    data.globalCandidateId ? db.candidate.findUnique({ where: { id: data.globalCandidateId } }) : Promise.resolve(null),
+    data.ownerId ? db.user.findUnique({ where: { id: data.ownerId }, include: { role: true } }) : Promise.resolve(null),
+    db.commissionPolicy.findUnique({ where: { id: "default" } }),
+  ]);
+  if (data.vendorId && !vendor) return NextResponse.json({ message: "Please correct the highlighted fields.", errors: { vendorId: "That vendor no longer exists." } }, { status: 422 });
+  if (data.globalCandidateId && (!globalCandidate || globalCandidate.kind !== "GLOBAL")) return NextResponse.json({ message: "Please correct the highlighted fields.", errors: { globalCandidateId: "Choose a Global Candidate for this job." } }, { status: 422 });
+  if (globalCandidate && globalCandidate.consentStatus !== "CONSENTED") return NextResponse.json({ message: "This Global Candidate has not completed profile-marketing consent.", errors: { globalCandidateId: "Consent must be confirmed before a job can be procured." } }, { status: 409 });
+  if (data.ownerId && (!owner || owner.status !== "ACTIVE" || !isLeadershipRank(owner.role.rank))) return NextResponse.json({ message: "Please correct the highlighted fields.", errors: { ownerId: "Project/account owner must be an active Founder or Co-Founder." } }, { status: 422 });
+
+  const actualClientRate = toMinorUnits(data.actualClientRate);
+  const commissionPolicy = policy ?? await db.commissionPolicy.upsert({ where: { id: "default" }, update: {}, create: { id: "default" } });
+  const isC2C = data.employmentType === "C2C";
+  const candidateCommission = isC2C && data.globalCandidateCommissionPercent
+    ? Number(data.globalCandidateCommissionPercent)
+    : (isC2C && data.globalCandidateId ? existing.globalCandidateCommissionPercent ?? commissionPolicy.defaultGlobalCandidateCommissionPercent : null);
+  const vendorCommission = isC2C && data.vendorCommissionPercent
+    ? Number(data.vendorCommissionPercent)
+    : (isC2C && data.vendorId ? existing.vendorCommissionPercent ?? commissionPolicy.defaultVendorCommissionPercent : null);
+  try {
+    if (isC2C && candidateCommission !== null && vendorCommission !== null) {
+      c2cCommissionBreakdown({
+        grossClientAmount: 100,
+        globalCandidateCommissionPercent: candidateCommission,
+        vendorCommissionPercent: vendorCommission,
+      });
+    }
+  } catch (error) {
+    return NextResponse.json({ message: error instanceof Error ? error.message : "Invalid C2C commission configuration.", errors: { vendorCommissionPercent: "Combined commissions cannot exceed 100%." } }, { status: 422 });
+  }
+
   await db.$transaction(async (tx) => {
     await tx.client.update({
       where: { id },
@@ -57,8 +91,51 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         name: data.name, code: data.code, status: data.status as never,
         industry: data.industry || null, website: data.website || null,
         notes: data.notes || null, ownerId: data.ownerId || null,
+        vendorId: data.vendorId || null,
+        globalCandidateId: data.globalCandidateId || null,
+        employmentType: data.employmentType || null,
+        workArrangement: data.workArrangement || null,
+        startDate: data.startDate ? new Date(`${data.startDate}T00:00:00.000Z`) : null,
+        endDate: data.endDate ? new Date(`${data.endDate}T00:00:00.000Z`) : null,
+        actualClientRate,
+        rateCurrency: data.rateCurrency || existing.rateCurrency,
+        globalCandidateCommissionPercent: candidateCommission,
+        vendorCommissionPercent: vendorCommission,
       },
     });
+    // Client terms are authoritative for the automatically-created internal
+    // project. This keeps dates, manager and the downstream billing rate in
+    // sync without asking users to type the same data twice.
+    await tx.project.updateMany({
+      where: { clientId: id },
+      data: {
+        startDate: data.startDate ? new Date(`${data.startDate}T00:00:00.000Z`) : null,
+        endDate: data.endDate ? new Date(`${data.endDate}T00:00:00.000Z`) : null,
+        managerId: data.ownerId || null,
+        defaultRate: actualClientRate,
+        budgetCurrency: data.rateCurrency || existing.rateCurrency,
+      },
+    });
+    // Existing generic clients can be promoted to a procured Global Candidate
+    // job later. Create its minimal internal project exactly once at that
+    // point, preserving the same Client → Project data flow as new jobs.
+    if (data.globalCandidateId) {
+      const hasProject = await tx.project.findFirst({ where: { clientId: id }, select: { id: true } });
+      if (!hasProject) {
+        const project = await tx.project.create({
+          data: {
+            clientId: id, name: data.projectName, code: `${data.code}-JOB`,
+            status: data.status === "UPCOMING" ? "PLANNED" : "ACTIVE",
+            billing: "TIME_AND_MATERIALS", defaultRate: actualClientRate,
+            budgetCurrency: data.rateCurrency || existing.rateCurrency,
+            startDate: data.startDate ? new Date(`${data.startDate}T00:00:00.000Z`) : null,
+            endDate: data.endDate ? new Date(`${data.endDate}T00:00:00.000Z`) : null,
+            managerId: data.ownerId || null,
+          },
+        });
+        await tx.projectTask.create({ data: { projectId: project.id, name: "General", billable: true, sortOrder: 0 } });
+      }
+    }
     await recordAudit({
       actorId: context.user.id, action: "client.update", entityType: "Client", entityId: id,
       before: { name: existing.name, code: existing.code, status: existing.status },

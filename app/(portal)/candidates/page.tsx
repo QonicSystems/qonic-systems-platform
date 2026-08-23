@@ -6,9 +6,6 @@ import { db } from "@/lib/db";
 
 export const metadata = { title: "Candidate Pool" };
 
-const money = (minor: number | null) =>
-  minor === null ? "—" : `$ ${(minor / 100).toLocaleString("en-US")}`;
-
 export default async function CandidatesPage() {
   const context = await requirePermission("candidate.view");
   // A candidate's real contract status is HR/leadership scope — a plain
@@ -23,6 +20,8 @@ export default async function CandidatesPage() {
           include: { job: { select: { title: true, reference: true } } },
         },
         linkedUser: { select: { id: true, name: true } },
+        addedBy: { select: { name: true } },
+        marketingProfiles: { where: { isActive: true }, select: { technology: true } },
       },
       // Active first, then most recently added — archived records stay reachable
       // through the filter without crowding the top of the pool.
@@ -92,26 +91,25 @@ export default async function CandidatesPage() {
             headline: candidate.headline ?? "",
             location: candidate.location ?? "",
             techStack: candidate.techStack ?? candidate.skills ?? "",
+            marketingProfiles: candidate.marketingProfiles.map((profile) => profile.technology),
             visaType: candidate.visaType ?? "",
             visaStatus: candidate.visaStatus ?? (candidate.visaType ? "Valid" : ""),
             visaExpiry: candidate.visaExpiry ? candidate.visaExpiry.toISOString().slice(0, 10) : "",
-            commissionPaid: money(candidate.commissionPaid),
-            rawCommissionPaid: candidate.commissionPaid !== null ? String(candidate.commissionPaid / 100) : "",
             ssn: candidate.ssn ? `•••-••-${candidate.ssn.slice(-4)}` : "—",
             rawSsn: candidate.ssn ?? "",
             address: candidate.address ?? "",
             benchStatus: candidate.benchStatus ?? (resourceTypeOf(candidate.source) === "GLOBAL" ? "Available / On Bench" : "Available / Ready to Deploy"),
             projectAllocations: allocations,
             source: candidate.source,
-            resourceType: resourceTypeOf(candidate.source),
+            resourceType: candidate.kind === "GLOBAL" ? "GLOBAL" : candidate.kind === "DEVELOPER" ? "EMPLOYEE_DEV" : resourceTypeOf(candidate.source),
             noticePeriod: candidate.noticePeriod ?? "",
-            expectedSalary: candidate.expectedSalary !== null ? String(candidate.expectedSalary / 100) : "",
-            currentSalary: candidate.currentSalary !== null ? String(candidate.currentSalary / 100) : "",
             notes: candidate.notes ?? "",
             status: candidate.status,
             resumeUrl: candidate.resumeUrl,
             linkedinUrl: candidate.linkedinUrl ?? "",
-            hasConsent: candidate.consentAt !== null,
+            hasConsent: candidate.consentStatus === "CONSENTED",
+            consentStatus: candidate.consentStatus,
+            addedBy: candidate.addedBy?.name ?? "System / legacy record",
             applications: candidate.applications.map((a) => `${a.job.title} (${STAGE_LABELS[a.stage]})`),
             linkedUserName: candidate.linkedUser?.name ?? null,
             contractStatus: candidate.linkedUser ? contractByUserId.get(candidate.linkedUser.id)?.status ?? null : null,

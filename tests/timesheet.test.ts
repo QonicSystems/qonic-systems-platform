@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { AuthContext } from "@/lib/auth/guard";
 import {
   canDecideTimesheet, canEditTimesheet, canSubmitTimesheet,
-  formatDuration, isDayBookable, parseDuration, weekDays, weekStartOf, canRecallTimesheet,
+  formatDuration, isDayBookable, parseDuration, projectBookingStart, weekDays, weekStartOf, canRecallTimesheet,
 } from "@/lib/delivery/timesheet";
 import { toMinorUnits, validateClient, validateProject } from "@/lib/delivery/validate";
 
@@ -39,7 +39,7 @@ describe("weekStartOf", () => {
 describe("isDayBookable", () => {
   const today = utc("2026-08-20"); // a Thursday
 
-  it("is not bookable when no assignment has ever existed", () => {
+  it("is not bookable when no project booking boundary is known", () => {
     expect(isDayBookable(utc("2026-08-20"), today, null)).toBe(false);
   });
 
@@ -51,17 +51,29 @@ describe("isDayBookable", () => {
     expect(isDayBookable(utc("2026-08-21"), today, utc("2026-01-01"))).toBe(false);
   });
 
-  it("is bookable on the day someone was first assigned", () => {
+  it("is bookable on the Project Start Date", () => {
     expect(isDayBookable(utc("2026-08-14"), today, utc("2026-08-14"))).toBe(true);
   });
 
-  it("is not bookable for a day before the first assignment, even within the same week", () => {
-    // Assigned Friday the 14th — Monday-Thursday of that same week are still locked.
+  it("is not bookable before the Project Start Date, even within the same week", () => {
+    // Project started Friday the 14th — Monday-Thursday of that same week are still locked.
     expect(isDayBookable(utc("2026-08-10"), today, utc("2026-08-14"))).toBe(false);
   });
 
-  it("ignores the time-of-day component of the assignment timestamp", () => {
+  it("ignores the time-of-day component of the project start timestamp", () => {
     expect(isDayBookable(utc("2026-08-14"), today, new Date("2026-08-14T23:59:00.000Z"))).toBe(true);
+  });
+
+  it("uses the project start even when a Developer's payout start is later", () => {
+    const projectStart = utc("2026-08-10");
+    const developerPayoutStart = utc("2026-08-13");
+    expect(isDayBookable(utc("2026-08-10"), today, projectStart)).toBe(true);
+    expect(developerPayoutStart.getTime()).toBeGreaterThan(projectStart.getTime());
+  });
+
+  it("falls back to the assignment creation date only for legacy projects without a start date", () => {
+    expect(projectBookingStart(null, utc("2026-08-13")).toISOString().slice(0, 10)).toBe("2026-08-13");
+    expect(projectBookingStart(utc("2026-08-10"), utc("2026-08-13")).toISOString().slice(0, 10)).toBe("2026-08-10");
   });
 });
 

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { clientIp, recordAudit } from "@/lib/audit";
 import { guardRoute } from "@/lib/auth/guard";
 import { formatMoney, toMinor } from "@/lib/money";
+import { notifyLeadership, sendEmail } from "@/lib/notify";
 import { db } from "@/lib/db";
 
 export const runtime = "nodejs";
@@ -12,7 +13,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (response) return response;
 
   const { id } = await params;
-  const invoice = await db.invoice.findUnique({ where: { id } });
+  const invoice = await db.invoice.findUnique({
+    where: { id },
+    include: { client: { include: { vendor: true, globalCandidate: true } } },
+  });
   if (!invoice) return NextResponse.json({ message: "That invoice could not be found." }, { status: 404 });
   if (invoice.status === "DRAFT") return NextResponse.json({ message: "Issue the invoice before recording a payment." }, { status: 409 });
   if (invoice.status === "VOID") return NextResponse.json({ message: "That invoice is void." }, { status: 409 });
@@ -50,8 +54,28 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       where: { id },
       data: { paidAmount, status: paidAmount >= invoice.total ? "PAID" : "PART_PAID" },
     });
+    await notifyLeadership({
+      kind: "INVOICE",
+      title: paidAmount >= invoice.total ? `Payment received in full: ${invoice.number}` : `Partial payment received: ${invoice.number}`,
+      body: `${context.user.name} recorded ${formatMoney(amount, invoice.currency)} against ${invoice.number}. ${formatMoney(invoice.total - paidAmount, invoice.currency)} remains outstanding.`,
+      link: "/invoices",
+    }, tx);
     await recordAudit({ actorId: context.user.id, action: "payment.record", entityType: "Invoice", entityId: id, after: { number: invoice.number, amount, paidAmount }, ipAddress: clientIp(request) }, tx);
   });
+
+  const recipient = invoice.commercialKind === "QONIC_TO_VENDOR"
+    ? invoice.client.vendor?.email
+    : invoice.commercialKind === "GLOBAL_CANDIDATE_COMMISSION_RECORD"
+      ? invoice.client.globalCandidate?.email
+      : null;
+  if (recipient) {
+    void sendEmail(
+      [recipient],
+      `Payment confirmation — ${invoice.number}`,
+      `A payment of ${formatMoney(amount, invoice.currency)} has been recorded against ${invoice.number}.`,
+      "/invoices"
+    );
+  }
 
   return NextResponse.json({
     message: paidAmount >= invoice.total

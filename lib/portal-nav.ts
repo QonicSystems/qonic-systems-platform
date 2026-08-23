@@ -31,6 +31,7 @@ export const portalNavigation: ReadonlyArray<NavItem | NavGroup> = [
     items: [
       { label: "Projects", href: "/projects", permission: "project.view" },
       { label: "Clients", href: "/clients", permission: "client.view" },
+      { label: "Vendors", href: "/vendors", permission: "client.view" },
     ],
   },
   {
@@ -43,11 +44,10 @@ export const portalNavigation: ReadonlyArray<NavItem | NavGroup> = [
     label: "Finance",
     items: [
       { label: "Invoices", href: "/invoices", permission: "invoice.view" },
-      // Revenue is the last surviving report. A "Reports" group holding one
-      // link rendered as a single-item dropdown, so it sits with Invoices —
-      // receivables ageing and placement fees are finance, not a category of
-      // their own.
-      { label: "Revenue", href: "/reports/revenue", permission: "report.finance" },
+      // Company Finance is a complete finance view, not a single report. It
+      // sits with Invoices because collections, costs, payouts, and delivery
+      // economics belong to the same finance workflow.
+      { label: "Company Finance", href: "/reports/revenue", permission: "report.finance" },
     ],
   },
   { label: "Directory", href: "/directory", permission: "directory.view" },

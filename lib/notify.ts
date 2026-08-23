@@ -29,7 +29,7 @@ function getSmtpConfig() {
   };
 }
 
-async function sendNotificationEmails(
+export async function sendEmail(
   recipients: ReadonlyArray<string>,
   title: string,
   body?: string | null,
@@ -94,7 +94,7 @@ export async function notify(
   });
 
   if (user?.email) {
-    void sendNotificationEmails([user.email], entry.title, entry.body, entry.link);
+    void sendEmail([user.email], entry.title, entry.body, entry.link);
   }
 }
 
@@ -126,7 +126,7 @@ export async function notifyMany(
 
   const emails = users.map((u) => u.email).filter(Boolean);
   if (emails.length > 0) {
-    void sendNotificationEmails(emails, entry.title, entry.body, entry.link);
+    void sendEmail(emails, entry.title, entry.body, entry.link);
   }
 }
 
@@ -155,4 +155,3 @@ export async function notifyLeadership(
     await notifyMany(ids, entry, client);
   }
 }
-

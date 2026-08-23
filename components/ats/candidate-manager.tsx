@@ -27,8 +27,6 @@ type Row = {
   visaType: string;
   visaStatus?: string;
   visaExpiry?: string;
-  commissionPaid?: string;
-  rawCommissionPaid?: string;
   ssn?: string;
   rawSsn?: string;
   address?: string;
@@ -37,13 +35,14 @@ type Row = {
   source: string;
   resourceType: ResourceType;
   noticePeriod?: string;
-  expectedSalary?: string;
-  currentSalary?: string;
   notes?: string;
   status: "ACTIVE" | "ARCHIVED";
   resumeUrl: string | null;
   linkedinUrl?: string;
   hasConsent: boolean;
+  consentStatus: string;
+  addedBy: string;
+  marketingProfiles: string[];
   applications: string[];
   linkedUserName: string | null;
   contractStatus: string | null;
@@ -52,8 +51,8 @@ type Row = {
 type Errors = Record<string, string>;
 
 /** The `source` value each Add button seeds the dialog with. */
-const GLOBAL_SOURCE = "Global Visa Resource";
-const EMPLOYEE_DEV_SOURCE = "Direct / LinkedIn";
+const GLOBAL_SOURCE = "LinkedIn";
+const EMPLOYEE_DEV_SOURCE = "Internal Sources";
 
 const EMPTY_FORM = {
   name: "",
@@ -66,15 +65,13 @@ const EMPTY_FORM = {
   visaStatus: "",
   visaExpiry: "",
   ssn: "",
-  commissionPaid: "",
   address: "",
   benchStatus: "Available / Ready to Deploy",
   source: EMPLOYEE_DEV_SOURCE,
+  kind: "DEVELOPER",
   resumeUrl: "",
   linkedinUrl: "",
   noticePeriod: "",
-  currentSalary: "",
-  expectedSalary: "",
   notes: "",
   consent: false,
 };
@@ -88,11 +85,12 @@ type CandidateForm = typeof EMPTY_FORM;
  * only the select could reach it, and a button that seeded `source` directly
  * would have left the visa and bench fields on their non-global defaults.
  */
-function withSourceDefaults(previous: CandidateForm, source: string): CandidateForm {
-  const isGlobal = source === GLOBAL_SOURCE;
+function withSourceDefaults(previous: CandidateForm, source: string, kind = previous.kind): CandidateForm {
+  const isGlobal = kind === "GLOBAL";
   return {
     ...previous,
     source,
+    kind,
     visaType: isGlobal ? previous.visaType || "H-1B" : "",
     visaStatus: isGlobal ? previous.visaStatus || "Valid" : "",
     visaExpiry: isGlobal ? previous.visaExpiry : "",
@@ -102,7 +100,6 @@ function withSourceDefaults(previous: CandidateForm, source: string): CandidateF
         : "Available / On Bench"
       : "Available / Ready to Deploy",
     ssn: isGlobal ? previous.ssn : "",
-    commissionPaid: isGlobal ? previous.commissionPaid : "",
     address: isGlobal ? previous.address : "",
   };
 }
@@ -192,15 +189,13 @@ export function CandidateManager({
       visaStatus: c.visaStatus || "",
       visaExpiry: c.visaExpiry || "",
       ssn: c.rawSsn || "",
-      commissionPaid: c.rawCommissionPaid || "",
       address: c.address || "",
       benchStatus: c.benchStatus || "Available / Ready to Deploy",
       source: c.source || EMPLOYEE_DEV_SOURCE,
+      kind: c.resourceType === "GLOBAL" ? "GLOBAL" : c.resourceType === "EMPLOYEE_DEV" ? "DEVELOPER" : "DIRECT",
       resumeUrl: c.resumeUrl || "",
       linkedinUrl: c.linkedinUrl || "",
       noticePeriod: c.noticePeriod || "",
-      currentSalary: c.currentSalary || "",
-      expectedSalary: c.expectedSalary || "",
       notes: c.notes || "",
       consent: c.hasConsent,
     });
@@ -211,7 +206,7 @@ export function CandidateManager({
 
   const startAdd = (source: string) => {
     setEditing(null);
-    setForm(withSourceDefaults(EMPTY_FORM, source));
+    setForm(withSourceDefaults(EMPTY_FORM, source, source === GLOBAL_SOURCE ? "GLOBAL" : "DEVELOPER"));
     setErrors({});
     setNotice(null);
     setOpen(true);
@@ -227,7 +222,7 @@ export function CandidateManager({
     setNotice(null);
     setErrors({});
     try {
-      const isGlobal = form.source === GLOBAL_SOURCE;
+      const isGlobal = form.kind === "GLOBAL";
       const payload = {
         ...form,
         skills: form.techStack,
@@ -235,7 +230,6 @@ export function CandidateManager({
         visaStatus: isGlobal ? form.visaStatus : null,
         visaExpiry: isGlobal ? form.visaExpiry || null : null,
         ssn: isGlobal ? form.ssn : null,
-        commissionPaid: isGlobal ? form.commissionPaid : null,
         benchStatus: form.benchStatus || (isGlobal ? "Available / On Bench" : "Available / Ready to Deploy"),
       };
 
@@ -505,7 +499,7 @@ export function CandidateManager({
                               <span>
                                 {c.email} {c.location && `· ${c.location}`}
                               </span>
-                              {!c.hasConsent && <span className="portal-muted">No consent recorded</span>}
+                              <span className="portal-muted">Added by {c.addedBy}</span>
                               {c.linkedUserName && <span className="portal-muted">Linked employee: {c.linkedUserName}</span>}
                             </th>
                             <td>
@@ -549,11 +543,6 @@ export function CandidateManager({
                                 <span className="text-xs font-semibold text-slate-800">
                                   Direct Staff (Non-Visa)
                                 </span>
-                                {c.expectedSalary && (
-                                  <span className="text-xs text-slate-600">
-                                    Exp: ₹{c.expectedSalary}
-                                  </span>
-                                )}
                                 {c.noticePeriod && (
                                   <span className="text-[11px] text-blue-700 font-medium">
                                     Notice: {c.noticePeriod}
@@ -736,6 +725,10 @@ export function CandidateManager({
                                 <span className="text-xs text-slate-500 font-mono">SSN: {c.ssn}</span>
                               )}
                               {!c.hasConsent && <span className="portal-muted">No consent recorded</span>}
+                              <span className={c.hasConsent ? "text-xs text-emerald-700" : "text-xs text-amber-700"}>
+                                Consent: {c.consentStatus.toLowerCase().replace("_", " ")}
+                              </span>
+                              <span className="portal-muted">Added by {c.addedBy}</span>
                               {c.linkedUserName && <span className="portal-muted">Linked employee: {c.linkedUserName}</span>}
                             </th>
                             <td>
@@ -752,6 +745,7 @@ export function CandidateManager({
                             <td>
                               <div className="flex flex-col gap-1.5 min-w-[200px]">
                                 <TechStackBadges stack={c.techStack} />
+                                {c.marketingProfiles.length > 1 && <span className="text-[11px] text-slate-500">Marketing profiles: {c.marketingProfiles.join(", ")}</span>}
                                 {match && (
                                   <div className="flex items-center gap-1.5 mt-0.5">
                                     <span
@@ -781,11 +775,6 @@ export function CandidateManager({
                                 </span>
                                 {c.visaExpiry && (
                                   <span className="text-[11px] text-slate-500">Expires {c.visaExpiry}</span>
-                                )}
-                                {c.commissionPaid && c.commissionPaid !== "—" && (
-                                  <span className="text-xs text-emerald-700 font-medium">
-                                    Comm: {c.commissionPaid}
-                                  </span>
                                 )}
                               </div>
                             </td>
@@ -945,24 +934,41 @@ export function CandidateManager({
             <h3 id="cand-title" className="dialog-title">
               {editing
                 ? `Edit Candidate: ${editing.name}`
-                : form.source === GLOBAL_SOURCE
+                : form.kind === "GLOBAL"
                   ? "Add Global Candidate"
                   : "Add Developer"}
             </h3>
             <form className="contact-form" noValidate onSubmit={submit}>
               <div className="grid gap-5 sm:grid-cols-2">
-                <div className="sm:col-span-2">
-                  <label htmlFor="cd-source">Resource Classification <em>*</em></label>
+                <div>
+                  <label htmlFor="cd-kind">Candidate Type <em>*</em></label>
                   <select
-                    id="cd-source"
-                    value={form.source}
-                    onChange={(e) => handleSourceChange(e.target.value)}
+                    id="cd-kind"
+                    value={form.kind}
+                    onChange={(e) => {
+                      const kind = e.target.value as CandidateForm["kind"];
+                      setForm((previous) => withSourceDefaults(previous, kind === "GLOBAL" ? "LinkedIn" : "Internal Sources", kind));
+                    }}
                   >
-                    <option value="Global Visa Resource">Global Visa Resource (VISA Utilisation & Placement Commission)</option>
-                    <option value="Direct / LinkedIn">Developer (Sourced via LinkedIn)</option>
-                    <option value="Internal Connection">Developer (Sourced via Internal Network / Founders)</option>
-                    <option value="Job Application">Direct Applicant</option>
+                    <option value="GLOBAL">Global Candidate</option>
+                    <option value="DEVELOPER">Developer</option>
+                    <option value="DIRECT">Direct Applicant</option>
                   </select>
+                </div>
+                <div>
+                  <label htmlFor="cd-source">Source <em>*</em></label>
+                  <select id="cd-source" value={form.source} onChange={(e) => handleSourceChange(e.target.value)}>
+                    {form.kind === "GLOBAL" ? <>
+                      <option value="LinkedIn">LinkedIn</option>
+                      <option value="Internal Sources">Internal Sources</option>
+                      <option value="Other">Other</option>
+                    </> : <>
+                      <option value="LinkedIn">LinkedIn</option>
+                      <option value="Internal Sources">Internal Sources</option>
+                      <option value="Other">Other</option>
+                    </>}
+                  </select>
+                  {form.kind === "GLOBAL" && <p className="field-hint">Consent is emailed after the record is added.</p>}
                 </div>
                 <div>
                   <label htmlFor="cd-name">Full Name <em>*</em></label>
@@ -1016,12 +1022,12 @@ export function CandidateManager({
                   />
                 </div>
 
-                {/* Conditional Fields: Global Visa Resource */}
-                {form.source === "Global Visa Resource" ? (
+                {/* Conditional fields: Global Candidate */}
+                {form.kind === "GLOBAL" ? (
                   <>
                     <div className="sm:col-span-2 pt-2 border-t border-slate-200">
                       <p className="text-xs font-bold uppercase tracking-wider text-amber-700">
-                        Global Visa & Placement Commission Details
+                        Global Candidate visa details
                       </p>
                     </div>
                     <div>
@@ -1081,16 +1087,6 @@ export function CandidateManager({
                         placeholder="123-45-6789"
                       />
                     </div>
-                    <div>
-                      <label htmlFor="cd-comm">Commission Paid on VISA ($ / ₹)</label>
-                      <input
-                        id="cd-comm"
-                        type="number"
-                        value={form.commissionPaid}
-                        onChange={(e) => setForm({ ...form, commissionPaid: e.target.value })}
-                        placeholder="e.g. 5000"
-                      />
-                    </div>
                     <div className="sm:col-span-2">
                       <label htmlFor="cd-address">Residential / Postal Address</label>
                       <input
@@ -1105,7 +1101,7 @@ export function CandidateManager({
                   <>
                     <div className="sm:col-span-2 pt-2 border-t border-slate-200">
                       <p className="text-xs font-bold uppercase tracking-wider text-blue-700">
-                        Developer Sourcing & Compensation Details
+                        Developer Sourcing Details
                       </p>
                     </div>
                     <div>
@@ -1115,15 +1111,6 @@ export function CandidateManager({
                         value={form.noticePeriod}
                         onChange={(e) => setForm({ ...form, noticePeriod: e.target.value })}
                         placeholder="Immediate / 15 Days / 1 Month"
-                      />
-                    </div>
-                    <div>
-                      <label htmlFor="cd-exp-salary">Expected Compensation</label>
-                      <input
-                        id="cd-exp-salary"
-                        value={form.expectedSalary}
-                        onChange={(e) => setForm({ ...form, expectedSalary: e.target.value })}
-                        placeholder="e.g. 80000 or $50/hr"
                       />
                     </div>
                     <div className="sm:col-span-2">
@@ -1190,7 +1177,7 @@ export function CandidateManager({
                     ? editing ? "Updating…" : "Saving…"
                     : editing
                       ? "Update Candidate"
-                      : form.source === GLOBAL_SOURCE
+                      : form.kind === "GLOBAL"
                         ? "Add Global Candidate"
                         : "Add Developer"}
                 </button>

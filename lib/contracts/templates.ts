@@ -147,7 +147,7 @@ export function findTemplate(key: string): LetterTemplate {
 export const FIELD_LABELS: Record<TemplateField, string> = {
   jobTitle: "Position",
   employmentType: "Employment type",
-  startDate: "Effective date",
+  startDate: "Date of Contract",
   endDate: "Duration / End Date",
   annualSalary: "Annual salary",
   monthlyCompensation: "Monthly compensation",

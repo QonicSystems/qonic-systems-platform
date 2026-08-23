@@ -72,7 +72,7 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
             <tr><th scope="row">Employee</th><td>{letter.subject.name} — {letter.subject.email}</td></tr>
             <tr><th scope="row">Position</th><td>{payload.jobTitle}</td></tr>
             <tr><th scope="row">Employment type</th><td>{payload.employmentType}</td></tr>
-            <tr><th scope="row">Start date</th><td>{formatDate(payload.startDate)}</td></tr>
+            <tr><th scope="row">Date of Contract</th><td>{formatDate(payload.startDate)}</td></tr>
             <tr><th scope="row">{formatCompensation(payload).label}</th><td>{formatCompensation(payload).value}</td></tr>
             <tr><th scope="row">Location</th><td>{payload.location}</td></tr>
             {payload.reportingTo ? <tr><th scope="row">Reporting to</th><td>{payload.reportingTo}</td></tr> : null}

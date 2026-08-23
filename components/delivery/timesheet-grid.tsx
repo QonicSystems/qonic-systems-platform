@@ -10,9 +10,8 @@ export type GridProject = {
   tasks: { id: string; name: string; billable: boolean }[];
   /**
    * ISO date: the earliest day time may be booked against this project —
-   * `Project.startDate` when set, otherwise the day this person was
-   * assigned. Per-project, not per-person: someone on two projects can have
-   * one week partly open and partly locked depending which row it's on.
+   * the Project Start Date, otherwise the day they were assigned to a legacy
+   * project with no recorded start. Actual Start only controls payout.
    */
   bookableFrom: string;
 };

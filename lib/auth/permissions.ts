@@ -42,7 +42,7 @@ export const PERMISSIONS = [
   { key: "payment.record", group: "Finance", label: "Record payments", description: "Log payments received against an invoice.", sortOrder: 68 },
   { key: "expense.submit", group: "Finance", label: "Claim expenses", description: "Submit your own expense claims.", sortOrder: 70 },
   { key: "expense.approve", group: "Finance", label: "Approve expenses", description: "Approve, reject, and mark expenses reimbursed.", sortOrder: 72 },
-  { key: "report.finance", group: "Finance", label: "View finance reports", description: "Revenue, receivables ageing, and placement fees.", sortOrder: 74 },
+  { key: "report.finance", group: "Finance", label: "View company finance", description: "Revenue, collections, receivables, costs, payouts, and placement fees.", sortOrder: 74 },
   { key: "payout.view_own", group: "Finance", label: "View own payout breakdown", description: "See your own earnings, split between actual payout and company-billed backfill.", sortOrder: 75 },
   { key: "payout.view_all", group: "Finance", label: "View all payout data", description: "See every resource's payout breakdown, not only your own.", sortOrder: 76 },
 

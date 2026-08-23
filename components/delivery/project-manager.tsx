@@ -18,6 +18,7 @@ import { useFilter } from "@/lib/ui/filter";
 export type Assignment = {
   userId: string;
   allocationPercent: number;
+  startedOn: string;
   name: string;
   email: string;
   roleLabel: string;
@@ -627,13 +628,13 @@ export function ProjectManager({
           allEmployees={allEmployees}
           busy={busy}
           onClose={() => setManagingTeam(null)}
-          onAssign={async (userId, allocationPercent) => {
+          onAssign={async (userId, allocationPercent, startedOn) => {
             setBusy(true);
             try {
               const res = await fetch(`/api/projects/${managingTeam.id}/team`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ userId, allocationPercent }),
+                body: JSON.stringify({ userId, allocationPercent, startedOn }),
               });
               const data = (await res.json()) as { message?: string };
               if (res.ok) {
@@ -649,6 +650,7 @@ export function ProjectManager({
                       roleLabel: emp.roleLabel,
                       jobTitle: emp.jobTitle,
                       allocationPercent,
+                      startedOn,
                     },
                   ];
                   setManagingTeam({
@@ -713,13 +715,14 @@ function TeamDialog({
   allEmployees: ReadonlyArray<EmployeeOption>;
   busy: boolean;
   onClose: () => void;
-  onAssign: (userId: string, allocationPercent: number) => Promise<{ ok: boolean; message?: string }>;
+  onAssign: (userId: string, allocationPercent: number, startedOn: string) => Promise<{ ok: boolean; message?: string }>;
   onRemove: (userId: string) => Promise<{ ok: boolean; message?: string }>;
 }) {
   const [selectedUserId, setSelectedUserId] = useState(
     allEmployees.find((e) => !project.assignments?.some((a) => a.userId === e.id))?.id ?? allEmployees[0]?.id ?? ""
   );
   const [allocation, setAllocation] = useState("100");
+  const [startedOn, setStartedOn] = useState(project.startDate || "");
   const [localNotice, setLocalNotice] = useState<{ tone: "success" | "error"; text: string } | null>(null);
 
   const availableEmployees = allEmployees.filter(
@@ -730,7 +733,7 @@ function TeamDialog({
     e.preventDefault();
     if (!selectedUserId) return;
     setLocalNotice(null);
-    const res = await onAssign(selectedUserId, Number(allocation) || 100);
+    const res = await onAssign(selectedUserId, Number(allocation) || 100, startedOn);
     if (res.ok) {
       setLocalNotice({ tone: "success", text: res.message ?? "Resource allocated successfully." });
     } else {
@@ -778,7 +781,7 @@ function TeamDialog({
           </h4>
           {!project.assignments || project.assignments.length === 0 ? (
             <p className="text-xs text-[#8c8a82] italic bg-[#faf9f5] border border-[#e7e4da] p-3 rounded-lg">
-              No developers or staff are currently assigned to this project. Use the form below to allocate team members.
+              No developers are currently assigned to this project. Use the form below to allocate a Developer.
             </p>
           ) : (
             <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
@@ -802,7 +805,7 @@ function TeamDialog({
                         </span>
                       </div>
                       <p className="text-xs text-[#6b6b6b] mt-0.5">
-                        {member.email} {member.jobTitle ? `· ${member.jobTitle}` : ""}
+                        {member.email} {member.jobTitle ? `· ${member.jobTitle}` : ""}{member.startedOn ? ` · Actual start: ${member.startedOn}` : ""}
                       </p>
                     </div>
                   </div>
@@ -823,15 +826,15 @@ function TeamDialog({
         {/* Allocate New Resource Form */}
         <div className="mt-5 pt-4 border-t border-[#e7e4da]">
           <h4 className="text-xs font-bold uppercase tracking-wider text-[#4f4f4f] mb-2">
-            Assign Developer / Team Member
+            Assign Developer
           </h4>
           {availableEmployees.length === 0 ? (
-            <p className="text-xs text-[#8c8a82]">All active staff members are already assigned to this project.</p>
+            <p className="text-xs text-[#8c8a82]">No eligible Developers are available. A Developer appears here only after accepting their contract letter.</p>
           ) : (
             <form onSubmit={handleAssign} className="grid sm:grid-cols-12 gap-3 items-end">
               <div className="sm:col-span-7">
                 <label htmlFor="assign-user" className="text-xs font-semibold text-[#4f4f4f] block mb-1">
-                  Select Employee / Developer <em>*</em>
+                  Select Developer <em>*</em>
                 </label>
                 <select
                   id="assign-user"
@@ -864,10 +867,23 @@ function TeamDialog({
                 />
               </div>
               <div className="sm:col-span-3">
+                <label htmlFor="assign-start" className="text-xs font-semibold text-[#4f4f4f] block mb-1">
+                  Actual Start Date <em>*</em>
+                </label>
+                <input
+                  id="assign-start"
+                  type="date"
+                  value={startedOn}
+                  onChange={(e) => setStartedOn(e.target.value)}
+                  className="w-full text-xs py-2 px-2.5 border border-[#e7e4da] rounded-md bg-white"
+                  required
+                />
+              </div>
+              <div className="sm:col-span-12 flex justify-end">
                 <button
                   type="submit"
-                  className="button button-primary w-full text-xs py-2"
-                  disabled={busy || !selectedUserId}
+                  className="button button-primary text-xs py-2"
+                  disabled={busy || !selectedUserId || !startedOn}
                 >
                   {busy ? "Assigning…" : "+ Assign Resource"}
                 </button>

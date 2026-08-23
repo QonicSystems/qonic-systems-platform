@@ -38,7 +38,8 @@ export default async function InvoicesPage() {
   const today = now.toISOString().slice(0, 10);
   const dueDefault = new Date(now.getTime() + 30 * 86_400_000).toISOString().slice(0, 10);
 
-  const outstanding = invoices.filter((i) => !["PAID", "VOID", "DRAFT"].includes(i.status));
+  const revenueInvoices = invoices.filter((i) => ["STANDARD", "QONIC_TO_VENDOR"].includes(i.commercialKind));
+  const outstanding = revenueInvoices.filter((i) => !["PAID", "VOID", "DRAFT"].includes(i.status));
   const overdue = outstanding.filter((i) => ageingBucket(i.dueDate) !== "current");
 
   return <div className="portal-page">
@@ -51,12 +52,13 @@ export default async function InvoicesPage() {
     <div className="portal-grid">
       <article className="portal-card"><span className="portal-stat">{formatMoney(outstanding.reduce((s, i) => s + (i.total - i.paidAmount), 0))}</span><p>Outstanding</p></article>
       <article className="portal-card"><span className="portal-stat">{formatMoney(overdue.reduce((s, i) => s + (i.total - i.paidAmount), 0))}</span><p>Overdue</p></article>
-      <article className="portal-card"><span className="portal-stat">{formatMoney(invoices.filter((i) => i.status === "PAID").reduce((s, i) => s + i.total, 0))}</span><p>Collected</p></article>
+      <article className="portal-card"><span className="portal-stat">{formatMoney(revenueInvoices.filter((i) => i.status === "PAID").reduce((s, i) => s + i.paidAmount, 0))}</span><p>Qonic revenue received</p></article>
     </div>
 
     <InvoiceManager
       invoices={invoices.map((invoice) => ({
         id: invoice.id, number: invoice.number, client: invoice.client.name,
+        commercialKind: invoice.commercialKind, billingRecipient: invoice.billingRecipient ?? "",
         project: invoice.project?.name ?? "—", status: invoice.status,
         issued: invoice.issueDate.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }),
         due: invoice.dueDate.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }),
@@ -67,6 +69,10 @@ export default async function InvoicesPage() {
         taxPercent: invoice.taxPercent,
         taxAmount: formatMoney(invoice.taxAmount, invoice.currency),
         notes: invoice.notes ?? "",
+        grossClientAmount: invoice.grossClientAmount === null ? "" : formatMoney(invoice.grossClientAmount, invoice.currency),
+        vendorCommissionAmount: invoice.vendorCommissionAmount === null ? "" : formatMoney(invoice.vendorCommissionAmount, invoice.currency),
+        globalCandidateCommissionAmount: invoice.globalCandidateCommissionAmount === null ? "" : formatMoney(invoice.globalCandidateCommissionAmount, invoice.currency),
+        qonicRevenueAmount: invoice.qonicRevenueAmount === null ? "" : formatMoney(invoice.qonicRevenueAmount, invoice.currency),
         lines: invoice.lines.map((line) => ({
           id: line.id,
           description: line.description,
