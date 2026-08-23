@@ -1,8 +1,6 @@
 import type { AuthContext } from "@/lib/auth/guard";
 import type { TimesheetStatus } from "@/lib/generated/prisma/enums";
 
-/** A standard working week, used as the denominator for utilisation. */
-export const STANDARD_WEEK_MINUTES = 40 * 60;
 /** Nobody books more than this in one day; a larger figure is a typo. */
 export const MAX_DAY_MINUTES = 16 * 60;
 
@@ -144,25 +142,4 @@ export function canSubmitTimesheet(
   if (!EDITABLE_STATUSES.includes(sheet.status)) return { ok: false, reason: "That week has already been submitted.", status: 409 };
   if (totalMinutes <= 0) return { ok: false, reason: "Add some time before submitting the week.", status: 409 };
   return { ok: true };
-}
-
-export type UtilisationInput = { billableMinutes: number; nonBillableMinutes: number; capacityMinutes?: number };
-
-/**
- * Billable share of recorded time, and of contracted capacity.
- *
- * `billableRatio` answers "of the time booked, how much is chargeable" and
- * `utilisation` answers "of a standard week, how much was chargeable" — they
- * differ whenever someone books more or less than a full week, which is exactly
- * when the distinction matters.
- */
-export function utilisation({ billableMinutes, nonBillableMinutes, capacityMinutes = STANDARD_WEEK_MINUTES }: UtilisationInput) {
-  const total = billableMinutes + nonBillableMinutes;
-  return {
-    totalMinutes: total,
-    billableMinutes,
-    nonBillableMinutes,
-    billableRatio: total === 0 ? 0 : billableMinutes / total,
-    utilisation: capacityMinutes === 0 ? 0 : billableMinutes / capacityMinutes,
-  };
 }

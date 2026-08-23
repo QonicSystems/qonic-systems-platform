@@ -1,4 +1,5 @@
 import { PeopleTable, type PersonRow } from "@/components/admin/people-table";
+import { RoleManager, type RoleRow } from "@/components/admin/role-manager";
 import { canAdminister, canAssignRole, canEditIdentity, describeAuthority } from "@/lib/auth/authority";
 import { can, requirePermission } from "@/lib/auth/guard";
 import { db } from "@/lib/db";
@@ -15,7 +16,7 @@ export default async function AdminPeoplePage() {
       include: { role: true, overrides: { include: { permission: true } } },
       orderBy: [{ role: { rank: "asc" } }, { name: "asc" }],
     }),
-    db.role.findMany({ orderBy: { rank: "asc" } }),
+    db.role.findMany({ orderBy: { rank: "asc" }, include: { _count: { select: { users: true } } } }),
     db.permission.findMany({ orderBy: [{ group: "asc" }, { sortOrder: "asc" }] }),
   ]);
 
@@ -63,6 +64,36 @@ export default async function AdminPeoplePage() {
     id: role.id,
     label: role.label,
     assignable: canAssignRole(context, role).ok,
+    // Employee, and anything else flagged the same way, is created from the
+    // Candidate Pool. Both user endpoints re-check this; the flag is here only
+    // so the dialogs can say why the option is unavailable.
+    viaCandidatePool: role.viaCandidatePool,
+  }));
+
+  // Same server-resolved-authority pattern as the people rows above: the role
+  // table is a dumb renderer and every action it offers is re-checked by its
+  // own endpoint.
+  const mayEditRole = (role: (typeof roles)[number]) =>
+    mayOverride && !role.isSuperAdmin && (context.role.isSuperAdmin || role.rank > context.role.rank);
+
+  const roleRows: RoleRow[] = roles.map((role) => ({
+    id: role.id,
+    key: role.key,
+    label: role.label,
+    description: role.description ?? "",
+    rank: role.rank,
+    isSystem: role.isSystem,
+    isSuperAdmin: role.isSuperAdmin,
+    viaCandidatePool: role.viaCandidatePool,
+    userCount: role._count.users,
+    canEdit: mayEditRole(role),
+    // Deleting is refused while anyone still holds the role, so the button is
+    // disabled rather than the request being sent and rejected.
+    // Built-in roles are deletable too — the seed keeps a tombstone so they do
+    // not come back. Only the super admin (the one access that can never be
+    // locked out) and a role somebody still holds are refused; the latter would
+    // violate User.roleId anyway.
+    canDelete: mayEditRole(role) && role._count.users === 0,
   }));
 
   return <section className="portal-section">
@@ -77,9 +108,14 @@ export default async function AdminPeoplePage() {
       // Same permission as editing — user.manage is described as "Create
       // accounts and edit their details". Whether any given role can actually
       // be assigned is decided per role by canAssignRole below.
-      canCreate={mayEdit && roleOptions.some((role) => role.assignable)}
+      canCreate={mayEdit && roleOptions.some((role) => role.assignable && !role.viaCandidatePool)}
       permissions={permissions.map((p) => ({ key: p.key, label: p.label, group: p.group }))}
       today={today}
     />
+
+    {mayOverride && <div className="mt-10">
+      <h2 className="portal-section-title">Roles</h2>
+      <RoleManager roles={roleRows} />
+    </div>}
   </section>;
 }

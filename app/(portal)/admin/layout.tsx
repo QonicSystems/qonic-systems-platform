@@ -3,7 +3,8 @@ import { can, requirePermission } from "@/lib/auth/guard";
 
 const tabs = [
   { label: "People", href: "/admin", permission: "user.view" },
-  { label: "Global Candidates", href: "/admin/candidates", permission: "candidate.view" },
+  // Global Candidates used to live here as its own tab, with its own form and
+  // its own API. Both kinds of candidate are now managed in the Candidate Pool.
   { label: "Roles & Permissions", href: "/admin/permissions", permission: "rbac.manage" },
   { label: "Rate Management", href: "/admin/rates", permission: "payout.manage" },
   { label: "Holidays", href: "/admin/holidays", permission: "admin.access" },

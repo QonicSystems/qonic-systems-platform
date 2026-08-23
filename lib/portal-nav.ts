@@ -43,16 +43,11 @@ export const portalNavigation: ReadonlyArray<NavItem | NavGroup> = [
     label: "Finance",
     items: [
       { label: "Invoices", href: "/invoices", permission: "invoice.view" },
-    ],
-  },
-  {
-    label: "Reports",
-    items: [
-      { label: "Analytics", href: "/reports/analytics", permission: "report.utilization" },
-      { label: "Utilisation", href: "/reports", permission: "report.utilization" },
-      { label: "Capacity", href: "/reports/capacity", permission: "report.utilization" },
+      // Revenue is the last surviving report. A "Reports" group holding one
+      // link rendered as a single-item dropdown, so it sits with Invoices —
+      // receivables ageing and placement fees are finance, not a category of
+      // their own.
       { label: "Revenue", href: "/reports/revenue", permission: "report.finance" },
-      { label: "Deal Financials", href: "/reports/deals", permission: "payout.view_all" },
     ],
   },
   { label: "Directory", href: "/directory", permission: "directory.view" },

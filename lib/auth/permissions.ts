@@ -28,7 +28,6 @@ export const PERMISSIONS = [
   { key: "project.manage", group: "Delivery", label: "Manage projects", description: "Create projects, set budgets, and assign people.", sortOrder: 46 },
   { key: "timesheet.submit", group: "Delivery", label: "Record time", description: "Fill in and submit your own weekly timesheet.", sortOrder: 48 },
   { key: "timesheet.approve", group: "Delivery", label: "Approve timesheets", description: "Approve or reject submitted timesheets.", sortOrder: 50 },
-  { key: "report.utilization", group: "Delivery", label: "View utilisation reports", description: "See billable ratios and capacity across the team.", sortOrder: 52 },
 
   // Recruitment
   { key: "job.view", group: "Recruitment", label: "View jobs", description: "See open requisitions and their pipelines.", sortOrder: 54 },
@@ -83,7 +82,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Readonly<Record<Exclude<RoleKey, "ceo">, 
     "portal.access", "directory.view",
     "contract.view_own", "contract.view_all", "contract.generate", "contract.submit", "contract.release", "contract.revoke",
     "client.view", "client.manage", "project.view", "project.manage",
-    "timesheet.submit", "timesheet.approve", "report.utilization",
+    "timesheet.submit", "timesheet.approve",
     "job.view", "job.manage", "candidate.view", "candidate.manage", "placement.manage",
     "invoice.view", "invoice.manage", "payment.record", "report.finance",
     "payout.view_own", "payout.view_all", "payout.manage",

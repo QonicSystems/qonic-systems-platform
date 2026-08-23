@@ -1539,23 +1539,13 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 }
 .timesheet-total { color: var(--ink); font-weight: 700; font-variant-numeric: tabular-nums; }
 
-.meter {
-  display: inline-block; width: 6.5rem; height: 0.5rem;
-  margin-right: 0.6rem; border-radius: 999px; background: var(--line);
-  overflow: hidden; vertical-align: middle;
-}
-.meter span {
-  display: block; height: 100%; border-radius: 999px;
-  background: linear-gradient(90deg, var(--accent), var(--accent-dark));
-}
-
 /* ── Report charts ──────────────────────────────────────────────────────
    Hand-rolled rather than a library: the app has no client-side chart deps,
    and these are static (server-rendered) magnitude/composition bars, not
-   interactive plots. Sequential fills reuse the same gold ramp as .meter;
-   "emphasis" bars pair the gold fill against a neutral gray rather than a
-   second hue, which sidesteps categorical colorblind-safety entirely (a
-   gray has no hue to confuse). See app/(portal)/reports/*. */
+   interactive plots. "Emphasis" bars pair the gold fill against a neutral
+   gray rather than a second hue, which sidesteps categorical colorblind-
+   safety entirely (a gray has no hue to confuse).
+   See app/(portal)/reports/revenue and app/(portal)/dashboard. */
 .chart-panel + .chart-panel { margin-top: 1.75rem; }
 .chart-bars { display: grid; gap: 0.7rem; }
 .chart-bar-row {
@@ -1689,22 +1679,6 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
   cursor: pointer;
 }
 .inline-check input { width: auto; margin-top: 0.25rem; cursor: pointer; }
-.alloc-chip {
-  display: inline-flex; align-items: center; gap: 0.35rem;
-  margin: 0 0.4rem 0.4rem 0; border-radius: 999px;
-  background: var(--accent-tint); padding: 0.18rem 0.65rem;
-  color: var(--accent-dark); font-size: 0.74rem; font-weight: 600;
-}
-.alloc-chip::before {
-  content: ""; width: 0.4rem; height: 0.4rem; border-radius: 50%;
-  background: currentColor; opacity: 0.55; flex: none;
-}
-/* Health tint — on-track stays the default gold; only a project that needs
-   attention repaints the chip, so a calm allocation list doesn't turn into
-   a wall of color. */
-.alloc-chip--at-risk { background: #fffbeb; color: #92400e; }
-.alloc-chip--off-track { background: #fef2f2; color: #991b1b; }
-.meter span.is-over { background: linear-gradient(90deg, #f59e0b, #dc2626); }
 .text-over { color: #dc2626; font-weight: 700; }
 
 /* ── Dark hero panel ────────────────────────────────────────────────────

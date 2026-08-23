@@ -18,15 +18,24 @@ const db = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
  * using the defaults as the initial value.
  */
 async function main() {
-  for (const role of SEEDED_ROLES) {
+  // Roles the CEO has deleted through the admin console. Recreating one here
+  // would silently undo a deliberate deletion on the next deploy, which is the
+  // bug this table exists to fix — "delete" has to mean deleted.
+  const retired = new Set((await db.retiredRole.findMany({ select: { key: true } })).map((row) => row.key));
+  const wanted = SEEDED_ROLES.filter((role) => !retired.has(role.key));
+
+  for (const role of wanted) {
     await db.role.upsert({
       where: { key: role.key },
       // `label`/`description` are CEO-editable, so only sync the structural fields.
-      update: { isSuperAdmin: role.isSuperAdmin, isSystem: true, rank: role.rank },
-      create: { key: role.key, label: role.label, description: role.description, isSuperAdmin: role.isSuperAdmin, isSystem: true, rank: role.rank },
+      update: { isSuperAdmin: role.isSuperAdmin, isSystem: true, rank: role.rank, viaCandidatePool: role.viaCandidatePool },
+      create: { key: role.key, label: role.label, description: role.description, isSuperAdmin: role.isSuperAdmin, isSystem: true, rank: role.rank, viaCandidatePool: role.viaCandidatePool },
     });
   }
-  console.log(`✔ ${SEEDED_ROLES.length} roles`);
+  console.log(`✔ ${wanted.length} roles`);
+  if (retired.size > 0) {
+    console.log(`  • skipped ${retired.size} role(s) deleted in the admin console: ${[...retired].join(", ")}`);
+  }
 
   for (const permission of PERMISSIONS) {
     await db.permission.upsert({
@@ -36,6 +45,10 @@ async function main() {
     });
   }
   console.log(`✔ ${PERMISSIONS.length} permissions`);
+
+  // Before the backfill below, so it never recreates toggles for a permission
+  // that is about to be deleted.
+  await pruneRetiredPermissions();
 
   const allPermissions = await db.permission.findMany();
   const roles = await db.role.findMany();
@@ -63,6 +76,26 @@ async function main() {
 }
 
 /**
+ * Deletes permissions the code-owned catalog no longer defines.
+ *
+ * Permissions were only ever upserted, so removing a key from PERMISSIONS left a
+ * live row behind — and the admin console renders its matrix from real rows, so
+ * a retired capability kept appearing as a switch that grants nothing, because
+ * nothing checks it any more. Same reasoning as pruneRetiredRoles below.
+ *
+ * RolePermission and UserPermissionOverride both declare `onDelete: Cascade` on
+ * permissionId, so no toggle or per-person exception is left dangling.
+ */
+async function pruneRetiredPermissions() {
+  const current = PERMISSIONS.map((permission) => permission.key);
+  const retired = await db.permission.findMany({ where: { key: { notIn: current } }, select: { key: true } });
+  if (retired.length === 0) return;
+
+  await db.permission.deleteMany({ where: { key: { notIn: current } } });
+  console.log(`✔ ${retired.length} retired permission(s) removed: ${retired.map((p) => p.key).join(", ")}`);
+}
+
+/**
  * Deletes system roles the code no longer defines.
  *
  * Roles were only ever upserted, so the HR / Accounts / Projects rows seeded
@@ -71,8 +104,8 @@ async function main() {
  * permission matrix that a freshly seeded one did not.
  *
  * Roles created by hand through the admin console are `isSystem: false` and are
- * never touched. Anyone still holding a retired role is moved to Employee first,
- * so the delete can never orphan an account.
+ * never touched. Anyone still holding a retired role is moved to a surviving one
+ * first, so the delete can never orphan an account.
  */
 async function pruneRetiredRoles() {
   const current = new Set<string>(SEEDED_ROLES.map((role) => role.key));
@@ -81,17 +114,37 @@ async function pruneRetiredRoles() {
   );
   if (retired.length === 0) return;
 
-  const employee = await db.role.findUniqueOrThrow({ where: { key: ROLE.EMPLOYEE } });
+  const retiredIds = new Set(retired.map((role) => role.id));
 
+  // Employee by preference, but it is deletable from the admin console now, so
+  // fall back to the most junior surviving role rather than throwing — this runs
+  // unattended at deploy time and must not take the deploy down.
+  const fallback =
+    (await db.role.findUnique({ where: { key: ROLE.EMPLOYEE } }))
+    ?? (await db.role.findFirst({
+      where: { isSuperAdmin: false, id: { notIn: [...retiredIds] } },
+      orderBy: { rank: "desc" },
+    }));
+
+  const removed: string[] = [];
   for (const role of retired) {
-    const moved = await db.user.updateMany({ where: { roleId: role.id }, data: { roleId: employee.id } });
-    if (moved.count > 0) {
-      console.log(`  → moved ${moved.count} account(s) from retired role "${role.key}" to Employee`);
+    const holders = await db.user.count({ where: { roleId: role.id } });
+    if (holders > 0) {
+      if (!fallback) {
+        // Deleting would violate User.roleId. Leaving the role in place is the
+        // lesser evil: an extra column in the permission matrix beats a failed
+        // deploy or an orphaned account.
+        console.log(`  ! kept retired role "${role.key}": ${holders} account(s) hold it and there is no other role to move them to`);
+        continue;
+      }
+      await db.user.updateMany({ where: { roleId: role.id }, data: { roleId: fallback.id } });
+      console.log(`  → moved ${holders} account(s) from retired role "${role.key}" to ${fallback.label}`);
     }
     // RolePermission and UserPermissionOverride rows cascade with the role.
     await db.role.delete({ where: { id: role.id } });
+    removed.push(role.key);
   }
-  console.log(`✔ ${retired.length} retired role(s) removed: ${retired.map((r) => r.key).join(", ")}`);
+  if (removed.length > 0) console.log(`✔ ${removed.length} retired role(s) removed: ${removed.join(", ")}`);
 }
 
 /**

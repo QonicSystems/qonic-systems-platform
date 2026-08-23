@@ -4,6 +4,7 @@ import { guardRoute } from "@/lib/auth/guard";
 import { emailPattern } from "@/lib/contact";
 import { toMinor } from "@/lib/money";
 import { resourceTypeOf, RESOURCE_TYPE } from "@/lib/ats/resource-type";
+import { isLeadershipRank } from "@/lib/auth/roles";
 import { db } from "@/lib/db";
 
 export const runtime = "nodejs";
@@ -130,11 +131,11 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
     // audit trail explaining why. Permanently purging an account, when that
     // is genuinely wanted, is its own deliberate, CEO-only action —
     // DELETE /api/admin/users/[id] — not a side effect of deleting a candidate.
-    // The link is a real FK (Candidate.linkedUserId) set only when someone
-    // deliberately drafts this person's first contract letter — no more
-    // guessing by email, so an unlinked candidate's deletion never touches
-    // any User account, however similar the names or emails look.
-    const linkedUser = existing.linkedUser && !["ceo", "co_founder"].includes(existing.linkedUser.role.key) && existing.linkedUser.status === "ACTIVE"
+    // The link is a real FK (Candidate.linkedUserId), written only by the
+    // deliberate "Create Employee Account" action — no more guessing by email,
+    // so an unlinked candidate's deletion never touches any User account,
+    // however similar the names or emails look.
+    const linkedUser = existing.linkedUser && !isLeadershipRank(existing.linkedUser.role.rank) && existing.linkedUser.status === "ACTIVE"
       ? existing.linkedUser
       : null;
     if (linkedUser) {

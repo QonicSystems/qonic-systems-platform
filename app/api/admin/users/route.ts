@@ -1,12 +1,11 @@
 import { randomBytes } from "node:crypto";
 import { NextResponse } from "next/server";
-import nodemailer from "nodemailer";
-import { appOrigin } from "@/lib/app-origin";
 import { clientIp, recordAudit } from "@/lib/audit";
 import { canAssignRole } from "@/lib/auth/authority";
 import { guardRoute } from "@/lib/auth/guard";
+import { deliverInvite } from "@/lib/auth/invite";
 import { hashPassword } from "@/lib/auth/password";
-import { INVITE_TTL_MS, createResetToken, hashResetToken, inviteEmail, resetUrl } from "@/lib/auth/reset";
+import { INVITE_TTL_MS, createResetToken, hashResetToken } from "@/lib/auth/reset";
 import { emailPattern } from "@/lib/contact";
 import { db } from "@/lib/db";
 import { isUniqueEmailViolation } from "@/lib/db-errors";
@@ -14,15 +13,6 @@ import { isUniqueEmailViolation } from "@/lib/db-errors";
 export const runtime = "nodejs";
 
 type CreateErrors = Partial<Record<"name" | "email" | "phone" | "jobTitle" | "roleId", string>>;
-
-function smtp() {
-  const required = ["SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASSWORD", "CONTACT_FROM_EMAIL"] as const;
-  if (required.some((name) => !process.env[name])) return null;
-  return {
-    host: process.env.SMTP_HOST!, port: Number(process.env.SMTP_PORT), secure: process.env.SMTP_SECURE === "true",
-    auth: { user: process.env.SMTP_USER!, pass: process.env.SMTP_PASSWORD! }, from: process.env.CONTACT_FROM_EMAIL!,
-  };
-}
 
 /**
  * Create a colleague's account. Requires user.manage, plus the authority to
@@ -72,6 +62,20 @@ export async function POST(request: Request) {
   const assignable = canAssignRole(context, role);
   if (!assignable.ok) return NextResponse.json({ message: assignable.reason }, { status: assignable.status });
 
+  // Employee, and any other role the CEO marks the same way, is created
+  // from the Candidate Pool so the account always has a candidate record and a
+  // contract letter behind it. Creating one here would produce a delivery
+  // account with neither. The dialog disables these options, but that is
+  // cosmetic — this is the check that counts.
+  //
+  // 422 with a `roleId` field error so the existing form renders it inline.
+  if (role.viaCandidatePool) {
+    return NextResponse.json({
+      message: "Please correct the highlighted fields.",
+      errors: { roleId: `${role.label} accounts are added from the Candidate Pool. Add the candidate there, then create their employee account.` },
+    }, { status: 422 });
+  }
+
   // A random 32-byte password is generated so the account cannot be logged into
   // until the invite is accepted — no hardcoded "password123".
   const passwordHash = await hashPassword(randomBytes(32).toString("hex"));
@@ -109,21 +113,9 @@ export async function POST(request: Request) {
     throw error;
   }
 
-  const url = resetUrl(appOrigin(), token);
-  const config = smtp();
-  let delivered = false;
-
-  if (config) {
-    try {
-      const { subject, text } = inviteEmail(created.name, url, context.user.name);
-      const transporter = nodemailer.createTransport({ host: config.host, port: config.port, secure: config.secure, auth: config.auth });
-      await transporter.sendMail({ from: config.from, to: created.email, subject, text });
-      delivered = true;
-    } catch (error) {
-      // The account exists either way; the caller gets the link to pass on.
-      console.error("Invite email failed", error);
-    }
-  }
+  const { url, delivered } = await deliverInvite({
+    name: created.name, email: created.email, token, inviterName: context.user.name,
+  });
 
   return NextResponse.json({
     message: delivered

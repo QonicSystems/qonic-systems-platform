@@ -49,8 +49,7 @@ After signing in you land on the **Dashboard**. The top navigation is grouped:
 | **My Work** | Timesheets · Leave · Expenses · Contract Letters | Your own records |
 | **Delivery** | Clients · Projects · Timesheets | Running client work |
 | **Recruitment** | Jobs · Candidates | Hiring |
-| **Finance** | Invoices · Expense Claims | Money |
-| **Reports** | Analytics · Utilisation · Capacity · Revenue | The numbers |
+| **Finance** | Invoices · Expense Claims · Revenue | Money |
 | **Directory** | The team | Everyone |
 | **Administration** | People · Roles & Permissions · Audit log | CEO / super admin |
 
@@ -98,12 +97,29 @@ minimum retention window).
 Now you'll add people. In real life HR does this; the CEO can too.
 **Sign in as HR** (`hr@qonicsystems.com`) — or stay as CEO.
 
-### 2.1 Add an employee
-Open **Administration → People** (`/admin/users`) → **add a user**. Create:
+### 2.1 Add a colleague
+Open **Administration → People** (`/admin`) → **Add a person**. Create:
 
-- Name: **Anusha Kherwal**, email `anusha@qonicsystems.com`, role **Employee**
+- Name, work email, and a leadership or custom role
 - Job title, phone, and a **photo URL** (a link to an `https` image — nothing is
   uploaded; a broken link just falls back to initials)
+
+> **Employee is not on this list.** Those accounts start in the Candidate Pool
+> (§4.2) so that every delivery account has a candidate record and a contract
+> letter behind it. The option is left out of the dropdown entirely, and the API
+> refuses it too — the restriction is not just a hidden menu entry.
+
+### 2.1a Create a role
+Still on **Administration → People**, the **Roles** panel below the people table
+lets the CEO **create a role** — a row, not code, so no migration and no deploy.
+Set its seniority rank (lower is more senior; 10 or lower counts as leadership),
+then switch its capabilities on in **Roles & Permissions**. A new role starts with
+none.
+
+Deleting a role removes it **for good**: built-in roles can go too, and a
+tombstone stops the deploy seed recreating them. The only refusals are the
+super-admin role (the one access that can never be locked out) and any role
+somebody still holds — move those people first.
 
 > **Rank guard in action:** HR can create and edit people *junior* to HR, but not
 > peers or seniors. As HR you can edit Anusha (Employee); you'll find no edit
@@ -174,8 +190,20 @@ openings, placement fee %, and a time-to-fill SLA (ageing requisitions get
 flagged). **Publish** it to make it live on the public careers page.
 
 ### 4.2 Add candidates and move them along
-**Candidates** (`/candidates`) → add **Jordan Lee**: CV and LinkedIn **links**
-(nothing uploaded), skills, source, and a recorded **consent** timestamp.
+**Candidate Pool** (`/candidates`) holds every candidate, whichever kind:
+
+- **Add Developer** — someone sourced through LinkedIn or an internal
+  connection, who may become staff.
+- **Add Global Candidate** — a sponsored visa resource, with visa type, status and
+  expiry, SSN, address, commission and bench status.
+
+Both open the same form with the Resource Classification preset; changing that
+select switches the visa fields on or off. Add **Jordan Lee**: CV and LinkedIn
+**links** (nothing uploaded), skills, source, and a recorded **consent** timestamp.
+
+**Create Employee Account** on a candidate's row gives them a staff account and
+sends a one-time invite, and is the only way an Employee account is made.
+Once they have one, **Draft Contract** appears.
 
 Open the candidate's application and walk the **pipeline**:
 
@@ -230,12 +258,6 @@ a candidate + one application. Draft/unpublished roles are 404 to the public.
 (`→ APPROVED`, locked permanently) or **Reject** with a written reason (back to
 DRAFT). **Nobody approves their own timesheet** — time drives billing.
 
-### 5.4 See utilisation & capacity
-**Reports → Utilisation** and **Capacity**. Note **billable ratio** ("of time
-booked, how much is chargeable") and **utilisation** ("of a 40-hour week, how much
-was chargeable") are deliberately **different numbers**; the Capacity report flags
-the bench and anyone over-allocated.
-
 ---
 
 ## Part 6 — Finance: bill the client, pay the team
@@ -268,7 +290,7 @@ approve → reimburse. **Nobody approves their own claim** (the classic expense
 fraud); rejections need a reason.
 
 ### 6.4 The revenue picture
-**Reports → Revenue** (`/reports/revenue`): billed, collected, outstanding,
+**Finance → Revenue** (`/reports/revenue`): billed, collected, outstanding,
 **receivables ageing** (current / 1-30 / 31-60 / 61-90 / 90+), placements, and fees
 by recruiter. Accounting **CSV export** is available and injection-guarded (a cell
 starting `=`, `+`, `-`, `@` is quoted, so a spreadsheet can't run it).
@@ -284,9 +306,6 @@ starting `=`, `+`, `-`, `@` is quoted, so a spreadsheet can't run it).
   invoices, and letters — but **every result is gated on your own permissions**, so
   it can't leak what your role shouldn't see. (Sign in as the Employee and search
   the same term the CEO did — you'll get far less.)
-- **Reports → Analytics** (`/reports/analytics`): median time-to-fill, the
-  recruitment funnel with stage-to-stage conversion, revenue mix, billable share,
-  and rolling-year attrition.
 
 ---
 
@@ -322,8 +341,8 @@ If you only do one run-through, do this. It exercises the whole loop and every r
    **record a payment** → watch it go **Paid**.
 10. **Recruiter/CEO** → open a **job**, add candidate **Jordan Lee**, move them
     through the pipeline, schedule an interview, and **record a placement**.
-11. **CEO** → open **Reports → Revenue** and **Analytics** and see the invoice,
-    payment, placement, and utilisation all reflected.
+11. **CEO** → open **Finance → Revenue** and see the invoice, payment, and
+    placement fee all reflected.
 12. **CEO** → open the **Audit log** and see every privileged step you just took.
 
 That's the business, end to end: hire → onboard → deliver → bill → get paid →
@@ -341,9 +360,8 @@ recruit → measure — with the paperwork and the money reconciled at every ste
 My Work   → /timesheets  /leave  /expenses  /contracts (/contracts/new)
 Delivery  → /clients  /projects  /timesheets
 Recruitment → /jobs (/jobs/[id])  /candidates
-Finance   → /invoices  /expenses/approvals
-Reports   → /reports/analytics  /reports (utilisation)  /reports/capacity  /reports/revenue
-Admin     → /admin  /admin/users  /admin/roles  /admin/permissions  /admin/audit
+Finance   → /invoices  /expenses/approvals  /reports/revenue
+Admin     → /admin (People + Roles)  /admin/permissions  /admin/rates  /admin/holidays  /admin/audit
 ```
 
 ## Appendix B — Who can do what (defaults)
@@ -362,7 +380,7 @@ Admin     → /admin  /admin/users  /admin/roles  /admin/permissions  /admin/aud
 | Record own time / leave / expenses | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Jobs / candidates / placements | ✅ | ✅ | | | ✅ | |
 | Invoices / payments / expense approval | ✅ | ✅ | | ✅ | | |
-| Reports & analytics | ✅ | ✅ | | ✅ | ✅ | |
+| Revenue report | ✅ | ✅ | | ✅ | ✅ | |
 
 *Defaults only — the CEO can switch any of these on or off per role at runtime
 (Part 1). The only things never toggleable are the super-admin bypass and the

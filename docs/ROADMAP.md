@@ -135,7 +135,6 @@ names. The only legitimate role checks are `isSuperAdmin` (the CEO bypass) and
   - Rejections require a written reason
   - Time is only accepted against projects you are **assigned** to
   - Guards: entries must fall inside their own week, no more than 16h on one day, and durations must parse
-- **Utilisation report** over a rolling 4 weeks, per person and per project
 
 ### Two decisions worth knowing
 
@@ -146,11 +145,6 @@ timesheets. The UI accepts `7.5`, `7:30`, or `450m` — all three parse to the s
 
 **Money is stored in minor units** (paise/cents) for the same reason.
 
-**`billableRatio` and `utilisation` are deliberately different numbers.** The
-first asks "of the time booked, how much is chargeable"; the second asks "of a
-standard 40-hour week, how much was chargeable". They diverge whenever someone
-books more or less than a full week — which is exactly when the distinction matters.
-
 ### Phase 4 completion (all previously deferred items now shipped)
 
 - **Editing clients and projects** after creation, including re-coding a project
@@ -158,7 +152,6 @@ books more or less than a full week — which is exactly when the distinction ma
 - **Team assignment**: add or remove people at a stated allocation. Removal is blocked once someone has booked time, so history stays intact
 - **Milestones** with due dates, amounts, and status
 - **Project health** flag (on track / at risk / off track)
-- **Capacity report** reading `allocationPercent`, flagging the bench and anyone over-allocated
 
 ## Phase 5 — Recruitment / ATS ✅ COMPLETE
 
@@ -206,7 +199,6 @@ own components. Invoice quantities are hundredths of an hour, so 7.5h is exactly
 
 - **In-app notifications** written in the *same transaction* as the event they describe, so a rolled-back approval can never leave someone told their leave was approved. Verified: re-deciding a settled request writes no phantom notification. Wired into leave, timesheet, contract-letter, and expense decisions
 - **Global search** across people, clients, projects, jobs, candidates, invoices, and contract letters — **every branch gated on the searcher's own permissions**, because a search box is an easy accidental information leak
-- **Analytics**: median time to fill, recruitment funnel with stage-to-stage conversion, revenue mix, billable share, and rolling-year attrition
 
 ### Not built — needs an external service
 
@@ -267,7 +259,51 @@ when the user table is empty**. It must change its password at first login.
 3. Guard the route with `requirePermission("your.key")` or `guardRoute("your.key")`
 4. The CEO switches it on per role in **Administration → Roles & Permissions**
 
+## Removing a capability later
+
+Delete its entry from `PERMISSIONS` and re-run `npm run db:seed`. Permissions
+used to be upserted and never deleted, so a retired key left a live row behind
+and kept rendering in the admin matrix as a switch that granted nothing —
+`pruneRetiredPermissions()` in `prisma/seed.ts` now deletes them. Its cascade
+takes the per-role toggles and per-user overrides with it, so check what a
+drifted environment is holding (`SELECT key FROM "Permission"`) before deploying
+a removal.
+
 ## Adding a role later
 
-Create it in the admin console. No migration, no deploy. Give it a `rank` below
-the roles it should be allowed to administer.
+**Administration → People → Roles → Create a role.** No migration, no deploy.
+Give it a `rank` below the roles it should be allowed to administer, then switch
+its capabilities on in **Roles & Permissions** — a new role starts with none.
+
+Two things the rank decides beyond the escalation guard:
+
+- **Rank 10 or lower is leadership** (`LEADERSHIP_MAX_RANK` in `lib/auth/roles.ts`).
+  Leadership receives approval notifications, can own a client relationship, and
+  is kept out of the approvals queue and out of project delivery allocation.
+- **Rank 0 is refused.** It is the CEO tier; `isSuperAdmin` is what grants the
+  bypass, and a second rank-0 role would outrank every guard while holding none
+  of the CEO's rights.
+
+Roles created this way are `isSystem: false`, which is what keeps
+`pruneRetiredRoles()` in `prisma/seed.ts` from deleting them on the next deploy.
+
+### Deleting a role
+
+Deletion is permanent, built-in roles included. Because the seed upserts every
+`SEEDED_ROLES` entry on each run, deleting one used to last only until the next
+deploy recreated it — so `DELETE /api/admin/roles/[id]` writes a `RetiredRole`
+tombstone that the seed consults first. Creating the same key again lifts it.
+
+Two refusals remain: the **super-admin** role, because `isSuperAdmin` is the
+unconditional allow-all and its holder is the caller; and any role somebody still
+holds, because `User.roleId` is required — the CEO decides where those people go
+rather than the app reassigning them silently.
+
+### Where accounts in a role come from
+
+`Role.viaCandidatePool` says an account in this role starts in the **Candidate
+Pool** — add the candidate, then use **Create Employee Account** — rather than in
+Administration → People. Employee is flagged this way, so every delivery
+account has a candidate record behind it. `POST /api/admin/users` and the role
+change on `PATCH /api/admin/users/[id]` both refuse a flagged role; the People
+dialogs leave it out of the dropdown, which is cosmetic.

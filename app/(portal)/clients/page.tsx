@@ -1,6 +1,6 @@
 import { ClientManager } from "@/components/delivery/client-manager";
 import { can, requirePermission } from "@/lib/auth/guard";
-import { ROLE } from "@/lib/auth/roles";
+import { leadershipRoleWhere } from "@/lib/auth/roles";
 import { db } from "@/lib/db";
 
 export const metadata = { title: "Clients" };
@@ -20,11 +20,13 @@ export default async function ClientsPage() {
       },
       orderBy: { name: "asc" },
     }),
-    // Account Owner is restricted to Leadership (CEO & Co-Founder)
+    // Account Owner is restricted to leadership. Matched on rank, not on a list
+    // of role keys, so a role the CEO creates at rank 10 or better is eligible
+    // without a code change — with the seeded ranks this is the same set.
     db.user.findMany({
       where: {
         status: "ACTIVE",
-        role: { key: { in: [ROLE.CEO, ROLE.CO_FOUNDER] } },
+        role: leadershipRoleWhere,
       },
       select: { id: true, name: true, role: { select: { label: true } } },
       orderBy: { name: "asc" },

@@ -153,6 +153,17 @@ model Role {
   isSuperAdmin Boolean @default(false)
   /// System roles cannot be deleted or have their key changed.
   isSystem     Boolean @default(false)
+  /// True when accounts in this role originate in the Candidate Pool — add the
+  /// candidate there, then create their employee account — rather than from
+  /// Administration → People. POST /api/admin/users and the role change on
+  /// PATCH /api/admin/users/[id] both refuse such a role, so an account in it
+  /// always has a candidate record behind it.
+  ///
+  /// A flag on the row rather than a hardcoded `key === "employee"` check,
+  /// because the CEO creates roles at runtime: a new delivery role must be
+  /// markable without a code change, which is the whole point of roles being
+  /// rows.
+  viaCandidatePool Boolean @default(false)
   /// Lower = more senior. Drives the privilege-escalation guard: you may only
   /// administer users whose rank is strictly greater than your own.
   rank         Int     @default(100)
@@ -162,6 +173,22 @@ model Role {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+/// A role key the CEO has deleted through the admin console.
+///
+/// Without this a deletion would not stick: prisma/seed.ts upserts every entry
+/// in SEEDED_ROLES on each run, so deleting a built-in role removed it until the
+/// next deploy quietly recreated it. The seed consults this table first, which
+/// is what makes "delete" mean deleted.
+///
+/// Deleting a role the code still defines is a deliberate act, so it is recorded
+/// rather than inferred — re-adding the role is equally deliberate (remove the
+/// row, or re-create it from the console, which clears the tombstone).
+model RetiredRole {
+  key         String   @id
+  retiredAt   DateTime @default(now())
+  retiredById String?
 }
 
 model Permission {
@@ -779,12 +806,13 @@ model Candidate {
   applications Application[]
 
   /// Set only at the one deliberate moment a candidate becomes a real
-  /// employee — drafting their first contract letter (app/(portal)/contracts/new).
-  /// Never written by a background job: this used to be guessed live by
-  /// matching email strings between Candidate and User, which had no audit
-  /// trail and could silently archive the wrong account. `onDelete: SetNull`
-  /// because purging a User must never be blocked by, or cascade into,
-  /// this candidate's history — see the ARCHIVED comment above.
+  /// employee — "Create Employee Account" in the Candidate Pool
+  /// (POST /api/candidates/[id]/employee). Never written by a background job:
+  /// this used to be guessed live by matching email strings between Candidate
+  /// and User, which had no audit trail and could silently archive the wrong
+  /// account. `onDelete: SetNull` because purging a User must never be blocked
+  /// by, or cascade into, this candidate's history — see the ARCHIVED comment
+  /// above.
   linkedUserId String? @unique
   linkedUser   User?   @relation("CandidateLink", fields: [linkedUserId], references: [id], onDelete: SetNull)
 

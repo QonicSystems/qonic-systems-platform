@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { clientIp, recordAudit } from "@/lib/audit";
 import { guardRoute } from "@/lib/auth/guard";
+import { isLeadershipRank } from "@/lib/auth/roles";
 import { notify, notifyLeadership } from "@/lib/notify";
 import { db } from "@/lib/db";
 
@@ -27,7 +28,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   const user = await db.user.findUnique({ where: { id: userId }, include: { role: true } });
   if (!user || user.status !== "ACTIVE") return NextResponse.json({ message: "That person is not an active member of staff." }, { status: 422 });
-  if (user.role.isSuperAdmin || ["ceo", "co_founder"].includes(user.role.key)) {
+  // Rank rather than a role-key list, so a leadership role the CEO creates is
+  // excluded from delivery allocation too.
+  if (user.role.isSuperAdmin || isLeadershipRank(user.role.rank)) {
     return NextResponse.json({ message: "Leadership cannot be allocated as project delivery resources." }, { status: 422 });
   }
 

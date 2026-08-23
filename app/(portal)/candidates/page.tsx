@@ -31,10 +31,7 @@ export default async function CandidatesPage() {
     }),
     db.projectAssignment.findMany({
       where: { project: { status: "ACTIVE" } },
-      include: {
-        project: { select: { name: true, code: true } },
-        user: { select: { email: true } },
-      },
+      include: { project: { select: { name: true, code: true } } },
     }),
   ]);
 
@@ -53,17 +50,20 @@ export default async function CandidatesPage() {
     : [];
   const contractByUserId = new Map(latestContracts.map((c) => [c.subjectUserId, c]));
 
-  const assignmentByEmail = new Map<string, Array<{ projectName: string; projectCode: string; allocationPercent: number }>>();
+  // Keyed on the real FK, not on a lowercased email. Matching Candidate to User
+  // by email string is the pattern the candidate/user sync was removed for: it
+  // has no audit trail and silently attaches one person's project allocations
+  // to a different person who happens to share an address. `linkedUserId` is
+  // written once, deliberately, when the candidate becomes an employee.
+  const assignmentByUserId = new Map<string, Array<{ projectName: string; projectCode: string; allocationPercent: number }>>();
   for (const a of activeAssignments) {
-    if (!a.user?.email) continue;
-    const email = a.user.email.toLowerCase().trim();
-    const list = assignmentByEmail.get(email) ?? [];
+    const list = assignmentByUserId.get(a.userId) ?? [];
     list.push({
       projectName: a.project.name,
       projectCode: a.project.code,
       allocationPercent: a.allocationPercent,
     });
-    assignmentByEmail.set(email, list);
+    assignmentByUserId.set(a.userId, list);
   }
 
   const activeCount = candidates.filter((candidate) => candidate.status === "ACTIVE").length;
@@ -83,8 +83,7 @@ export default async function CandidatesPage() {
 
       <CandidateManager
         candidates={candidates.map((candidate) => {
-          const email = candidate.email.toLowerCase().trim();
-          const allocations = assignmentByEmail.get(email) ?? [];
+          const allocations = candidate.linkedUserId ? assignmentByUserId.get(candidate.linkedUserId) ?? [] : [];
           return {
             id: candidate.id,
             name: candidate.name,
@@ -95,6 +94,7 @@ export default async function CandidatesPage() {
             techStack: candidate.techStack ?? candidate.skills ?? "",
             visaType: candidate.visaType ?? "",
             visaStatus: candidate.visaStatus ?? (candidate.visaType ? "Valid" : ""),
+            visaExpiry: candidate.visaExpiry ? candidate.visaExpiry.toISOString().slice(0, 10) : "",
             commissionPaid: money(candidate.commissionPaid),
             rawCommissionPaid: candidate.commissionPaid !== null ? String(candidate.commissionPaid / 100) : "",
             ssn: candidate.ssn ? `•••-••-${candidate.ssn.slice(-4)}` : "—",
@@ -120,6 +120,9 @@ export default async function CandidatesPage() {
         })}
         canManage={can(context, "candidate.manage")}
         canDraftContract={can(context, "contract.generate")}
+        // Creating the staff account is account administration, not recruitment
+        // — the endpoint it calls guards on the same permission.
+        canCreateAccount={can(context, "user.manage")}
       />
     </div>
   );

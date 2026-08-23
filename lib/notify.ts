@@ -1,4 +1,5 @@
 import nodemailer from "nodemailer";
+import { leadershipRoleWhere } from "@/lib/auth/roles";
 import { db } from "@/lib/db";
 import type { NotificationKind } from "@/lib/generated/prisma/enums";
 import type { Prisma } from "@/lib/generated/prisma/client";
@@ -137,10 +138,14 @@ export async function notifyLeadership(
   entry: Omit<NotifyInput, "userId">,
   client: Prisma.TransactionClient | typeof db = db
 ): Promise<void> {
+  // Matched on rank, not a list of role keys. A key list cannot see a role the
+  // CEO created after this file was written, so its holders would silently
+  // never receive an approval notification — the one place where missing a new
+  // role fails quietly rather than safely.
   const leaders = await (client as typeof db).user.findMany({
     where: {
       status: "ACTIVE",
-      role: { key: { in: ["ceo", "co_founder"] } },
+      role: leadershipRoleWhere,
     },
     select: { id: true, email: true },
   });

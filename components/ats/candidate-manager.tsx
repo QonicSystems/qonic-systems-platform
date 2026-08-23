@@ -26,6 +26,7 @@ type Row = {
   techStack: string;
   visaType: string;
   visaStatus?: string;
+  visaExpiry?: string;
   commissionPaid?: string;
   rawCommissionPaid?: string;
   ssn?: string;
@@ -50,14 +51,73 @@ type Row = {
 };
 type Errors = Record<string, string>;
 
+/** The `source` value each Add button seeds the dialog with. */
+const GLOBAL_SOURCE = "Global Visa Resource";
+const EMPLOYEE_DEV_SOURCE = "Direct / LinkedIn";
+
+const EMPTY_FORM = {
+  name: "",
+  email: "",
+  phone: "",
+  headline: "",
+  location: "",
+  techStack: "",
+  visaType: "",
+  visaStatus: "",
+  visaExpiry: "",
+  ssn: "",
+  commissionPaid: "",
+  address: "",
+  benchStatus: "Available / Ready to Deploy",
+  source: EMPLOYEE_DEV_SOURCE,
+  resumeUrl: "",
+  linkedinUrl: "",
+  noticePeriod: "",
+  currentSalary: "",
+  expectedSalary: "",
+  notes: "",
+  consent: false,
+};
+type CandidateForm = typeof EMPTY_FORM;
+
+/**
+ * Applies the defaults that go with a resource classification.
+ *
+ * Pure and module-scope so the two Add buttons and the in-dialog classification
+ * select run the identical logic — when this lived inline in the change handler
+ * only the select could reach it, and a button that seeded `source` directly
+ * would have left the visa and bench fields on their non-global defaults.
+ */
+function withSourceDefaults(previous: CandidateForm, source: string): CandidateForm {
+  const isGlobal = source === GLOBAL_SOURCE;
+  return {
+    ...previous,
+    source,
+    visaType: isGlobal ? previous.visaType || "H-1B" : "",
+    visaStatus: isGlobal ? previous.visaStatus || "Valid" : "",
+    visaExpiry: isGlobal ? previous.visaExpiry : "",
+    benchStatus: isGlobal
+      ? previous.benchStatus.includes("Bench")
+        ? previous.benchStatus
+        : "Available / On Bench"
+      : "Available / Ready to Deploy",
+    ssn: isGlobal ? previous.ssn : "",
+    commissionPaid: isGlobal ? previous.commissionPaid : "",
+    address: isGlobal ? previous.address : "",
+  };
+}
+
 export function CandidateManager({
   candidates,
   canManage,
   canDraftContract,
+  canCreateAccount,
 }: {
   candidates: ReadonlyArray<Row>;
   canManage: boolean;
   canDraftContract: boolean;
+  /** `user.manage` — creating a staff account is account administration. */
+  canCreateAccount: boolean;
 }) {
   const router = useRouter();
   const [matchRequirement, setMatchRequirement] = useState("");
@@ -87,6 +147,7 @@ export function CandidateManager({
   const { query, setQuery, rows, isFiltered } = useFilter(visible, (c) => [
     c.name,
     c.email,
+    c.phone,
     c.headline,
     c.techStack,
     c.location,
@@ -111,32 +172,12 @@ export function CandidateManager({
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Row | null>(null);
   const [deleting, setDeleting] = useState<Row | null>(null);
-  const empty = {
-    name: "",
-    email: "",
-    phone: "",
-    headline: "",
-    location: "",
-    techStack: "",
-    visaType: "",
-    visaStatus: "",
-    ssn: "",
-    commissionPaid: "",
-    address: "",
-    benchStatus: "Available / Ready to Deploy",
-    source: "Direct / LinkedIn",
-    resumeUrl: "",
-    linkedinUrl: "",
-    noticePeriod: "",
-    currentSalary: "",
-    expectedSalary: "",
-    notes: "",
-    consent: false,
-  };
-  const [form, setForm] = useState(empty);
+  const [form, setForm] = useState<CandidateForm>(EMPTY_FORM);
   const [errors, setErrors] = useState<Errors>({});
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ tone: "success" | "error"; text: string } | null>(null);
+  // Only ever set when SMTP is unconfigured and the invite could not be emailed.
+  const [inviteUrl, setInviteUrl] = useState<string | null>(null);
 
   const startEdit = (c: Row) => {
     setEditing(c);
@@ -149,11 +190,12 @@ export function CandidateManager({
       techStack: c.techStack || "",
       visaType: c.visaType || "",
       visaStatus: c.visaStatus || "",
+      visaExpiry: c.visaExpiry || "",
       ssn: c.rawSsn || "",
       commissionPaid: c.rawCommissionPaid || "",
       address: c.address || "",
       benchStatus: c.benchStatus || "Available / Ready to Deploy",
-      source: c.source || "Direct / LinkedIn",
+      source: c.source || EMPLOYEE_DEV_SOURCE,
       resumeUrl: c.resumeUrl || "",
       linkedinUrl: c.linkedinUrl || "",
       noticePeriod: c.noticePeriod || "",
@@ -167,26 +209,16 @@ export function CandidateManager({
     setOpen(true);
   };
 
-  const startAdd = () => {
+  const startAdd = (source: string) => {
     setEditing(null);
-    setForm(empty);
+    setForm(withSourceDefaults(EMPTY_FORM, source));
     setErrors({});
     setNotice(null);
     setOpen(true);
   };
 
   const handleSourceChange = (newSource: string) => {
-    const isGlobal = newSource === "Global Visa Resource";
-    setForm((prev) => ({
-      ...prev,
-      source: newSource,
-      visaType: isGlobal ? (prev.visaType || "H-1B") : "",
-      visaStatus: isGlobal ? (prev.visaStatus || "Valid") : "",
-      benchStatus: isGlobal ? (prev.benchStatus.includes("Bench") ? prev.benchStatus : "Available / On Bench") : "Available / Ready to Deploy",
-      ssn: isGlobal ? prev.ssn : "",
-      commissionPaid: isGlobal ? prev.commissionPaid : "",
-      address: isGlobal ? prev.address : "",
-    }));
+    setForm((prev) => withSourceDefaults(prev, newSource));
   };
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
@@ -195,12 +227,13 @@ export function CandidateManager({
     setNotice(null);
     setErrors({});
     try {
-      const isGlobal = form.source === "Global Visa Resource";
+      const isGlobal = form.source === GLOBAL_SOURCE;
       const payload = {
         ...form,
         skills: form.techStack,
         visaType: isGlobal ? form.visaType : null,
         visaStatus: isGlobal ? form.visaStatus : null,
+        visaExpiry: isGlobal ? form.visaExpiry || null : null,
         ssn: isGlobal ? form.ssn : null,
         commissionPaid: isGlobal ? form.commissionPaid : null,
         benchStatus: form.benchStatus || (isGlobal ? "Available / On Bench" : "Available / Ready to Deploy"),
@@ -219,7 +252,7 @@ export function CandidateManager({
         return;
       }
       setNotice({ tone: "success", text: result.message ?? (editing ? "Candidate updated successfully." : "Candidate added to pool.") });
-      setForm(empty);
+      setForm(EMPTY_FORM);
       setOpen(false);
       setEditing(null);
       router.refresh();
@@ -256,7 +289,7 @@ export function CandidateManager({
   };
 
   const toggleStatus = (candidate: Row) =>
-    act(`/api/admin/candidates/${candidate.id}/status`, {
+    act(`/api/candidates/${candidate.id}/status`, {
       method: "POST",
       body: JSON.stringify({ active: candidate.status !== "ACTIVE" }),
     });
@@ -265,12 +298,51 @@ export function CandidateManager({
     if (await act(`/api/candidates/${candidate.id}`, { method: "DELETE" })) setDeleting(null);
   };
 
+  /**
+   * Gives the candidate a staff account and records the link.
+   *
+   * Not folded into `act`: this is the one call that can return an invite link,
+   * and that link has to survive the `router.refresh()` so it can be copied.
+   */
+  const createAccount = async (candidate: Row) => {
+    setBusy(true);
+    setNotice(null);
+    setInviteUrl(null);
+    try {
+      const res = await fetch(`/api/candidates/${candidate.id}/employee`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const result = (await res.json().catch(() => ({}))) as { message?: string; inviteUrl?: string };
+      if (!res.ok) {
+        setNotice({ tone: "error", text: result.message ?? "Unable to create that account." });
+        if (res.status === 404 || res.status === 409) router.refresh();
+        return;
+      }
+      setNotice({ tone: "success", text: result.message ?? "Account created." });
+      setInviteUrl(result.inviteUrl ?? null);
+      router.refresh();
+    } catch {
+      setNotice({ tone: "error", text: "Unable to reach the server." });
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div>
       {notice && (
         <p className={`form-status form-status--${notice.tone}`} role="status">
           {notice.text}
         </p>
+      )}
+
+      {inviteUrl && (
+        <div className="portal-panel mt-4 mb-6">
+          <p className="font-semibold text-emerald-800">New invite link generated:</p>
+          <p className="portal-note">Email is not configured in this environment. Send this link directly to the person:</p>
+          <p className="mfa-secret">{inviteUrl}</p>
+        </div>
       )}
 
       {/* ── Status & resource-type filters ─────────────────────────────── */}
@@ -308,10 +380,18 @@ export function CandidateManager({
         placeholder="Search candidate, tech stack, visa, bench status…"
         label="Search candidate pool"
       >
+        {/* Both kinds of candidate are added here now — Global Candidates used
+            to be a separate Administration tab with its own form and its own
+            API, which is how it drifted into writing no `source` at all. */}
         {canManage && (
-          <button type="button" className="button button-primary" onClick={startAdd}>
-            Add Candidate
-          </button>
+          <>
+            <button type="button" className="button button-outline" onClick={() => startAdd(EMPLOYEE_DEV_SOURCE)}>
+              Add Developer
+            </button>
+            <button type="button" className="button button-primary" onClick={() => startAdd(GLOBAL_SOURCE)}>
+              Add Global Candidate
+            </button>
+          </>
         )}
       </TableToolbar>
 
@@ -383,21 +463,16 @@ export function CandidateManager({
         />
       ) : (
         <>
-          {/* ── Section 1: Employee (Dev) & Direct Talent Pool ────────────── */}
+          {/* ── Section 1: Developer & Direct Talent Pool ─────────────────── */}
           {(typeFilter === "ALL" || typeFilter === "DIRECT" || typeFilter === "EMPLOYEE_DEV") && (
             <section className="mb-6">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2.5">
-                  <span className="w-3 h-3 rounded-full bg-blue-600 shadow-xs" />
-                  <h2 className="text-lg font-extrabold text-[#111111] tracking-tight m-0">
-                    Employee (Dev) &amp; Direct Talent Pool
-                  </h2>
-                  <span className="bg-[#eef2ff] text-[#1e40af] border border-[#c7d2fe] text-xs font-bold px-2.5 py-0.5 rounded-full shadow-xs">
-                    {scored.filter((entry) => entry.row.resourceType !== "GLOBAL").length} Developers
-                  </span>
-                </div>
-                <span className="text-xs text-slate-600 font-medium hidden sm:inline">
-                  Synced with Admin &rarr; People
+              <div className="flex items-center gap-2.5 mb-3">
+                <span className="w-3 h-3 rounded-full bg-blue-600 shadow-xs" />
+                <h2 className="text-lg font-extrabold text-[#111111] tracking-tight m-0">
+                  Developer &amp; Direct Talent Pool
+                </h2>
+                <span className="bg-[#eef2ff] text-[#1e40af] border border-[#c7d2fe] text-xs font-bold px-2.5 py-0.5 rounded-full shadow-xs">
+                  {scored.filter((entry) => entry.row.resourceType !== "GLOBAL").length} Developers
                 </span>
               </div>
 
@@ -533,9 +608,25 @@ export function CandidateManager({
                                     <StatusChip status={c.contractStatus} />
                                   </Link>
                                 )}
-                                {canDraftContract && c.status === "ACTIVE" && !c.contractStatus && (
+                                {/* An account first, then a letter addressed to
+                                    it. Creating the account used to happen
+                                    invisibly when this link was followed —
+                                    during a GET render — so it fired on
+                                    prefetch and on every refresh too. */}
+                                {canCreateAccount && c.status === "ACTIVE" && !c.linkedUserName && (
+                                  <button
+                                    type="button"
+                                    className="row-action row-action--highlight"
+                                    onClick={() => createAccount(c)}
+                                    disabled={busy}
+                                    title="Create their staff account and send a one-time invite"
+                                  >
+                                    Create Employee Account
+                                  </button>
+                                )}
+                                {canDraftContract && c.status === "ACTIVE" && !c.contractStatus && c.linkedUserName && (
                                   <Link
-                                    href={`/contracts/new?candidateId=${c.id}&name=${encodeURIComponent(c.name)}&email=${encodeURIComponent(c.email)}`}
+                                    href={`/contracts/new?candidateId=${c.id}`}
                                     className="row-action row-action--highlight"
                                     title="Draft employment contract for candidate"
                                   >
@@ -602,18 +693,13 @@ export function CandidateManager({
           {/* ── Section 2: Global Visa Resources Pool ─────────────────────── */}
           {(typeFilter === "ALL" || typeFilter === "GLOBAL") && (
             <section className="mt-4">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2.5">
-                  <span className="w-3 h-3 rounded-full bg-emerald-600 shadow-xs" />
-                  <h2 className="text-lg font-extrabold text-[#111111] tracking-tight m-0">
-                    Global Visa Resources Pool
-                  </h2>
-                  <span className="bg-[#ecfdf5] text-[#065f46] border border-[#a7f3d0] text-xs font-bold px-2.5 py-0.5 rounded-full shadow-xs">
-                    {scored.filter((entry) => entry.row.resourceType === "GLOBAL").length} Visa Resources
-                  </span>
-                </div>
-                <span className="text-xs text-slate-600 font-medium hidden sm:inline">
-                  Synced with Admin &rarr; Global Candidates
+              <div className="flex items-center gap-2.5 mb-3">
+                <span className="w-3 h-3 rounded-full bg-emerald-600 shadow-xs" />
+                <h2 className="text-lg font-extrabold text-[#111111] tracking-tight m-0">
+                  Global Visa Resources Pool
+                </h2>
+                <span className="bg-[#ecfdf5] text-[#065f46] border border-[#a7f3d0] text-xs font-bold px-2.5 py-0.5 rounded-full shadow-xs">
+                  {scored.filter((entry) => entry.row.resourceType === "GLOBAL").length} Visa Resources
                 </span>
               </div>
 
@@ -693,6 +779,9 @@ export function CandidateManager({
                                 <span className="text-xs font-semibold text-slate-800">
                                   {c.visaType || "Visa Required"} {c.visaStatus ? `(${c.visaStatus})` : ""}
                                 </span>
+                                {c.visaExpiry && (
+                                  <span className="text-[11px] text-slate-500">Expires {c.visaExpiry}</span>
+                                )}
                                 {c.commissionPaid && c.commissionPaid !== "—" && (
                                   <span className="text-xs text-emerald-700 font-medium">
                                     Comm: {c.commissionPaid}
@@ -747,9 +836,25 @@ export function CandidateManager({
                                     <StatusChip status={c.contractStatus} />
                                   </Link>
                                 )}
-                                {canDraftContract && c.status === "ACTIVE" && !c.contractStatus && (
+                                {/* An account first, then a letter addressed to
+                                    it. Creating the account used to happen
+                                    invisibly when this link was followed —
+                                    during a GET render — so it fired on
+                                    prefetch and on every refresh too. */}
+                                {canCreateAccount && c.status === "ACTIVE" && !c.linkedUserName && (
+                                  <button
+                                    type="button"
+                                    className="row-action row-action--highlight"
+                                    onClick={() => createAccount(c)}
+                                    disabled={busy}
+                                    title="Create their staff account and send a one-time invite"
+                                  >
+                                    Create Employee Account
+                                  </button>
+                                )}
+                                {canDraftContract && c.status === "ACTIVE" && !c.contractStatus && c.linkedUserName && (
                                   <Link
-                                    href={`/contracts/new?candidateId=${c.id}&name=${encodeURIComponent(c.name)}&email=${encodeURIComponent(c.email)}`}
+                                    href={`/contracts/new?candidateId=${c.id}`}
                                     className="row-action row-action--highlight"
                                     title="Issue client / placement agreement for candidate"
                                   >
@@ -838,7 +943,11 @@ export function CandidateManager({
         <div className="dialog-backdrop" role="dialog" aria-modal="true" aria-labelledby="cand-title">
           <div className="dialog dialog--wide">
             <h3 id="cand-title" className="dialog-title">
-              {editing ? `Edit Candidate: ${editing.name}` : "Add Candidate to Pool"}
+              {editing
+                ? `Edit Candidate: ${editing.name}`
+                : form.source === GLOBAL_SOURCE
+                  ? "Add Global Candidate"
+                  : "Add Developer"}
             </h3>
             <form className="contact-form" noValidate onSubmit={submit}>
               <div className="grid gap-5 sm:grid-cols-2">
@@ -850,8 +959,8 @@ export function CandidateManager({
                     onChange={(e) => handleSourceChange(e.target.value)}
                   >
                     <option value="Global Visa Resource">Global Visa Resource (VISA Utilisation & Placement Commission)</option>
-                    <option value="Direct / LinkedIn">Employee Dev (Sourced via LinkedIn)</option>
-                    <option value="Internal Connection">Employee Dev (Sourced via Internal Network / Founders)</option>
+                    <option value="Direct / LinkedIn">Developer (Sourced via LinkedIn)</option>
+                    <option value="Internal Connection">Developer (Sourced via Internal Network / Founders)</option>
                     <option value="Job Application">Direct Applicant</option>
                   </select>
                 </div>
@@ -933,6 +1042,24 @@ export function CandidateManager({
                       </select>
                     </div>
                     <div>
+                      <label htmlFor="cd-visa-status">Visa Status</label>
+                      <input
+                        id="cd-visa-status"
+                        value={form.visaStatus}
+                        onChange={(e) => setForm({ ...form, visaStatus: e.target.value })}
+                        placeholder="Active, Transfer in Progress, Extension Filed"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="cd-visa-expiry">Visa Expiry</label>
+                      <input
+                        id="cd-visa-expiry"
+                        type="date"
+                        value={form.visaExpiry}
+                        onChange={(e) => setForm({ ...form, visaExpiry: e.target.value })}
+                      />
+                    </div>
+                    <div>
                       <label htmlFor="cd-bench">Bench Status</label>
                       <select
                         id="cd-bench"
@@ -942,6 +1069,7 @@ export function CandidateManager({
                         <option value="Available / On Bench">Available / On Bench</option>
                         <option value="Allocated to Project">Allocated to Project</option>
                         <option value="Interviewing">Interviewing</option>
+                        <option value="Placement Closed">Placement Closed</option>
                       </select>
                     </div>
                     <div>
@@ -1058,7 +1186,13 @@ export function CandidateManager({
                   Cancel
                 </button>
                 <button type="submit" className="button button-primary" disabled={busy}>
-                  {busy ? (editing ? "Updating…" : "Saving…") : (editing ? "Update Candidate" : "Add to Candidate Pool")}
+                  {busy
+                    ? editing ? "Updating…" : "Saving…"
+                    : editing
+                      ? "Update Candidate"
+                      : form.source === GLOBAL_SOURCE
+                        ? "Add Global Candidate"
+                        : "Add Developer"}
                 </button>
               </div>
             </form>

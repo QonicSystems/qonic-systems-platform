@@ -46,7 +46,25 @@ export type Override = {
 
 export type PermissionOption = { key: string; label: string; group: string };
 
-type RoleOption = { id: string; label: string; assignable: boolean };
+type RoleOption = { id: string; label: string; assignable: boolean; viaCandidatePool: boolean };
+
+/**
+ * Roles this dialog offers at all.
+ *
+ * A Candidate Pool role is left out entirely rather than shown disabled: it is
+ * not a thing you could do here under different circumstances, it is simply
+ * managed somewhere else, and an option that can never be picked is noise. A
+ * role you merely lack the seniority to assign is different — that one stays
+ * visible, disabled, with the reason (see `roleUnavailableReason`).
+ */
+function selectableRoles(roles: ReadonlyArray<RoleOption>): ReadonlyArray<RoleOption> {
+  return roles.filter((role) => !role.viaCandidatePool);
+}
+
+/** Why a listed role cannot be chosen, or "" when it can. */
+function roleUnavailableReason(role: RoleOption): string {
+  return role.assignable ? "" : " — not assignable by you";
+}
 /** Success is explicit; `errors` is only ever present on a 422. */
 type ActResult = { ok: boolean; errors?: Errors; inviteUrl?: string };
 type Errors = Partial<Record<"name" | "email" | "phone" | "jobTitle" | "techStack" | "roleId", string>>;
@@ -493,9 +511,18 @@ function EditDialog({ person, roles, busy, onClose, onSave }: {
           <div className="sm:col-span-2">
             <label htmlFor="edit-role">Role <em>*</em></label>
             <select id="edit-role" value={data.roleId} onChange={(event) => update("roleId", event.target.value)} disabled={person.isSelf} aria-invalid={Boolean(errors.roleId)}>
-              {roles.map((role) => <option key={role.id} value={role.id} disabled={!role.assignable && role.id !== person.roleId}>
-                {role.label}{!role.assignable && role.id !== person.roleId ? " — not assignable by you" : ""}
-              </option>)}
+              {/* Candidate Pool roles are not offered, but the person's own
+                  current role is always listed — otherwise an existing Employee
+                  would show a blank select, and saving would silently move them
+                  to whatever happened to be first. */}
+              {roles
+                .filter((role) => role.id === person.roleId || !role.viaCandidatePool)
+                .map((role) => {
+                  const reason = role.id === person.roleId ? "" : roleUnavailableReason(role);
+                  return <option key={role.id} value={role.id} disabled={Boolean(reason)}>
+                    {role.label}{reason}
+                  </option>;
+                })}
             </select>
             {person.isSelf ? <p className="field-hint">You cannot change your own role — ask another administrator.</p> : null}
             {errors.roleId ? <p className="form-error">{errors.roleId}</p>
@@ -523,7 +550,7 @@ function AddDialog({ roles, busy, onClose, onSave }: {
   onClose: () => void;
   onSave: (payload: Record<string, string>) => Promise<Errors>;
 }) {
-  const assignable = roles.filter((role) => role.assignable);
+  const assignable = selectableRoles(roles).filter((role) => !roleUnavailableReason(role));
   const [data, setData] = useState({ name: "", email: "", phone: "", jobTitle: "", techStack: "", roleId: assignable[0]?.id ?? "" });
   const [errors, setErrors] = useState<Errors>({});
 
@@ -569,9 +596,12 @@ function AddDialog({ roles, busy, onClose, onSave }: {
           <div className="sm:col-span-2">
             <label htmlFor="add-role">Role <em>*</em></label>
             <select id="add-role" value={data.roleId} onChange={(event) => update("roleId", event.target.value)} aria-invalid={Boolean(errors.roleId)}>
-              {roles.map((role) => <option key={role.id} value={role.id} disabled={!role.assignable}>
-                {role.label}{!role.assignable ? " — not assignable by you" : ""}
-              </option>)}
+              {selectableRoles(roles).map((role) => {
+                const reason = roleUnavailableReason(role);
+                return <option key={role.id} value={role.id} disabled={Boolean(reason)}>
+                  {role.label}{reason}
+                </option>;
+              })}
             </select>
             {errors.roleId ? <p className="form-error">{errors.roleId}</p>
               : <p className="field-hint">They choose their own password from an emailed invite — nobody else ever knows it.</p>}

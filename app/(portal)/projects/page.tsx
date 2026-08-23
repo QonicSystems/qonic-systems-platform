@@ -1,6 +1,6 @@
 import { ProjectManager } from "@/components/delivery/project-manager";
 import { can, requirePermission } from "@/lib/auth/guard";
-import { ROLE } from "@/lib/auth/roles";
+import { isLeadershipRank, leadershipRoleWhere, nonLeadershipRoleWhere } from "@/lib/auth/roles";
 import { BILLING_LABELS } from "@/lib/delivery/validate";
 import { db } from "@/lib/db";
 
@@ -24,7 +24,7 @@ export default async function ProjectsPage() {
           select: {
             userId: true,
             allocationPercent: true,
-            user: { select: { id: true, name: true, email: true, jobTitle: true, status: true, role: { select: { key: true, label: true } } } },
+            user: { select: { id: true, name: true, email: true, jobTitle: true, status: true, role: { select: { key: true, label: true, rank: true } } } },
           },
         },
         _count: { select: { assignments: true, timeEntries: true, invoices: true, expenses: true } },
@@ -37,20 +37,23 @@ export default async function ProjectsPage() {
       select: { id: true, name: true, code: true },
       orderBy: { name: "asc" },
     }),
-    // Project Manager restricted strictly to Founder and Co-Founder
+    // Project Manager is restricted to leadership. Matched on rank rather than
+    // a list of role keys, so a role the CEO creates at rank 10 or better is
+    // eligible without a code change.
     db.user.findMany({
       where: {
         status: "ACTIVE",
-        role: { key: { in: [ROLE.CEO, ROLE.CO_FOUNDER] } },
+        role: leadershipRoleWhere,
       },
       select: { id: true, name: true, role: { select: { label: true } } },
       orderBy: { name: "asc" },
     }),
-    // All active developer/staff members eligible for project allocation (strictly excludes Leadership)
+    // Everyone eligible for a project allocation — delivery and support staff,
+    // never leadership.
     db.user.findMany({
       where: {
         status: "ACTIVE",
-        role: { key: { notIn: [ROLE.CEO, ROLE.CO_FOUNDER] } },
+        role: nonLeadershipRoleWhere,
       },
       select: { id: true, name: true, email: true, jobTitle: true, role: { select: { key: true, label: true } } },
       orderBy: [{ name: "asc" }],
@@ -78,7 +81,7 @@ export default async function ProjectsPage() {
           // ledger entries key off) but no longer show as "currently
           // assigned" — that reads as an active team member when they're not.
           const validAssignments = project.assignments.filter(
-            (a) => !["ceo", "co_founder"].includes(a.user.role.key) && a.user.status === "ACTIVE"
+            (a) => !isLeadershipRank(a.user.role.rank) && a.user.status === "ACTIVE"
           );
           return {
             id: project.id,

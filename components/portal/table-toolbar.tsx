@@ -3,8 +3,14 @@
 import type { ReactNode } from "react";
 
 /**
- * The bar above a data table: a search field on the left, the primary action on
- * the right.
+ * The bar above a data table: a search field on the left, the actions on the
+ * right.
+ *
+ * The actions are wrapped in their own flex group rather than being dropped
+ * straight into the `justify-between` row. With one action the result is
+ * identical; with two, the bare children were spread to opposite ends of the
+ * bar — the search box, one button, a gap, and the other button pinned to the
+ * far edge, reading as two unrelated controls rather than a pair.
  */
 export function TableToolbar({ search, onSearch, placeholder, label, children }: {
   search?: string;
@@ -41,7 +47,7 @@ export function TableToolbar({ search, onSearch, placeholder, label, children }:
       ) : (
         <span />
       )}
-      {children}
+      <div className="flex flex-wrap items-center gap-3">{children}</div>
     </div>
   );
 }

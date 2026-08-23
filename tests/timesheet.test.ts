@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { AuthContext } from "@/lib/auth/guard";
 import {
-  STANDARD_WEEK_MINUTES, canDecideTimesheet, canEditTimesheet, canSubmitTimesheet,
-  formatDuration, isDayBookable, parseDuration, utilisation, weekDays, weekStartOf, canRecallTimesheet,
+  canDecideTimesheet, canEditTimesheet, canSubmitTimesheet,
+  formatDuration, isDayBookable, parseDuration, weekDays, weekStartOf, canRecallTimesheet,
 } from "@/lib/delivery/timesheet";
 import { toMinorUnits, validateClient, validateProject } from "@/lib/delivery/validate";
 
@@ -147,31 +147,6 @@ describe("canDecideTimesheet", () => {
     const result = canDecideTimesheet(MANAGER, { userId: EMPLOYEE.user.id, status });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.status).toBe(409);
-  });
-});
-
-describe("utilisation", () => {
-  it("separates billable share from utilisation", () => {
-    // Booked 20h, all billable, against a 40h week: 100% billable but 50% utilised.
-    const stats = utilisation({ billableMinutes: 1200, nonBillableMinutes: 0 });
-    expect(stats.billableRatio).toBe(1);
-    expect(stats.utilisation).toBe(0.5);
-  });
-
-  it("reports a full standard week as 100% utilised", () => {
-    expect(utilisation({ billableMinutes: STANDARD_WEEK_MINUTES, nonBillableMinutes: 0 }).utilisation).toBe(1);
-  });
-
-  it("counts non-billable time toward the total but not utilisation", () => {
-    const stats = utilisation({ billableMinutes: 1200, nonBillableMinutes: 1200 });
-    expect(stats.totalMinutes).toBe(2400);
-    expect(stats.billableRatio).toBe(0.5);
-    expect(stats.utilisation).toBe(0.5);
-  });
-
-  it("never divides by zero", () => {
-    expect(utilisation({ billableMinutes: 0, nonBillableMinutes: 0 }).billableRatio).toBe(0);
-    expect(utilisation({ billableMinutes: 60, nonBillableMinutes: 0, capacityMinutes: 0 }).utilisation).toBe(0);
   });
 });
 

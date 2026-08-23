@@ -67,6 +67,20 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (roleChanged) {
     const assignable = canAssignRole(context, nextRole!);
     if (!assignable.ok) return NextResponse.json({ message: assignable.reason }, { status: assignable.status });
+
+    // Guarded here as well as on create, or the create restriction is one click
+    // from being bypassed: add the person as a Co-Founder, then edit them down
+    // to Employee, and you have the delivery account with no candidate
+    // record that POST /api/admin/users refuses to make.
+    //
+    // Gated on `roleChanged`, so someone already in the role stays editable for
+    // their name, email, phone, job title and tech stack.
+    if (nextRole!.viaCandidatePool) {
+      return NextResponse.json({
+        message: "Please correct the highlighted fields.",
+        errors: { roleId: `${nextRole!.label} accounts are added from the Candidate Pool, not here.` },
+      }, { status: 422 });
+    }
   }
 
   const before = { name: target.name, email: target.email, phone: target.phone, jobTitle: target.jobTitle, role: target.role.key, techStack: target.techStack };
@@ -185,13 +199,20 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
         await tx.notification.deleteMany({ where: { userId: target.id } });
         await tx.userPermissionOverride.deleteMany({ where: { userId: target.id } });
 
-        // 7. Clean up matching candidate in Candidate pool so auto-sync will never resurrect the user
-        await tx.candidate.deleteMany({ where: { email: { equals: target.email, mode: "insensitive" } } });
-
-        // 8. Permanently delete the user
+        // 7. Permanently delete the user.
+        //
+        // Their candidate record, if they have one, is deliberately left alone:
+        // Candidate.linkedUserId is `onDelete: SetNull`, so this neither fails
+        // on nor cascades into the pool. A `candidate.deleteMany` matching on
+        // email used to sit here, justified by an auto-sync that would
+        // "resurrect the user" — that sync no longer exists, and the delete was
+        // pure destruction, silently erasing a different person's candidate
+        // record whenever two people shared an address, with no audit row and
+        // in flat contradiction of the archive-not-erase rule the rest of this
+        // file follows.
         await tx.user.delete({ where: { id: target.id } });
 
-        // 9. Record audit log
+        // 8. Record audit log
         await recordAudit({
           actorId: context.user.id,
           action: "user.purge_permanent",

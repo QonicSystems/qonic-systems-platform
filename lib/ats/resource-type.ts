@@ -47,7 +47,7 @@ export function resourceTypeOf(source: string | null | undefined): ResourceType 
 /** Short badge wording for the table. The full `source` stays in the tooltip. */
 export const RESOURCE_TYPE_LABEL: Record<ResourceType, string> = {
   GLOBAL: "Global Visa",
-  EMPLOYEE_DEV: "Employee Dev",
+  EMPLOYEE_DEV: "Developer",
   DIRECT: "Direct Applicant",
 };
 

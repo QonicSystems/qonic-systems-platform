@@ -39,7 +39,10 @@ async function main() {
     });
 
     if (person.email === "hr@qonicsystems.com") {
-      const perms = await db.permission.findMany({ where: { key: { in: ["contract.generate", "contract.submit", "contract.view_any", "candidate.manage", "candidate.view"] } } });
+      // `contract.view_any` used to be listed here and matches nothing — the
+      // catalog key is `contract.view_all` — so the HR demo account silently
+      // came up one override short.
+      const perms = await db.permission.findMany({ where: { key: { in: ["contract.generate", "contract.submit", "contract.view_all", "candidate.manage", "candidate.view"] } } });
       for (const p of perms) {
         await db.userPermissionOverride.upsert({
           where: { userId_permissionId: { userId: user.id, permissionId: p.id } },

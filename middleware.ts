@@ -26,7 +26,6 @@ const PORTAL_PREFIXES = [
   "/invoices",
   "/expenses",
   "/notifications",
-  "/search",
 ];
 
 type Site = "landing" | "shutterpact" | "app";
