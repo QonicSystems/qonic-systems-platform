@@ -28,9 +28,11 @@ export default async function EarningsPage({ searchParams }: { searchParams: Pro
     orderBy: { workDate: "desc" },
   });
 
-  const category = (line: (typeof lines)[number]) => line.overrideCategory ?? line.category;
-  const actual = lines.filter((line) => category(line) === "ACTUAL_PAYOUT");
-  const billedToCompany = lines.filter((line) => category(line) === "BILLED_TO_COMPANY");
+  // `category` is computed and frozen when the timesheet is approved. It used to
+  // be read through an admin override set in Rate Management; that screen and its
+  // override columns are gone, so the stored value is the only value.
+  const actual = lines.filter((line) => line.category === "ACTUAL_PAYOUT");
+  const billedToCompany = lines.filter((line) => line.category === "BILLED_TO_COMPANY");
   const sum = (rows: typeof lines) => rows.reduce((total, line) => total + line.amount, 0);
 
   // Billed-to-company is a company-vs-client accounting split, not something
@@ -90,10 +92,7 @@ export default async function EarningsPage({ searchParams }: { searchParams: Pro
             {visibleLines.map((line) => <tr key={line.id}>
               <th scope="row">{line.workDate.toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" })}</th>
               <td>{line.project.client.name} — {line.project.name}</td>
-              {canViewAll && <td>
-                <StatusChip status={category(line)} />
-                {line.overrideCategory && <span className="portal-muted">Reclassified{line.overrideNote ? `: ${line.overrideNote}` : ""}</span>}
-              </td>}
+              {canViewAll && <td><StatusChip status={line.category} /></td>}
               <td>{formatMoney(line.amount, line.currency)}</td>
             </tr>)}
           </tbody>

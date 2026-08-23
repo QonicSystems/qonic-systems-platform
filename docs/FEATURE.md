@@ -445,6 +445,15 @@ exist; the portal exposes the pipeline, not a calendar).
 The Revenue report (§6.7) is the only one that remains, and now lives under
 Finance rather than a Reports group of its own.
 
+**Removed:** Administration → Rate Management, along with the `ResourceDeal`
+table it maintained and the payout-reclassification override on
+`PayoutLedgerEntry`. Payout categories are still computed and frozen when a
+timesheet is approved, and **My Earnings** still shows them — there is simply no
+longer a screen that can override one after the fact. `ProjectAssignment.rate`
+and `.startedOn` survive as columns because invoicing and payout categorisation
+still read them, but nothing sets them any more: new assignments fall back to
+`Project.defaultRate` and to the assignment's `createdAt`.
+
 ---
 
 ## Phase 8 — Scale & compliance

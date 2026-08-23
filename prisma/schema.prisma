@@ -64,8 +64,6 @@ model User {
   timesheets         Timesheet[]          @relation("TimesheetOwner")
   timesheetDecisions Timesheet[]          @relation("TimesheetApprover")
   payoutsReceived    PayoutLedgerEntry[]  @relation("PayoutRecipient")
-  payoutOverrides    PayoutLedgerEntry[]  @relation("PayoutOverrideActor")
-  resourceDeals      ResourceDeal[]
   leaveRequests      LeaveRequest[]       @relation("LeaveRequester")
   leaveDecisions     LeaveRequest[]       @relation("LeaveDecider")
   leaveBalances      LeaveBalance[]
@@ -493,7 +491,6 @@ model Project {
   invoices     Invoice[]
   expenses     Expense[]
   payoutLedger PayoutLedgerEntry[]
-  deals        ResourceDeal[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -510,15 +507,24 @@ model ProjectAssignment {
   project           Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   userId            String
   user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  /// Overrides Project.defaultRate for this person.
+  /// Per-person override of Project.defaultRate, read when an invoice is built
+  /// from approved time (app/api/invoices/route.ts).
+  ///
+  /// NO LONGER SETTABLE: Rate Management was the only screen that wrote it. Rows
+  /// that already carry a value are still honoured — which is why the column
+  /// stays — but new assignments fall through to Project.defaultRate, which the
+  /// project form does still set.
   rate              Int?
-  /// Planned share of a working week, for capacity reporting.
+  /// Planned share of a working week. Shown on Projects, My Work, and the
+  /// Candidate Pool; set when someone is assigned to a project.
   allocationPercent Int     @default(100)
-  /// The day this person actually began working on this project — set
-  /// deliberately by an admin (Rate Management), distinct from `createdAt`
-  /// (just when this row was inserted) and from `Project.startDate` (the
-  /// project's own date, not any one person's). Null until someone sets it;
-  /// callers fall back through `?? Project.startDate ?? createdAt`.
+  /// The day this person actually began working on this project — distinct from
+  /// `createdAt` (just when this row was inserted) and from `Project.startDate`
+  /// (the project's own date, not any one person's). Read when a timesheet is
+  /// approved, to split actual payout from backfilled days.
+  ///
+  /// NO LONGER SETTABLE, for the same reason as `rate` above. Existing values
+  /// are still honoured; otherwise callers fall back to `createdAt`.
   startedOn         DateTime? @db.Date
 
   createdAt DateTime @default(now())
@@ -646,41 +652,11 @@ model PayoutLedgerEntry {
   currency String         @default("INR")
   category PayoutCategory
 
-  /// Admin reclassification. `category` above is never overwritten — this is
-  /// a separate, audited override so the computed value is always
-  /// recoverable even after an admin corrects it.
-  overrideCategory PayoutCategory?
-  overriddenById   String?
-  overriddenBy     User?     @relation("PayoutOverrideActor", fields: [overriddenById], references: [id], onDelete: SetNull)
-  overriddenAt     DateTime?
-  overrideNote     String?
-
   createdAt DateTime @default(now())
 
   @@unique([userId, projectId, workDate])
   @@index([userId, workDate])
   @@index([projectId])
-}
-
-/// The client-facing monthly deal value for one person on one project —
-/// distinct from what the person is paid. Admin-managed; feeds the founder
-/// dashboard's "closed deal amount" figure.
-model ResourceDeal {
-  id        String  @id @default(cuid())
-  userId    String
-  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  projectId String
-  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-
-  /// Minor units.
-  monthlyAmount Int
-  currency      String   @default("INR")
-  effectiveFrom DateTime @db.Date
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([userId, projectId])
 }
 
 // -------------------------------------------- Phase 4 completion: delivery --

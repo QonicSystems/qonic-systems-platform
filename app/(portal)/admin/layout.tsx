@@ -6,7 +6,6 @@ const tabs = [
   // Global Candidates used to live here as its own tab, with its own form and
   // its own API. Both kinds of candidate are now managed in the Candidate Pool.
   { label: "Roles & Permissions", href: "/admin/permissions", permission: "rbac.manage" },
-  { label: "Rate Management", href: "/admin/rates", permission: "payout.manage" },
   { label: "Holidays", href: "/admin/holidays", permission: "admin.access" },
   { label: "Audit Log", href: "/admin/audit", permission: "audit.view" },
 ];

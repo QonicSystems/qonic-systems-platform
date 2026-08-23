@@ -361,7 +361,7 @@ My Work   → /timesheets  /leave  /expenses  /contracts (/contracts/new)
 Delivery  → /clients  /projects  /timesheets
 Recruitment → /jobs (/jobs/[id])  /candidates
 Finance   → /invoices  /expenses/approvals  /reports/revenue
-Admin     → /admin (People + Roles)  /admin/permissions  /admin/rates  /admin/holidays  /admin/audit
+Admin     → /admin (People + Roles)  /admin/permissions  /admin/holidays  /admin/audit
 ```
 
 ## Appendix B — Who can do what (defaults)
