@@ -52,19 +52,25 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
   if (Object.keys(errors).length) return NextResponse.json({ message: "Please correct the highlighted fields.", errors }, { status: 422 });
 
-  const kind = String(input.kind ?? existing.kind).trim().toUpperCase();
+  const requestedKind = String(input.kind ?? existing.kind).trim().toUpperCase();
+  if (requestedKind !== existing.kind) {
+    return NextResponse.json({
+      message: "A candidate's classification is permanent. Add a new Developer or Global Candidate record instead.",
+      errors: { kind: "Global Candidates, Developers, and Direct Candidates cannot be converted into one another." },
+    }, { status: 409 });
+  }
+  const kind = existing.kind;
   const isGlobal = kind === "GLOBAL";
   const rawSource = String(input.source ?? existing.source).trim() || "Direct";
-  if (!["GLOBAL", "DEVELOPER", "DIRECT"].includes(kind)) errors.kind = "Please choose a candidate type.";
   if (isGlobal && !["LinkedIn", "Internal Sources", "Other"].includes(rawSource)) {
     errors.source = "Choose LinkedIn, Internal Sources, or Other for a Global Candidate.";
   }
 
   if (Object.keys(errors).length) return NextResponse.json({ message: "Please correct the highlighted fields.", errors }, { status: 422 });
 
-  // Treat a conversion to Global (and legacy Global records that predate the
-  // consent model) exactly like a new Global Candidate intake.
-  const needsConsentRequest = isGlobal && (existing.kind !== "GLOBAL" || existing.consentStatus === "NOT_REQUIRED");
+  // Legacy Global records may predate the consent model. Their immutable
+  // classification stays Global, but an outstanding consent request is created.
+  const needsConsentRequest = isGlobal && existing.consentStatus === "NOT_REQUIRED";
   const consentToken = needsConsentRequest ? randomBytes(32).toString("base64url") : null;
   const updated = await db.$transaction(async (tx) => {
     const candidate = await tx.candidate.update({

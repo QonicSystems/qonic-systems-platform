@@ -3,6 +3,7 @@ import { RoleManager, type RoleRow } from "@/components/admin/role-manager";
 import { canAdminister, canAssignRole, canEditIdentity, describeAuthority } from "@/lib/auth/authority";
 import { can, requirePermission } from "@/lib/auth/guard";
 import { db } from "@/lib/db";
+import { formatMoney } from "@/lib/money";
 
 export const metadata = { title: "People" };
 
@@ -13,7 +14,14 @@ export default async function AdminPeoplePage() {
     // Overrides are per-person exceptions to the role matrix. The guard has
     // always honoured them; nothing could create one until now.
     db.user.findMany({
-      include: { role: true, overrides: { include: { permission: true } } },
+      // Candidate-Pool Developers are managed in the Candidate Pool. People
+      // contains only accounts deliberately added through Administration.
+      where: { role: { viaCandidatePool: false } },
+      include: {
+        role: true,
+        overrides: { include: { permission: true } },
+        compensationProfiles: { orderBy: { effectiveFrom: "desc" }, take: 1 },
+      },
       orderBy: [{ role: { rank: "asc" } }, { name: "asc" }],
     }),
     db.role.findMany({ orderBy: { rank: "asc" }, include: { _count: { select: { users: true } } } }),
@@ -22,6 +30,8 @@ export default async function AdminPeoplePage() {
 
   const mayEdit = can(context, "user.manage");
   const mayOverride = can(context, "rbac.manage");
+  const founderFinance = context.role.isSuperAdmin || context.role.key === "co_founder";
+  const maySetCompensation = founderFinance && can(context, "compensation.manage");
   const today = new Date().toISOString().slice(0, 10);
 
   // Authority is resolved on the SERVER for each row. The table is a dumb
@@ -50,6 +60,10 @@ export default async function AdminPeoplePage() {
     canExport: can(context, "user.view") && (user.id === context.user.id || canAdminister(context, { id: user.id, role: user.role }).ok),
     isSelf: user.id === context.user.id,
     canOverride: mayOverride && user.id !== context.user.id && canAdminister(context, { id: user.id, role: user.role }).ok,
+    canSetCompensation: maySetCompensation && !user.role.viaCandidatePool && (user.id === context.user.id || canAdminister(context, { id: user.id, role: user.role }).ok),
+    compensation: user.compensationProfiles[0]
+      ? `${formatMoney(user.compensationProfiles[0].monthlyAmount, user.compensationProfiles[0].currency)} / month from ${user.compensationProfiles[0].effectiveFrom.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })}`
+      : null,
     overrides: user.overrides.map((o) => ({
       key: o.permission.key,
       label: o.permission.label,
@@ -107,6 +121,7 @@ export default async function AdminPeoplePage() {
       // accounts and edit their details". Whether any given role can actually
       // be assigned is decided per role by canAssignRole below.
       canCreate={mayEdit && roleOptions.some((role) => role.assignable && !role.viaCandidatePool)}
+      canSetCompensation={maySetCompensation}
       permissions={permissions.map((p) => ({ key: p.key, label: p.label, group: p.group }))}
       today={today}
     />

@@ -22,6 +22,7 @@ describe("reference numbering", () => {
     expect(REFERENCE_PREFIX).toBe("QNC");
     expect(referencePrefix("INV", 2026)).toBe("QNC-INV-2026-");
     expect(nextReferenceFrom([], "INV", 2026)).toBe("QNC-INV-2026-0001");
+    expect(nextReferenceFrom(["AVX-EI-2026-0003"], "EI", 2026)).toBe("QNC-EI-2026-0004");
   });
 
   it("continues the sequence across the rename instead of restarting it", () => {

@@ -47,6 +47,9 @@ type Row = {
   linkedUserName: string | null;
   contractStatus: string | null;
   contractId: string | null;
+  globalAgreementId: string | null;
+  globalAgreementReference: string | null;
+  globalAgreementStatus: string | null;
 };
 type Errors = Record<string, string>;
 
@@ -109,12 +112,18 @@ export function CandidateManager({
   canManage,
   canDraftContract,
   canCreateAccount,
+  canIssueGlobalAgreement,
+  canRevokeGlobalAgreement,
 }: {
   candidates: ReadonlyArray<Row>;
   canManage: boolean;
   canDraftContract: boolean;
   /** `user.manage` — creating a staff account is account administration. */
   canCreateAccount: boolean;
+  /** `contract.release` — only leadership can send external master terms. */
+  canIssueGlobalAgreement: boolean;
+  /** `contract.revoke` — withdraws a sent agreement before a replacement. */
+  canRevokeGlobalAgreement: boolean;
 }) {
   const router = useRouter();
   const [matchRequirement, setMatchRequirement] = useState("");
@@ -292,6 +301,14 @@ export function CandidateManager({
     if (await act(`/api/candidates/${candidate.id}`, { method: "DELETE" })) setDeleting(null);
   };
 
+  const revokeGlobalAgreement = (candidate: Row) => {
+    if (!candidate.globalAgreementId) return Promise.resolve(false);
+    return act(`/api/global-agreements/${candidate.globalAgreementId}`, {
+      method: "POST",
+      body: JSON.stringify({ action: "revoke" }),
+    });
+  };
+
   /**
    * Gives the candidate a staff account and records the link.
    *
@@ -466,7 +483,7 @@ export function CandidateManager({
                   Developer &amp; Direct Talent Pool
                 </h2>
                 <span className="bg-[#eef2ff] text-[#1e40af] border border-[#c7d2fe] text-xs font-bold px-2.5 py-0.5 rounded-full shadow-xs">
-                  {scored.filter((entry) => entry.row.resourceType !== "GLOBAL").length} Developers
+                  {scored.filter((entry) => entry.row.resourceType !== "GLOBAL").length} Candidates
                 </span>
               </div>
 
@@ -541,7 +558,7 @@ export function CandidateManager({
                             <td>
                               <div className="flex flex-col gap-0.5">
                                 <span className="text-xs font-semibold text-slate-800">
-                                  Direct Staff (Non-Visa)
+                                  {c.resourceType === "EMPLOYEE_DEV" ? "Developer candidate" : "Direct candidate"}
                                 </span>
                                 {c.noticePeriod && (
                                   <span className="text-[11px] text-blue-700 font-medium">
@@ -602,7 +619,7 @@ export function CandidateManager({
                                     invisibly when this link was followed —
                                     during a GET render — so it fired on
                                     prefetch and on every refresh too. */}
-                                {canCreateAccount && c.status === "ACTIVE" && !c.linkedUserName && (
+                                {canCreateAccount && c.resourceType === "EMPLOYEE_DEV" && c.status === "ACTIVE" && !c.linkedUserName && (
                                   <button
                                     type="button"
                                     className="row-action row-action--highlight"
@@ -613,7 +630,7 @@ export function CandidateManager({
                                     Create Employee Account
                                   </button>
                                 )}
-                                {canDraftContract && c.status === "ACTIVE" && !c.contractStatus && c.linkedUserName && (
+                                {canDraftContract && c.resourceType === "EMPLOYEE_DEV" && c.status === "ACTIVE" && !c.contractStatus && c.linkedUserName && (
                                   <Link
                                     href={`/contracts/new?candidateId=${c.id}`}
                                     className="row-action row-action--highlight"
@@ -729,7 +746,6 @@ export function CandidateManager({
                                 Consent: {c.consentStatus.toLowerCase().replace("_", " ")}
                               </span>
                               <span className="portal-muted">Added by {c.addedBy}</span>
-                              {c.linkedUserName && <span className="portal-muted">Linked employee: {c.linkedUserName}</span>}
                             </th>
                             <td>
                               <div className="flex flex-col items-start gap-1">
@@ -820,35 +836,36 @@ export function CandidateManager({
                                     Edit
                                   </button>
                                 )}
-                                {c.contractStatus && c.contractId && (
-                                  <Link href={`/contracts/${c.contractId}`} className="row-action" title="View this candidate's contract letter">
-                                    <StatusChip status={c.contractStatus} />
+                                {c.globalAgreementId && c.globalAgreementReference && (
+                                  <a
+                                    href={`/api/global-agreements/${c.globalAgreementId}/pdf`}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="row-action"
+                                    title={`Open ${c.globalAgreementReference} PDF`}
+                                  >
+                                    <StatusChip status={c.globalAgreementStatus ?? "SENT"} label={`Agreement · ${c.globalAgreementStatus?.toLowerCase() ?? "sent"}`} />
+                                  </a>
+                                )}
+                                {canIssueGlobalAgreement && c.status === "ACTIVE" && c.hasConsent && !["SENT", "ACKNOWLEDGED"].includes(c.globalAgreementStatus ?? "") && (
+                                  <Link
+                                    href={`/global-agreements/new?candidateId=${c.id}`}
+                                    className="row-action row-action--highlight"
+                                    title="Issue reusable Global Candidate agreement"
+                                  >
+                                    Issue Master Agreement
                                   </Link>
                                 )}
-                                {/* An account first, then a letter addressed to
-                                    it. Creating the account used to happen
-                                    invisibly when this link was followed —
-                                    during a GET render — so it fired on
-                                    prefetch and on every refresh too. */}
-                                {canCreateAccount && c.status === "ACTIVE" && !c.linkedUserName && (
+                                {canRevokeGlobalAgreement && c.globalAgreementId && ["SENT", "ACKNOWLEDGED"].includes(c.globalAgreementStatus ?? "") && (
                                   <button
                                     type="button"
-                                    className="row-action row-action--highlight"
-                                    onClick={() => createAccount(c)}
+                                    className="row-action row-action--danger"
+                                    onClick={() => revokeGlobalAgreement(c)}
                                     disabled={busy}
-                                    title="Create their staff account and send a one-time invite"
+                                    title="Withdraw this agreement so a corrected replacement can be issued"
                                   >
-                                    Create Employee Account
+                                    Revoke Agreement
                                   </button>
-                                )}
-                                {canDraftContract && c.status === "ACTIVE" && !c.contractStatus && c.linkedUserName && (
-                                  <Link
-                                    href={`/contracts/new?candidateId=${c.id}`}
-                                    className="row-action row-action--highlight"
-                                    title="Issue client / placement agreement for candidate"
-                                  >
-                                    Issue Agreement
-                                  </Link>
                                 )}
                                 {canManage && (
                                   <button
@@ -949,11 +966,13 @@ export function CandidateManager({
                       const kind = e.target.value as CandidateForm["kind"];
                       setForm((previous) => withSourceDefaults(previous, kind === "GLOBAL" ? "LinkedIn" : "Internal Sources", kind));
                     }}
+                    disabled={Boolean(editing)}
                   >
                     <option value="GLOBAL">Global Candidate</option>
                     <option value="DEVELOPER">Developer</option>
                     <option value="DIRECT">Direct Applicant</option>
                   </select>
+                  {editing && <p className="field-hint">Candidate type is permanent. Create a separate record for a different type.</p>}
                 </div>
                 <div>
                   <label htmlFor="cd-source">Source <em>*</em></label>

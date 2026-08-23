@@ -48,33 +48,40 @@ model User {
   manager   User?   @relation("ReportsTo", fields: [managerId], references: [id], onDelete: SetNull)
   reports   User[]  @relation("ReportsTo")
 
-  clientsOwned       Client[]             @relation("ClientOwner")
-  candidatesAdded    Candidate[]          @relation("CandidateAddedBy")
-  remindersSent      Reminder[]           @relation("ReminderSender")
-  jobsOwned          Job[]                @relation("JobOwner")
-  applicationsOwned  Application[]        @relation("ApplicationOwner")
-  interviews         Interview[]          @relation("Interviewer")
-  placements         Placement[]          @relation("PlacementRecruiter")
-  paymentsRecorded   Payment[]            @relation("PaymentRecorder")
-  expenses           Expense[]            @relation("ExpenseOwner")
-  expenseDecisions   Expense[]            @relation("ExpenseApprover")
-  notifications      Notification[]       @relation("NotificationRecipient")
-  bankDetail         BankDetail?
-  linkedCandidate    Candidate?           @relation("CandidateLink")
-  projectsManaged    Project[]            @relation("ProjectManager")
-  projectAssignments ProjectAssignment[]
-  timesheets         Timesheet[]          @relation("TimesheetOwner")
-  timesheetDecisions Timesheet[]          @relation("TimesheetApprover")
-  payoutsReceived    PayoutLedgerEntry[]  @relation("PayoutRecipient")
-  leaveRequests      LeaveRequest[]       @relation("LeaveRequester")
-  leaveDecisions     LeaveRequest[]       @relation("LeaveDecider")
-  leaveBalances      LeaveBalance[]
-  resetTokens        PasswordResetToken[]
-  mustChangePassword Boolean              @default(false)
-  techStack          String?
-  lastLoginAt        DateTime?
-  failedLoginCount   Int                  @default(0)
-  lockedUntil        DateTime?
+  clientsOwned                     Client[]                     @relation("ClientOwner")
+  candidatesAdded                  Candidate[]                  @relation("CandidateAddedBy")
+  remindersSent                    Reminder[]                   @relation("ReminderSender")
+  jobsOwned                        Job[]                        @relation("JobOwner")
+  applicationsOwned                Application[]                @relation("ApplicationOwner")
+  interviews                       Interview[]                  @relation("Interviewer")
+  placements                       Placement[]                  @relation("PlacementRecruiter")
+  paymentsRecorded                 Payment[]                    @relation("PaymentRecorder")
+  expenses                         Expense[]                    @relation("ExpenseOwner")
+  expenseDecisions                 Expense[]                    @relation("ExpenseApprover")
+  notifications                    Notification[]               @relation("NotificationRecipient")
+  bankDetail                       BankDetail?
+  linkedCandidate                  Candidate?                   @relation("CandidateLink")
+  projectsManaged                  Project[]                    @relation("ProjectManager")
+  projectAssignments               ProjectAssignment[]
+  timesheets                       Timesheet[]                  @relation("TimesheetOwner")
+  timesheetDecisions               Timesheet[]                  @relation("TimesheetApprover")
+  payoutsReceived                  PayoutLedgerEntry[]          @relation("PayoutRecipient")
+  compensationProfiles             CompensationProfile[]        @relation("CompensationRecipient")
+  compensationSet                  CompensationProfile[]        @relation("CompensationSetter")
+  earningInvoices                  EarningInvoice[]             @relation("EarningInvoicePayee")
+  earningInvoiceDecisions          EarningInvoice[]             @relation("EarningInvoiceDecider")
+  earningInvoicePayments           EarningInvoice[]             @relation("EarningInvoicePayer")
+  earningInvoiceEarlyReleases      EarningInvoiceEarlyRelease[] @relation("EarningInvoiceEarlyReleasePayee")
+  earningInvoiceEarlyReleaseGrants EarningInvoiceEarlyRelease[] @relation("EarningInvoiceEarlyReleaseGranter")
+  leaveRequests                    LeaveRequest[]               @relation("LeaveRequester")
+  leaveDecisions                   LeaveRequest[]               @relation("LeaveDecider")
+  leaveBalances                    LeaveBalance[]
+  resetTokens                      PasswordResetToken[]
+  mustChangePassword               Boolean                      @default(false)
+  techStack                        String?
+  lastLoginAt                      DateTime?
+  failedLoginCount                 Int                          @default(0)
+  lockedUntil                      DateTime?
 
   // --- Two-factor authentication (Phase 8) ---
   /// Base32 TOTP secret, encrypted at rest. Null until enrolment starts.
@@ -710,6 +717,110 @@ model PayoutLedgerEntry {
   @@index([projectId])
 }
 
+// ------------------------------------------------- Company compensation --
+//
+// Client invoices are receivables. These models deliberately represent the
+// other side of the ledger: the monthly amount a Qonic person may invoice the
+// company for, and the invoice they submit to receive it. Keeping them apart
+// stops payroll from ever appearing as client revenue.
+
+model CompensationProfile {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation("CompensationRecipient", fields: [userId], references: [id], onDelete: Cascade)
+  /// Minor units per calendar month. A new row, rather than an UPDATE, records
+  /// every salary decision and keeps past earning invoices reproducible.
+  monthlyAmount Int
+  currency      String    @default("INR")
+  effectiveFrom DateTime  @db.Date
+  effectiveTo   DateTime? @db.Date
+  setById       String?
+  setBy         User?     @relation("CompensationSetter", fields: [setById], references: [id], onDelete: SetNull)
+  note          String?
+  createdAt     DateTime  @default(now())
+
+  @@unique([userId, effectiveFrom])
+  @@index([userId, effectiveFrom, effectiveTo])
+}
+
+enum EarningInvoiceSource {
+  /// Developer's approved, payout-eligible delivery ledger entries.
+  DELIVERY_PAYOUT
+  /// Salary schedule set by the CEO or Co-Founder for a People account.
+  MONTHLY_SALARY
+}
+
+enum EarningInvoiceStatus {
+  SUBMITTED
+  APPROVED
+  PAID
+  REJECTED
+  VOID
+}
+
+/// A payable invoice raised by a Qonic portal user to Qonic Systems.
+model EarningInvoice {
+  id               String                      @id @default(cuid())
+  reference        String                      @unique
+  userId           String
+  user             User                        @relation("EarningInvoicePayee", fields: [userId], references: [id], onDelete: Cascade)
+  /// First day of the invoice month, e.g. 2026-08-01.
+  period           DateTime                    @db.Date
+  currency         String
+  amount           Int
+  source           EarningInvoiceSource
+  /// A month normally has one invoice. An urgent, founder-authorised Developer
+  /// invoice may be followed by a closed-month supplemental invoice for the
+  /// approved delivery earned after the early release.
+  sequence         Int                         @default(1)
+  status           EarningInvoiceStatus        @default(SUBMITTED)
+  /// A frozen calculation: profile date slices or delivery-ledger totals.
+  calculation      Json
+  notes            String?
+  submittedAt      DateTime                    @default(now())
+  decidedAt        DateTime?
+  decidedById      String?
+  decidedBy        User?                       @relation("EarningInvoiceDecider", fields: [decidedById], references: [id], onDelete: SetNull)
+  decisionNote     String?
+  paidAt           DateTime?
+  paidById         String?
+  paidBy           User?                       @relation("EarningInvoicePayer", fields: [paidById], references: [id], onDelete: SetNull)
+  paymentReference String?
+  earlyReleaseId   String?
+  earlyRelease     EarningInvoiceEarlyRelease? @relation(fields: [earlyReleaseId], references: [id], onDelete: SetNull)
+  createdAt        DateTime                    @default(now())
+  updatedAt        DateTime                    @updatedAt
+
+  @@unique([userId, period, currency, sequence])
+  @@index([status, period])
+  @@index([userId, period])
+  @@index([earlyReleaseId])
+}
+
+/// A deliberately narrow, auditable exception to the calendar-month close
+/// rule. It enables one person and one currency for the current open month;
+/// it never opens invoice raising globally or for future months.
+model EarningInvoiceEarlyRelease {
+  id          String           @id @default(cuid())
+  userId      String
+  user        User             @relation("EarningInvoiceEarlyReleasePayee", fields: [userId], references: [id], onDelete: Cascade)
+  /// First day of the current open month.
+  period      DateTime         @db.Date
+  currency    String
+  reason      String
+  grantedById String
+  grantedBy   User             @relation("EarningInvoiceEarlyReleaseGranter", fields: [grantedById], references: [id], onDelete: Restrict)
+  grantedAt   DateTime         @default(now())
+  /// Set atomically when the person raises their early invoice. A Developer's
+  /// later approved days become a supplemental closed-month invoice instead.
+  usedAt      DateTime?
+  invoices    EarningInvoice[]
+
+  @@unique([userId, period, currency])
+  @@index([period, usedAt])
+  @@index([grantedById])
+}
+
 // -------------------------------------------- Phase 4 completion: delivery --
 
 enum ProjectHealth {
@@ -854,6 +965,7 @@ model Candidate {
 
   applications      Application[]
   consents          CandidateConsent[]
+  globalAgreements  GlobalCandidateAgreement[]
   marketingProfiles CandidateMarketingProfile[]
   clientJobs        Client[]                    @relation("ClientGlobalCandidate")
 
@@ -892,6 +1004,47 @@ model CandidateConsent {
   ipAddress   String?
 
   @@index([candidateId, requestedAt])
+}
+
+/// Global Candidates are external profiles, never staff portal users. Their
+/// master representation agreement is separately addressed to their email and
+/// acknowledged through a one-time public link.
+enum GlobalCandidateAgreementStatus {
+  DRAFT
+  SENT
+  ACKNOWLEDGED
+  DECLINED
+  REVOKED
+}
+
+model GlobalCandidateAgreement {
+  id                       String                         @id @default(cuid())
+  reference                String                         @unique
+  candidateId              String
+  candidate                Candidate                      @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  recipientEmail           String
+  status                   GlobalCandidateAgreementStatus @default(DRAFT)
+  /// Versioned document payload. It freezes the candidate profile and the
+  /// commercial wording actually sent, while sensitive identifiers stay out.
+  payload                  Json
+  authorUserId             String
+  releasedById             String?
+  releasedAt               DateTime?
+  acknowledgementTokenHash String?                        @unique
+  /// One-time acceptance links deliberately expire. The generated PDF remains
+  /// available to authorised staff, but an old emailed link cannot be used to
+  /// create a fresh acknowledgement months later.
+  acknowledgementExpiresAt DateTime?
+  acknowledgedAt           DateTime?
+  responseIp               String?
+  revokedAt                DateTime?
+  revokedById              String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([candidateId, status])
+  @@index([status, releasedAt])
 }
 
 /// A Global Candidate can be marketed through multiple technology profiles

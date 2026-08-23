@@ -41,6 +41,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   });
   if (!candidate) return NextResponse.json({ message: "That candidate no longer exists." }, { status: 404 });
 
+  // A Global Candidate is an external profile, not Qonic staff. This is
+  // enforced here rather than only hiding the button: a direct API call must
+  // never turn a visa-profile record into a Developer login account.
+  if (candidate.kind !== "DEVELOPER") {
+    return NextResponse.json({ message: "Only a candidate added as a Developer can receive a Qonic Systems account." }, { status: 409 });
+  }
+
   if (candidate.linkedUser) {
     return NextResponse.json({
       message: `${candidate.name} already has a staff account (${candidate.linkedUser.name}).`,

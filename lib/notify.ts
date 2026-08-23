@@ -12,6 +12,13 @@ export type NotifyInput = {
   link?: string | null;
 };
 
+/** A generated document attached to a transactional email. */
+export type EmailAttachment = {
+  filename: string;
+  content: Buffer;
+  contentType?: string;
+};
+
 function getSmtpConfig() {
   const host = process.env.SMTP_HOST;
   const port = process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : 1025;
@@ -33,10 +40,11 @@ export async function sendEmail(
   recipients: ReadonlyArray<string>,
   title: string,
   body?: string | null,
-  link?: string | null
-): Promise<void> {
+  link?: string | null,
+  attachments: ReadonlyArray<EmailAttachment> = []
+): Promise<boolean> {
   const config = getSmtpConfig();
-  if (!config || recipients.length === 0) return;
+  if (!config || recipients.length === 0) return false;
 
   try {
     const transporter = nodemailer.createTransport({
@@ -53,21 +61,30 @@ export async function sendEmail(
       : "";
     const emailText = `${title}\n\n${body ?? ""}\n\n${fullLink ? `View details: ${fullLink}` : ""}\n\n— Qonic Systems Platform`;
 
+    let delivered = false;
     for (const email of recipients) {
       if (!email || !email.includes("@")) continue;
-      await transporter
-        .sendMail({
+      try {
+        await transporter.sendMail({
           from: config.from,
           to: email,
           subject: `[Qonic Systems] ${title}`,
           text: emailText,
-        })
-        .catch((err) => {
-          console.error(`[notification-email] Failed to dispatch email to ${email}:`, err);
+          attachments: attachments.map((attachment) => ({
+            filename: attachment.filename,
+            content: attachment.content,
+            contentType: attachment.contentType ?? "application/pdf",
+          })),
         });
+        delivered = true;
+      } catch (err) {
+        console.error(`[notification-email] Failed to dispatch email to ${email}:`, err);
+      }
     }
+    return delivered;
   } catch (err) {
     console.error("[notification-email] SMTP transport error:", err);
+    return false;
   }
 }
 

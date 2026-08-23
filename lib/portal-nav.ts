@@ -21,7 +21,10 @@ export const portalNavigation: ReadonlyArray<NavItem | NavGroup> = [
     label: "My Work",
     items: [
       { label: "Timesheets", href: "/timesheets", permission: "timesheet.submit" },
-      { label: "My Earnings", href: "/earnings", permission: "payout.view_own" },
+      // Every signed-in Qonic person can raise their own payable invoice from
+      // Earnings. The legacy payout permission still controls company-wide
+      // delivery detail, but must not hide salary invoicing from People roles.
+      { label: "My Earnings", href: "/earnings", permission: null },
       { label: "Leave", href: "/leave", permission: "leave.request" },
       { label: "Contract Letters", href: "/contracts", permission: "contract.view_own" },
     ],

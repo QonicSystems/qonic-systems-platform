@@ -1,12 +1,17 @@
 import { StatusChip } from "@/components/status-chip";
 import { ExpandableDeliveryFinance, type DeliveryFinanceAssignment } from "@/components/finance/expandable-delivery-finance";
+import { EarningsEarlyReleaseManager, type EarningEarlyReleaseRow } from "@/components/finance/earnings-early-release-manager";
+import { EarningsInvoiceManager, type EarningsInvoiceFinanceRow } from "@/components/finance/earnings-invoice-manager";
 import { PrestartBackfillFlags, type PrestartBackfillFlag } from "@/components/finance/prestart-backfill-flags";
-import { requirePermission } from "@/lib/auth/guard";
+import { can, requirePermission } from "@/lib/auth/guard";
+import { canAdminister } from "@/lib/auth/authority";
 import { ROLE } from "@/lib/auth/roles";
 import { weekStartOf } from "@/lib/delivery/timesheet";
 import { isoDay, missingPreStartWorkdays } from "@/lib/finance/prestart-backfill";
 import { ageingBucket, formatMoney, hoursToCentihours, lineAmount, type AgeingBucket } from "@/lib/money";
 import { currencyKeys, formatCurrencyTotals, subtractCurrencyTotals, totalsByCurrency, type CurrencyTotals } from "@/lib/finance/summary";
+import { monthRange, monthlySalaryValues } from "@/lib/finance/compensation";
+import { remainingEarningAmount } from "@/lib/finance/earnings";
 import { db } from "@/lib/db";
 
 export const metadata = { title: "Company Finance" };
@@ -25,10 +30,12 @@ const formatHours = (minutes: number) => `${(minutes / 60).toLocaleString("en-IN
 export default async function RevenuePage() {
   const context = await requirePermission("report.finance");
   const isExecutive = context.role.key === ROLE.CEO || context.role.key === ROLE.CO_FOUNDER;
+  const currentEarningMonth = new Date().toISOString().slice(0, 7);
+  const currentEarningRange = monthRange(currentEarningMonth)!;
 
-  const [invoices, expenses, payouts, placements, prestartAssignments] = await Promise.all([
+  const [invoices, expenses, payouts, placements, prestartAssignments, earningInvoices, currentEarningPeople, earlyEarningReleases] = await Promise.all([
     db.invoice.findMany({
-      include: { client: { select: { name: true } }, project: { select: { name: true } } },
+      include: { client: { select: { name: true } }, project: { select: { name: true } }, creditNotes: { select: { amount: true } } },
       orderBy: { issueDate: "desc" },
     }),
     db.expense.findMany({
@@ -60,6 +67,28 @@ export default async function RevenuePage() {
         user: { select: { name: true } },
         project: { select: { id: true, name: true, startDate: true, client: { select: { name: true } } } },
       },
+    }) : Promise.resolve([]),
+    db.earningInvoice.findMany({
+      include: { user: { include: { role: true } } },
+      orderBy: [{ period: "desc" }, { submittedAt: "desc" }],
+    }),
+    isExecutive ? db.user.findMany({
+      where: { status: "ACTIVE" },
+      include: {
+        role: true,
+        compensationProfiles: {
+          where: {
+            effectiveFrom: { lte: currentEarningRange.end },
+            OR: [{ effectiveTo: null }, { effectiveTo: { gte: currentEarningRange.start } }],
+          },
+          orderBy: { effectiveFrom: "asc" },
+        },
+      },
+      orderBy: { name: "asc" },
+    }) : Promise.resolve([]),
+    isExecutive ? db.earningInvoiceEarlyRelease.findMany({
+      where: { period: currentEarningRange.start },
+      include: { grantedBy: { select: { name: true } } },
     }) : Promise.resolve([]),
   ]);
 
@@ -95,12 +124,15 @@ export default async function RevenuePage() {
 
   // Company revenue comes only from a live standard invoice or Qonic's own
   // C2C claim. Vendor-to-candidate records document money held outside Qonic.
+  const creditValue = (invoice: (typeof invoices)[number]) => invoice.creditNotes.reduce((total, note) => total + note.amount, 0);
+  const netInvoiceValue = (invoice: (typeof invoices)[number]) => Math.max(0, invoice.total - creditValue(invoice));
+  const netOutstanding = (invoice: (typeof invoices)[number]) => Math.max(0, netInvoiceValue(invoice) - invoice.paidAmount);
   const revenueInvoices = invoices.filter((invoice) =>
     !["VOID", "DRAFT"].includes(invoice.status) && ["STANDARD", "QONIC_TO_VENDOR"].includes(invoice.commercialKind)
   );
-  const billed = totalsByCurrency(revenueInvoices.map((invoice) => ({ currency: invoice.currency, amount: invoice.total })));
-  const received = totalsByCurrency(revenueInvoices.map((invoice) => ({ currency: invoice.currency, amount: invoice.paidAmount })));
-  const outstanding = totalsByCurrency(revenueInvoices.map((invoice) => ({ currency: invoice.currency, amount: invoice.total - invoice.paidAmount })));
+  const billed = totalsByCurrency(revenueInvoices.map((invoice) => ({ currency: invoice.currency, amount: netInvoiceValue(invoice) })));
+  const received = totalsByCurrency(revenueInvoices.map((invoice) => ({ currency: invoice.currency, amount: Math.min(invoice.paidAmount, netInvoiceValue(invoice)) })));
+  const outstanding = totalsByCurrency(revenueInvoices.map((invoice) => ({ currency: invoice.currency, amount: netOutstanding(invoice) })));
 
   const approvedExpenses = totalsByCurrency(expenses.map((expense) => ({ currency: expense.currency, amount: expense.amount })));
   const reimbursedExpenses = totalsByCurrency(expenses.filter((expense) => expense.status === "REIMBURSED").map((expense) => ({ currency: expense.currency, amount: expense.amount })));
@@ -110,7 +142,24 @@ export default async function RevenuePage() {
   const companyRetained = payouts.filter((entry) => entry.category === "BILLED_TO_COMPANY");
   const actualPayoutTotal = totalsByCurrency(actualPayouts.map((entry) => ({ currency: entry.currency, amount: entry.amount })));
   const companyRetainedTotal = totalsByCurrency(companyRetained.map((entry) => ({ currency: entry.currency, amount: entry.amount })));
-  const cashAfterReimbursements = subtractCurrencyTotals(received, reimbursedExpenses);
+  const activeEarningInvoices = earningInvoices.filter((invoice) => !["REJECTED", "VOID"].includes(invoice.status));
+  // Developer pay is already accrued daily above. A submitted Developer
+  // invoice is the claim document for that same cost, not another cost line.
+  const developerInvoices = activeEarningInvoices.filter((invoice) => invoice.source === "DELIVERY_PAYOUT");
+  const developerPaid = totalsByCurrency(developerInvoices.filter((invoice) => invoice.status === "PAID").map((invoice) => ({ currency: invoice.currency, amount: invoice.amount })));
+  const salaryInvoices = activeEarningInvoices.filter((invoice) => invoice.source === "MONTHLY_SALARY");
+  const salaryPayable = totalsByCurrency(salaryInvoices.map((invoice) => ({ currency: invoice.currency, amount: invoice.amount })));
+  const salaryPaid = totalsByCurrency(salaryInvoices.filter((invoice) => invoice.status === "PAID").map((invoice) => ({ currency: invoice.currency, amount: invoice.amount })));
+  const salaryOutstanding = totalsByCurrency(salaryInvoices.filter((invoice) => ["SUBMITTED", "APPROVED"].includes(invoice.status)).map((invoice) => ({ currency: invoice.currency, amount: invoice.amount })));
+  // This is the cash reality after money has actually left the company. It is
+  // deliberately separate from operating margin: a paid Developer invoice
+  // settles a payout already accrued when delivery was approved, so it changes
+  // cash but must never reduce revenue a second time.
+  const cashAfterReleasedPayments = subtractCurrencyTotals(received, reimbursedExpenses, developerPaid, salaryPaid);
+  const operatingMargin = Object.fromEntries(currencyKeys(billed, actualPayoutTotal, salaryPayable, approvedExpenses).map((currency) => [
+    currency,
+    amountAt(billed, currency) - amountAt(actualPayoutTotal, currency) - amountAt(salaryPayable, currency) - amountAt(approvedExpenses, currency),
+  ])) as CurrencyTotals;
 
   // This dashboard deliberately does not add retained payout value to client
   // revenue: it is a cost that was not paid to the Developer, not new cash.
@@ -118,7 +167,8 @@ export default async function RevenuePage() {
   // twice when its approved hours are invoiced.
   const financeCurrencies = currencyKeys(
     billed, received, outstanding, approvedExpenses, reimbursedExpenses,
-    awaitingExpensePayment, actualPayoutTotal, companyRetainedTotal
+    awaitingExpensePayment, actualPayoutTotal, companyRetainedTotal, developerPaid,
+    salaryPayable, salaryPaid, salaryOutstanding, cashAfterReleasedPayments, operatingMargin
   );
 
   const ageing = new Map<AgeingBucket, CurrencyTotals>(BUCKETS.map((bucket) => [bucket, {}]));
@@ -127,11 +177,11 @@ export default async function RevenuePage() {
     const bucket = ageingBucket(invoice.dueDate);
     ageing.set(bucket, totalsByCurrency([
       ...Object.entries(ageing.get(bucket) ?? {}).map(([currency, amount]) => ({ currency, amount })),
-      { currency: invoice.currency, amount: invoice.total - invoice.paidAmount },
+      { currency: invoice.currency, amount: netOutstanding(invoice) },
     ]));
   }
 
-  const openInvoices = revenueInvoices.filter((invoice) => invoice.total > invoice.paidAmount);
+  const openInvoices = revenueInvoices.filter((invoice) => netOutstanding(invoice) > 0);
   const c2cInvoices = revenueInvoices.filter((invoice) => invoice.commercialKind === "QONIC_TO_VENDOR" && invoice.commercialGroupId);
   const placementFees = totalsByCurrency(placements.map((placement) => ({ currency: placement.currency, amount: placement.feeAmount })));
 
@@ -262,6 +312,67 @@ export default async function RevenuePage() {
     }))
     .sort((left, right) => left.developer.localeCompare(right.developer) || left.clientProject.localeCompare(right.clientProject));
 
+  const canDecideEarnings = isExecutive && can(context, "compensation.manage");
+  const earningsInvoiceRows: EarningsInvoiceFinanceRow[] = earningInvoices.map((invoice) => ({
+    id: invoice.id,
+    reference: invoice.reference,
+    payee: invoice.user.name,
+    role: invoice.user.role.label,
+    period: invoice.period.toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" }),
+    source: invoice.source,
+    amount: formatMoney(invoice.amount, invoice.currency),
+    status: invoice.status,
+    submittedAt: date(invoice.submittedAt),
+    paymentReference: invoice.paymentReference,
+    canDecide: canDecideEarnings && invoice.userId !== context.user.id && canAdminister(context, invoice.user).ok,
+  }));
+  const releaseByPersonCurrency = new Map(earlyEarningReleases.map((release) => [`${release.userId}:${release.currency}`, release]));
+  const earningEarlyReleaseRows: EarningEarlyReleaseRow[] = currentEarningPeople.flatMap((person) => {
+    const expected = person.role.viaCandidatePool
+      ? [...new Map(
+        payouts
+          .filter((entry) => entry.userId === person.id && entry.category === "ACTUAL_PAYOUT" && entry.workDate >= currentEarningRange.start && entry.workDate <= currentEarningRange.end)
+          .map((entry) => [entry.currency, 0] as const),
+      ).keys()].map((currency) => ({
+        currency,
+        amount: payouts
+          .filter((entry) => entry.userId === person.id && entry.category === "ACTUAL_PAYOUT" && entry.currency === currency && entry.workDate >= currentEarningRange.start && entry.workDate <= currentEarningRange.end)
+          .reduce((total, entry) => total + entry.amount, 0),
+        source: "DELIVERY_PAYOUT" as const,
+      }))
+      : monthlySalaryValues(person.compensationProfiles, currentEarningMonth).map((earning) => ({
+        currency: earning.currency,
+        amount: earning.amount,
+        source: "MONTHLY_SALARY" as const,
+      }));
+
+    return expected.flatMap((earning) => {
+      const raised = earningInvoices.filter((invoice) =>
+        invoice.userId === person.id && invoice.period.getTime() === currentEarningRange.start.getTime() && invoice.currency === earning.currency,
+      );
+      const remaining = remainingEarningAmount(earning.amount, raised);
+      const release = releaseByPersonCurrency.get(`${person.id}:${earning.currency}`) ?? null;
+      if (remaining <= 0 && !release) return [];
+      const authority = person.id === context.user.id ? { ok: true } : canAdminister(context, person);
+      return [{
+        userId: person.id,
+        payee: person.name,
+        role: person.role.label,
+        month: currentEarningMonth,
+        currency: earning.currency,
+        amount: formatMoney(remaining, earning.currency),
+        source: earning.source,
+        canEnable: canDecideEarnings && authority.ok && !release,
+        release: release ? {
+          grantedBy: release.grantedBy.name,
+          grantedAt: release.grantedAt.toISOString(),
+          reason: release.reason,
+          usedAt: release.usedAt?.toISOString() ?? null,
+        } : null,
+      }];
+    });
+  });
+
   return <div className="portal-page company-finance">
     <header className="hero-panel">
       <span className="hero-eyebrow">Finance overview</span>
@@ -272,6 +383,9 @@ export default async function RevenuePage() {
         <div><span className="hero-stat-value" style={{ fontSize: "1.35rem" }}>{formatCurrencyTotals(received)}</span><p className="hero-stat-label">Client cash received</p></div>
         <div><span className="hero-stat-value" style={{ fontSize: "1.35rem" }}>{formatCurrencyTotals(outstanding)}</span><p className="hero-stat-label">Receivables outstanding</p></div>
         <div><span className="hero-stat-value" style={{ fontSize: "1.35rem" }}>{formatCurrencyTotals(actualPayoutTotal)}</span><p className="hero-stat-label">Developer payout accrued</p></div>
+        <div><span className="hero-stat-value" style={{ fontSize: "1.35rem" }}>{formatCurrencyTotals(developerPaid)}</span><p className="hero-stat-label">Developer payments released</p></div>
+        <div><span className="hero-stat-value" style={{ fontSize: "1.35rem" }}>{formatCurrencyTotals(salaryOutstanding)}</span><p className="hero-stat-label">People salary invoices due</p></div>
+        <div><span className="hero-stat-value" style={{ fontSize: "1.35rem" }}>{formatCurrencyTotals(cashAfterReleasedPayments)}</span><p className="hero-stat-label">Actual company cash after payments</p></div>
         <div><span className="hero-stat-value" style={{ fontSize: "1.35rem" }}>{formatCurrencyTotals(companyRetainedTotal)}</span><p className="hero-stat-label">Pre-start value retained</p></div>
         <div><span className="hero-stat-value" style={{ fontSize: "1.35rem" }}>{formatCurrencyTotals(approvedExpenses)}</span><p className="hero-stat-label">Approved expenses</p></div>
       </div>
@@ -279,17 +393,21 @@ export default async function RevenuePage() {
 
     <section className="portal-section">
       <h2 className="portal-section-title">Cash and commitments</h2>
-      <p className="portal-note">Developer payouts are accrued from each Developer&apos;s Actual Start Date. Pre-start approved work is billed to the client but stays outside their payout. It is shown as retained delivery value, never added to revenue a second time.</p>
+      <p className="portal-note">Client billed is net of credit notes. Developer payouts are accrued from each Developer&apos;s Actual Start Date. People salary invoices are payables only once the person raises them. Actual company cash after payments is the live cash view: client cash received, less released Developer payments, paid People salaries, and reimbursed expenses. Pre-start approved work is billed to the client but stays outside Developer payout; it is retained delivery value, never added to revenue a second time.</p>
       {financeCurrencies.length === 0 ? <p className="portal-muted">No finance activity has been recorded yet.</p> : <div className="matrix-scroll"><table className="matrix matrix--people">
-        <thead><tr><th scope="col">Currency</th><th scope="col">Client billed</th><th scope="col">Cash received</th><th scope="col">Cash expenses reimbursed</th><th scope="col">Cash after expenses</th><th scope="col">Developer payout accrued</th><th scope="col">Approved expenses pending</th><th scope="col">Pre-start value retained*</th></tr></thead>
+        <thead><tr><th scope="col">Currency</th><th scope="col">Client billed, net</th><th scope="col">Client cash received</th><th scope="col">Developer payments released</th><th scope="col">People salaries paid</th><th scope="col">Cash expenses reimbursed</th><th scope="col">Actual company cash after payments</th><th scope="col">Developer payout accrued</th><th scope="col">People salary payable</th><th scope="col">Approved expenses pending</th><th scope="col">Net revenue before tax</th><th scope="col">Pre-start value retained*</th></tr></thead>
         <tbody>{financeCurrencies.map((currency) => <tr key={currency}>
           <th scope="row">{currency}</th>
           <td>{formatMoney(amountAt(billed, currency), currency)}</td>
           <td>{formatMoney(amountAt(received, currency), currency)}</td>
+          <td>−{formatMoney(amountAt(developerPaid, currency), currency)}</td>
+          <td>−{formatMoney(amountAt(salaryPaid, currency), currency)}</td>
           <td>{formatMoney(amountAt(reimbursedExpenses, currency), currency)}</td>
-          <td>{formatMoney(amountAt(cashAfterReimbursements, currency), currency)}</td>
+          <td><strong>{formatMoney(amountAt(cashAfterReleasedPayments, currency), currency)}</strong></td>
           <td>{formatMoney(amountAt(actualPayoutTotal, currency), currency)}</td>
+          <td>{formatMoney(amountAt(salaryPayable, currency), currency)}</td>
           <td>{formatMoney(amountAt(awaitingExpensePayment, currency), currency)}</td>
+          <td>{formatMoney(amountAt(operatingMargin, currency), currency)}</td>
           <td>{formatMoney(amountAt(companyRetainedTotal, currency), currency)}</td>
         </tr>)}</tbody>
       </table></div>}
@@ -297,11 +415,22 @@ export default async function RevenuePage() {
     </section>
 
     <section className="portal-section">
+      <h2 className="portal-section-title">Net company revenue breakdown</h2>
+      <p className="portal-note">This is the accrual view of company performance, not a cash balance: net client billing less delivery payout accrued, raised People salary invoices, and approved expense commitments. A Developer payment does not reduce this figure again because the cost was already accrued when their delivery was approved; its cash impact appears above in Actual company cash after payments. Credit notes reduce client billing; pre-start retained value remains a disclosure only, never a second revenue line.</p>
+      {financeCurrencies.length === 0 ? <p className="portal-muted">Net company revenue will appear after financial activity is recorded.</p> : <div className="matrix-scroll"><table className="matrix matrix--people">
+        <thead><tr><th scope="col">Currency</th><th scope="col">Net client billing</th><th scope="col">Less Developer payout accrued</th><th scope="col">Less People salaries invoiced</th><th scope="col">Less approved expenses</th><th scope="col">Net company revenue before tax</th></tr></thead>
+        <tbody>{financeCurrencies.map((currency) => <tr key={currency}>
+          <th scope="row">{currency}</th><td>{formatMoney(amountAt(billed, currency), currency)}</td><td>−{formatMoney(amountAt(actualPayoutTotal, currency), currency)}</td><td>−{formatMoney(amountAt(salaryPayable, currency), currency)}</td><td>−{formatMoney(amountAt(approvedExpenses, currency), currency)}</td><td><strong>{formatMoney(amountAt(operatingMargin, currency), currency)}</strong></td>
+        </tr>)}</tbody>
+      </table></div>}
+    </section>
+
+    <section className="portal-section">
       <h2 className="portal-section-title">Receivables and collection</h2>
       <div className="portal-grid">
         <article className="portal-card"><span className="portal-stat">{openInvoices.length}</span><p>Open client invoices</p></article>
         <article className="portal-card"><span className="portal-stat">{formatCurrencyTotals(outstanding)}</span><p>Outstanding collection</p></article>
-        <article className="portal-card"><span className="portal-stat">{formatCurrencyTotals(cashAfterReimbursements)}</span><p>Cash after reimbursed expenses</p></article>
+        <article className="portal-card"><span className="portal-stat">{formatCurrencyTotals(cashAfterReleasedPayments)}</span><p>Actual company cash after payments</p></article>
       </div>
       {openInvoices.length === 0 ? <p className="portal-muted">No client receivables are outstanding.</p> : <div className="matrix-scroll"><table className="matrix matrix--people">
         <thead><tr><th scope="col">Invoice</th><th scope="col">Client / Project</th><th scope="col">Due</th><th scope="col">Status</th><th scope="col">Issued</th><th scope="col">Received</th><th scope="col">Outstanding</th></tr></thead>
@@ -310,9 +439,9 @@ export default async function RevenuePage() {
           <td>{invoice.client.name}<span>{invoice.project?.name ?? "No project"}</span></td>
           <td>{date(invoice.dueDate)}<span>{BUCKET_LABELS[ageingBucket(invoice.dueDate)]}</span></td>
           <td><StatusChip status={invoice.status} /></td>
-          <td>{formatMoney(invoice.total, invoice.currency)}</td>
-          <td>{formatMoney(invoice.paidAmount, invoice.currency)}</td>
-          <td>{formatMoney(invoice.total - invoice.paidAmount, invoice.currency)}</td>
+          <td>{formatMoney(netInvoiceValue(invoice), invoice.currency)}{creditValue(invoice) > 0 && <span>Credit notes: −{formatMoney(creditValue(invoice), invoice.currency)}</span>}</td>
+          <td>{formatMoney(Math.min(invoice.paidAmount, netInvoiceValue(invoice)), invoice.currency)}</td>
+          <td>{formatMoney(netOutstanding(invoice), invoice.currency)}</td>
         </tr>)}</tbody>
       </table></div>}
       <div className="matrix-scroll"><table className="matrix matrix--people">
@@ -320,6 +449,23 @@ export default async function RevenuePage() {
         <tbody>{BUCKETS.map((bucket) => <tr key={bucket}><th scope="row">{BUCKET_LABELS[bucket]}</th><td>{formatCurrencyTotals(ageing.get(bucket) ?? {})}</td></tr>)}</tbody>
       </table></div>
     </section>
+
+    <section className="portal-section">
+      <h2 className="portal-section-title">People earnings invoices</h2>
+      <p className="portal-note">Every Qonic account raises its own monthly invoice from My Earnings. Developers invoice approved delivery payout; CEO, Co-Founder, and People accounts invoice their effective-dated salary schedule. A submitted Developer invoice documents payout already accrued above and is not deducted twice.</p>
+      <div className="portal-grid">
+        <article className="portal-card"><span className="portal-stat">{formatCurrencyTotals(salaryOutstanding)}</span><p>People salary invoices awaiting payment</p></article>
+        <article className="portal-card"><span className="portal-stat">{formatCurrencyTotals(salaryPaid)}</span><p>People salary invoices paid</p></article>
+        <article className="portal-card"><span className="portal-stat">{earningInvoices.filter((invoice) => ["SUBMITTED", "APPROVED"].includes(invoice.status)).length}</span><p>Open earnings invoices</p></article>
+      </div>
+      <EarningsInvoiceManager invoices={earningsInvoiceRows} />
+    </section>
+
+    {canDecideEarnings && <section className="portal-section">
+      <h2 className="portal-section-title">Urgent current-month invoice access</h2>
+      <p className="portal-note">CEO and Co-Founder only. Enable a single, audited early raise for one person and one currency when urgent payment is necessary. It never opens invoices globally. For Developers, only approved payout accrued today is included; approved delivery earned later is kept for a supplemental invoice after month close.</p>
+      <EarningsEarlyReleaseManager releases={earningEarlyReleaseRows} />
+    </section>}
 
     {isExecutive && prestartBackfillFlags.length > 0 && <section className="portal-section company-finance__prestart-flags">
       <h2 className="portal-section-title">Missing pre-start delivery time</h2>
@@ -339,7 +485,7 @@ export default async function RevenuePage() {
       {deliveryFinanceAssignments.length === 0 ? <p className="portal-muted">Daily finance entries appear when approved billable timesheets exist.</p> : <ExpandableDeliveryFinance assignments={deliveryFinanceAssignments} />}
     </section>
 
-    <section className="portal-section">
+    {expenses.length > 0 && <section className="portal-section">
       <h2 className="portal-section-title">Operating expenses</h2>
       <p className="portal-note">Approved expenses are commitments; reimbursed expenses have left company cash. Both remain visible so finance can distinguish what is owed from what has been paid.</p>
       <div className="portal-grid">
@@ -347,7 +493,7 @@ export default async function RevenuePage() {
         <article className="portal-card"><span className="portal-stat">{formatCurrencyTotals(reimbursedExpenses)}</span><p>Reimbursed / cash paid</p></article>
         <article className="portal-card"><span className="portal-stat">{formatCurrencyTotals(awaitingExpensePayment)}</span><p>Awaiting reimbursement</p></article>
       </div>
-      {expenses.length === 0 ? <p className="portal-muted">No approved expenses recorded.</p> : <div className="matrix-scroll"><table className="matrix matrix--people">
+      <div className="matrix-scroll"><table className="matrix matrix--people">
         <thead><tr><th scope="col">Date</th><th scope="col">Expense</th><th scope="col">Claimed by</th><th scope="col">Project</th><th scope="col">Status</th><th scope="col">Amount</th></tr></thead>
         <tbody>{expenses.map((expense) => <tr key={expense.id}>
           <td>{date(expense.spentOn)}</td>
@@ -355,13 +501,13 @@ export default async function RevenuePage() {
           <td>{expense.user.name}</td><td>{expense.project?.name ?? "Company-wide"}</td>
           <td><StatusChip status={expense.status} /></td><td>{formatMoney(expense.amount, expense.currency)}</td>
         </tr>)}</tbody>
-      </table></div>}
-    </section>
+      </table></div>
+    </section>}
 
-    <section className="portal-section">
+    {c2cInvoices.length > 0 && <section className="portal-section">
       <h2 className="portal-section-title">C2C reconciliation</h2>
       <p className="portal-note">Only the Qonic claim is counted as company revenue. Vendor and Global Candidate commissions are recorded for reconciliation, but remain vendor-held money.</p>
-      {c2cInvoices.length === 0 ? <p className="portal-muted">No C2C commercial invoice sets have been raised.</p> : <div className="matrix-scroll"><table className="matrix matrix--people">
+      <div className="matrix-scroll"><table className="matrix matrix--people">
         <thead><tr><th scope="col">Invoice / Client</th><th scope="col">Gross client amount</th><th scope="col">Qonic claim</th><th scope="col">Vendor commission</th><th scope="col">Global Candidate commission</th><th scope="col">Status</th></tr></thead>
         <tbody>{c2cInvoices.map((invoice) => <tr key={invoice.id}>
           <th scope="row"><strong>{invoice.number}</strong><span>{invoice.client.name}</span></th>
@@ -371,21 +517,21 @@ export default async function RevenuePage() {
           <td>{formatMoney(invoice.globalCandidateCommissionAmount, invoice.currency)}</td>
           <td><StatusChip status={invoice.status} /></td>
         </tr>)}</tbody>
-      </table></div>}
-    </section>
+      </table></div>
+    </section>}
 
-    <section className="portal-section">
+    {placements.length > 0 && <section className="portal-section">
       <h2 className="portal-section-title">Placement fee pipeline</h2>
       <p className="portal-note">Placement fees are earned-fee records. They are shown separately until invoiced and paid, so they are not mixed into client cash received above.</p>
       <div className="portal-grid"><article className="portal-card"><span className="portal-stat">{formatCurrencyTotals(placementFees)}</span><p>Active placement fees</p></article><article className="portal-card"><span className="portal-stat">{placements.length}</span><p>Active placements</p></article></div>
-      {placements.length === 0 ? <p className="portal-muted">No active placements recorded.</p> : <div className="matrix-scroll"><table className="matrix matrix--people">
+      <div className="matrix-scroll"><table className="matrix matrix--people">
         <thead><tr><th scope="col">Candidate</th><th scope="col">Client</th><th scope="col">Start</th><th scope="col">Fee</th><th scope="col">Recruiter</th></tr></thead>
         <tbody>{placements.map((placement) => <tr key={placement.id}>
           <th scope="row"><strong>{placement.application.candidate.name}</strong><span>{placement.application.job.title}</span></th>
           <td>{placement.application.job.client.name}</td><td>{date(placement.startDate)}</td>
           <td>{formatMoney(placement.feeAmount, placement.currency)}<span>{placement.feePercent}%</span></td><td>{placement.recruiter?.name ?? "—"}</td>
         </tr>)}</tbody>
-      </table></div>}
-    </section>
+      </table></div>
+    </section>}
   </div>;
 }

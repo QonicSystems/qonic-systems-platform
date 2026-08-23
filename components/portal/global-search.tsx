@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 
 type Hit = { kind: string; label: string; sub: string; href: string };
@@ -16,13 +16,25 @@ export function GlobalSearch() {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const clearSearch = useCallback(() => {
+    setQuery("");
+    setHits([]);
+    setSelectedIndex(0);
+  }, []);
+
+  const openSearch = useCallback(() => {
+    clearSearch();
+    setOpen(true);
+  }, [clearSearch]);
+
+  const closeSearch = useCallback(() => {
+    setOpen(false);
+    clearSearch();
+  }, [clearSearch]);
+
   useEffect(() => {
-    if (!open) {
-      setQuery("");
-      setHits([]);
-      setSelectedIndex(0);
-      return;
-    }
+    if (!open) return;
+
     const timer = setTimeout(() => {
       inputRef.current?.focus();
     }, 50);
@@ -60,16 +72,17 @@ export function GlobalSearch() {
     const onKeyDown = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
-        setOpen((prev) => !prev);
+        if (open) closeSearch();
+        else openSearch();
       }
       if (event.key === "Escape" && open) {
         event.preventDefault();
-        setOpen(false);
+        closeSearch();
       }
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [open]);
+  }, [closeSearch, open, openSearch]);
 
   const handleKeyDown = (event: React.KeyboardEvent) => {
     if (event.key === "ArrowDown") {
@@ -81,7 +94,7 @@ export function GlobalSearch() {
     } else if (event.key === "Enter" && hits[selectedIndex]) {
       event.preventDefault();
       window.location.href = hits[selectedIndex].href;
-      setOpen(false);
+      closeSearch();
     }
   };
 
@@ -91,7 +104,7 @@ export function GlobalSearch() {
       <button
         type="button"
         className="global-search-trigger"
-        onClick={() => setOpen(true)}
+        onClick={openSearch}
         aria-label="Search platform (Cmd+K)"
         title="Search platform (⌘K)"
       >
@@ -116,7 +129,7 @@ export function GlobalSearch() {
       {open && (
         <div
           className="global-search-backdrop"
-          onClick={() => setOpen(false)}
+          onClick={closeSearch}
           role="dialog"
           aria-modal="true"
           aria-label="Platform search palette"
@@ -150,7 +163,7 @@ export function GlobalSearch() {
                 <button
                   type="button"
                   className="text-xs text-white/40 hover:text-white/80 p-1"
-                  onClick={() => setQuery("")}
+                  onClick={clearSearch}
                   aria-label="Clear query"
                 >
                   ✕
@@ -159,7 +172,7 @@ export function GlobalSearch() {
               <button
                 type="button"
                 className="global-search-esc-badge"
-                onClick={() => setOpen(false)}
+                onClick={closeSearch}
                 aria-label="Close search"
               >
                 ESC
@@ -174,7 +187,7 @@ export function GlobalSearch() {
                     key={`${hit.kind}-${hit.href}-${hit.label}-${index}`}
                     href={hit.href}
                     className={`global-search-modal-hit ${index === selectedIndex ? "is-selected" : ""}`}
-                    onClick={() => setOpen(false)}
+                    onClick={closeSearch}
                     onMouseEnter={() => setSelectedIndex(index)}
                   >
                     <span className="global-search-modal-kind">{hit.kind}</span>

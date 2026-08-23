@@ -51,6 +51,7 @@ export function InvoiceManager({ invoices, clients, projects, canManage, canReco
   const [crediting, setCrediting] = useState<Row | null>(null);
   const [credit, setCredit] = useState({ amount: "", reason: "" });
   const [detailId, setDetailId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<Row | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ tone: "success" | "error"; text: string } | null>(null);
 
@@ -116,17 +117,14 @@ export function InvoiceManager({ invoices, clients, projects, canManage, canReco
                 <button type="button" className="row-action" onClick={() => setDetailId(invoice.id)}>Open</button>
                 <a className="row-action" href={`/api/invoices/${invoice.id}/pdf`} target="_blank" rel="noreferrer noopener">PDF</a>
                 {canManage && invoice.status === "DRAFT" && <button type="button" className="row-action" disabled={busy} onClick={() => call(`/api/invoices/${invoice.id}`, { action: "send" })}>Issue</button>}
+                {canManage && ["SENT", "PART_PAID", "OVERDUE"].includes(invoice.status) && <button type="button" className="row-action" disabled={busy} onClick={() => call(`/api/invoices/${invoice.id}`, { action: "reissue" })}>Reissue</button>}
                 {canManage && !["PAID", "VOID"].includes(invoice.status) && <button type="button" className="row-action row-action--danger" disabled={busy} onClick={() => call(`/api/invoices/${invoice.id}`, { action: "void" })}>Void</button>}
                 {canManage && ["DRAFT", "VOID"].includes(invoice.status) && (
                   <button
                     type="button"
                     className="row-action row-action--danger"
                     disabled={busy}
-                    onClick={() => {
-                      if (window.confirm(`Permanently delete ${invoice.number}? This cannot be undone.`)) {
-                        call(`/api/invoices/${invoice.id}`, {}, "DELETE");
-                      }
-                    }}
+                    onClick={() => setDeleting(invoice)}
                   >
                     Delete
                   </button>
@@ -200,6 +198,7 @@ export function InvoiceManager({ invoices, clients, projects, canManage, canReco
                   </div>
                   <p className="timeline__meta">{n.issuedOn} · {n.issuedBy}</p>
                   <p className="timeline__note">{n.reason}</p>
+                  <a className="row-action" href={`/api/credit-notes/${n.id}/pdf`} target="_blank" rel="noreferrer noopener">Credit note PDF</a>
                 </li>)}
               </ul>}
         </section>
@@ -211,6 +210,19 @@ export function InvoiceManager({ invoices, clients, projects, canManage, canReco
 
         <div className="dialog-actions">
           <button type="button" className="button button-outline" onClick={() => setDetailId(null)}>Close</button>
+        </div>
+      </div>
+    </div>}
+
+    {deleting && <div className="dialog-backdrop" role="dialog" aria-modal="true" aria-labelledby="delete-invoice-title">
+      <div className="dialog">
+        <h3 id="delete-invoice-title" className="dialog-title">Permanently delete invoice?</h3>
+        <p className="portal-note"><strong>{deleting.number}</strong> will be permanently deleted. This cannot be undone.</p>
+        <div className="dialog-actions">
+          <button type="button" className="button button-outline" disabled={busy} onClick={() => setDeleting(null)}>Cancel</button>
+          <button type="button" className="button button-danger" disabled={busy} onClick={async () => {
+            if (await call(`/api/invoices/${deleting.id}`, {}, "DELETE")) setDeleting(null);
+          }}>{busy ? "Deleting…" : "Delete permanently"}</button>
         </div>
       </div>
     </div>}

@@ -9,10 +9,11 @@ import { INVITE_TTL_MS, createResetToken, hashResetToken } from "@/lib/auth/rese
 import { emailPattern } from "@/lib/contact";
 import { db } from "@/lib/db";
 import { isUniqueEmailViolation } from "@/lib/db-errors";
+import { parseCompensationInput } from "@/lib/finance/compensation";
 
 export const runtime = "nodejs";
 
-type CreateErrors = Partial<Record<"name" | "email" | "phone" | "jobTitle" | "roleId", string>>;
+type CreateErrors = Partial<Record<"name" | "email" | "phone" | "jobTitle" | "roleId" | "monthlyCompensation" | "currency" | "effectiveFrom", string>>;
 
 /**
  * Create a colleague's account. Requires user.manage, plus the authority to
@@ -43,6 +44,7 @@ export async function POST(request: Request) {
     roleId: String(input.roleId ?? "").trim(),
   };
   const techStack = String(input.techStack ?? "").trim().slice(0, 500);
+  const wantsCompensation = String(input.monthlyCompensation ?? "").trim().length > 0;
 
   const errors: CreateErrors = {};
   if (data.name.length < 2) errors.name = "Please enter the person's name.";
@@ -76,6 +78,21 @@ export async function POST(request: Request) {
     }, { status: 422 });
   }
 
+  // Salary can be decided at People onboarding, but only by the two founder
+  // roles. The standalone compensation route applies the same restriction.
+  const founderFinance = context.role.isSuperAdmin || context.role.key === "co_founder";
+  let compensation: ReturnType<typeof parseCompensationInput>["data"];
+  if (wantsCompensation) {
+    if (!founderFinance || !context.permissions.has("compensation.manage")) {
+      return NextResponse.json({ message: "Only the CEO or Co-Founder may set compensation." }, { status: 403 });
+    }
+    const parsed = parseCompensationInput(input);
+    if (!parsed.data) {
+      return NextResponse.json({ message: "Please correct the highlighted fields.", errors: parsed.errors }, { status: 422 });
+    }
+    compensation = parsed.data;
+  }
+
   // A random 32-byte password is generated so the account cannot be logged into
   // until the invite is accepted — no hardcoded "password123".
   const passwordHash = await hashPassword(randomBytes(32).toString("hex"));
@@ -97,12 +114,23 @@ export async function POST(request: Request) {
           passwordHash,
           mustChangePassword: true,
           resetTokens: { create: { tokenHash, expiresAt } },
+          ...(compensation ? {
+            compensationProfiles: {
+              create: {
+                monthlyAmount: compensation.monthlyAmount,
+                currency: compensation.currency,
+                effectiveFrom: compensation.effectiveFrom,
+                note: compensation.note || null,
+                setById: context.user.id,
+              },
+            },
+          } : {}),
         },
         select: { id: true, name: true, email: true },
       });
       await recordAudit({
         actorId: context.user.id, action: "user.create", entityType: "User", entityId: user.id,
-        after: { name: data.name, email: data.email, role: role.key, techStack }, ipAddress: clientIp(request),
+        after: { name: data.name, email: data.email, role: role.key, techStack, compensation: compensation ? { monthlyAmount: compensation.monthlyAmount, currency: compensation.currency, effectiveFrom: compensation.effectiveFrom.toISOString().slice(0, 10) } : null }, ipAddress: clientIp(request),
       }, tx);
       return user;
     });
@@ -119,8 +147,8 @@ export async function POST(request: Request) {
 
   return NextResponse.json({
     message: delivered
-      ? `${created.name} has been added — an invite is on its way to ${created.email}.`
-      : `${created.name} has been added. Email is not configured here, so send them this link yourself.`,
+      ? `${created.name} has been added${compensation ? " with their salary schedule" : ""} — an invite is on its way to ${created.email}.`
+      : `${created.name} has been added${compensation ? " with their salary schedule" : ""}. Email is not configured here, so send them this link yourself.`,
     // Only returned when we could not deliver it; it is a bearer token.
     inviteUrl: delivered ? undefined : url,
   });

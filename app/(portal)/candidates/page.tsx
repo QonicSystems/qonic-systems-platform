@@ -22,6 +22,11 @@ export default async function CandidatesPage() {
         linkedUser: { select: { id: true, name: true } },
         addedBy: { select: { name: true } },
         marketingProfiles: { where: { isActive: true }, select: { technology: true } },
+        globalAgreements: {
+          orderBy: { updatedAt: "desc" },
+          take: 1,
+          select: { id: true, reference: true, status: true, updatedAt: true },
+        },
       },
       // Active first, then most recently added — archived records stay reachable
       // through the filter without crowding the top of the pool.
@@ -114,10 +119,15 @@ export default async function CandidatesPage() {
             linkedUserName: candidate.linkedUser?.name ?? null,
             contractStatus: candidate.linkedUser ? contractByUserId.get(candidate.linkedUser.id)?.status ?? null : null,
             contractId: candidate.linkedUser ? contractByUserId.get(candidate.linkedUser.id)?.id ?? null : null,
+            globalAgreementId: candidate.globalAgreements[0]?.id ?? null,
+            globalAgreementReference: candidate.globalAgreements[0]?.reference ?? null,
+            globalAgreementStatus: candidate.globalAgreements[0]?.status ?? null,
           };
         })}
         canManage={can(context, "candidate.manage")}
         canDraftContract={can(context, "contract.generate")}
+        canIssueGlobalAgreement={can(context, "contract.release")}
+        canRevokeGlobalAgreement={can(context, "contract.revoke")}
         // Creating the staff account is account administration, not recruitment
         // — the endpoint it calls guards on the same permission.
         canCreateAccount={can(context, "user.manage")}
