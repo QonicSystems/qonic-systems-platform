@@ -1,6 +1,7 @@
 import { Document, Link, Page, StyleSheet, Text, View, renderToBuffer } from "@react-pdf/renderer";
 import { PdfLockup, PdfParentMark } from "@/lib/pdf-brand";
 import { formatMoney, formatQuantity } from "@/lib/money";
+import { formatSettlementRate, settlementAmountAtLockedRate } from "@/lib/finance/fx-settlement";
 
 export type InvoiceContext = {
   number: string;
@@ -8,6 +9,8 @@ export type InvoiceContext = {
   issueDate: Date;
   dueDate: Date;
   currency: string;
+  settlementCurrency?: string | null;
+  lockedSettlementRate?: number | null;
   clientName: string;
   clientAddress?: string | null;
   projectName?: string | null;
@@ -95,6 +98,7 @@ function DocumentFooter({ reference }: { reference: string }) {
 function InvoiceDocument({ context }: { context: InvoiceContext }) {
   const outstanding = Math.max(0, context.total - context.paidAmount);
   const payUrl = context.paymentUrl || `https://consulting.qonicsystems.com/invoices/${context.number}`;
+  const foreignSettlement = Boolean(context.settlementCurrency && context.settlementCurrency !== context.currency && context.lockedSettlementRate);
 
   return <Document title={`Invoice ${context.number}`} author="QONIC consulting">
     <Page size="A4" style={styles.page}>
@@ -137,6 +141,10 @@ function InvoiceDocument({ context }: { context: InvoiceContext }) {
           <Text style={styles.paymentText}>Bank: JPMorgan Chase / HDFC Global Commercial</Text>
           <Text style={styles.paymentText}>Beneficiary: Qonic Systems Inc.</Text>
           <Text style={styles.paymentText}>Reference: {context.number}</Text>
+          {foreignSettlement ? <>
+            <Text style={styles.paymentText}>Settlement: {formatMoney(settlementAmountAtLockedRate(outstanding, context.lockedSettlementRate!), context.settlementCurrency!)} in {context.settlementCurrency}</Text>
+            <Text style={styles.paymentText}>Locked rate: {formatSettlementRate(context.lockedSettlementRate!, context.settlementCurrency!, context.currency)}</Text>
+          </> : null}
           <Link src={payUrl} style={styles.payLink}>Pay this invoice online or view payment options</Link>
         </View> : <View style={{ width: "51%" }} />}
         <View style={styles.totals}>

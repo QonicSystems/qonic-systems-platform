@@ -5,6 +5,7 @@ import { guardRoute } from "@/lib/auth/guard";
 import { formatMoney, hoursToCentihours, invoiceTotals, lineAmount, toMinor } from "@/lib/money";
 import { notifyLeadership, sendEmail } from "@/lib/notify";
 import { c2cCommissionBreakdown } from "@/lib/finance/c2c";
+import { parseSettlementRate } from "@/lib/finance/fx-settlement";
 import { db } from "@/lib/db";
 import { nextReferenceFrom, referenceWhere } from "@/lib/reference";
 
@@ -61,11 +62,21 @@ export async function POST(request: Request) {
     where: { id: clientId },
     include: { vendor: true, globalCandidate: true },
   }) : null;
+  const invoiceCurrency = (client?.rateCurrency || String(input.currency ?? "INR")).trim().toUpperCase() || "INR";
+  const requestedSettlementCurrency = String(input.settlementCurrency ?? invoiceCurrency).trim().toUpperCase() || invoiceCurrency;
+  const isForeignSettlement = requestedSettlementCurrency !== invoiceCurrency;
+  const lockedSettlementRate = isForeignSettlement ? parseSettlementRate(input.lockedSettlementRate) : null;
   if (clientId && !client) errors.clientId = "That client no longer exists.";
   const isC2C = client?.employmentType === "C2C";
   if (isC2C && taxPercent !== 0) errors.taxPercent = "C2C invoices use the commission reconciliation amount and cannot add tax.";
   if (isC2C && (!client?.actualClientRate || !client.globalCandidate || !client.vendor || client.globalCandidateCommissionPercent === null || client.vendorCommissionPercent === null)) {
     errors.clientId = "This C2C client needs an actual rate, vendor, Global Candidate, and both commission percentages before invoicing.";
+  }
+  if (isForeignSettlement && requestedSettlementCurrency !== "INR") {
+    errors.settlementCurrency = "Foreign-currency invoices can currently be settled only to Qonic's INR bank account.";
+  }
+  if (isForeignSettlement && lockedSettlementRate === null) {
+    errors.lockedSettlementRate = `Enter the locked INR rate for one ${invoiceCurrency}.`;
   }
   if (Object.keys(errors).length) return NextResponse.json({ message: "Please correct the highlighted fields.", errors }, { status: 422 });
 
@@ -150,7 +161,9 @@ export async function POST(request: Request) {
       clientId, projectId,
       issueDate: new Date(`${issueDate}T00:00:00.000Z`),
       dueDate: new Date(`${dueDate}T00:00:00.000Z`),
-      currency: client?.rateCurrency || String(input.currency ?? "INR"),
+      currency: invoiceCurrency,
+      settlementCurrency: isForeignSettlement ? requestedSettlementCurrency : null,
+      lockedSettlementRate: isForeignSettlement ? lockedSettlementRate : null,
       notes: String(input.notes ?? "").trim() || null,
     };
     const commercialGroupId = c2c ? randomUUID() : null;

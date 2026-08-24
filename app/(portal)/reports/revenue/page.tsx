@@ -2,6 +2,8 @@ import { StatusChip } from "@/components/status-chip";
 import { ExpandableDeliveryFinance, type DeliveryFinanceAssignment } from "@/components/finance/expandable-delivery-finance";
 import { EarningsEarlyReleaseManager, type EarningEarlyReleaseRow } from "@/components/finance/earnings-early-release-manager";
 import { EarningsInvoiceManager, type EarningsInvoiceFinanceRow } from "@/components/finance/earnings-invoice-manager";
+import { CompanyFinanceWorkspace, type FinanceCashFlowPoint, type FinanceMetric } from "@/components/finance/company-finance-workspace";
+import { FinanceLedger, type FinanceLedgerRow } from "@/components/finance/finance-ledger";
 import { PrestartBackfillFlags, type PrestartBackfillFlag } from "@/components/finance/prestart-backfill-flags";
 import { can, requirePermission } from "@/lib/auth/guard";
 import { canAdminister } from "@/lib/auth/authority";
@@ -12,6 +14,7 @@ import { ageingBucket, formatMoney, hoursToCentihours, lineAmount, type AgeingBu
 import { currencyKeys, formatCurrencyTotals, subtractCurrencyTotals, totalsByCurrency, type CurrencyTotals } from "@/lib/finance/summary";
 import { monthRange, monthlySalaryValues } from "@/lib/finance/compensation";
 import { remainingEarningAmount } from "@/lib/finance/earnings";
+import { formatSettlementRate, settlementAmountAtLockedRate } from "@/lib/finance/fx-settlement";
 import { db } from "@/lib/db";
 
 export const metadata = { title: "Company Finance" };
@@ -27,15 +30,44 @@ const assignmentKey = (userId: string, projectId: string) => `${userId}:${projec
 const userWeekKey = (userId: string, weekStart: Date) => `${userId}:${isoDay(weekStart)}`;
 const formatHours = (minutes: number) => `${(minutes / 60).toLocaleString("en-IN", { maximumFractionDigits: 2 })} h`;
 
-export default async function RevenuePage() {
+type FinanceRange = "30d" | "90d" | "ytd" | "all";
+
+function selectedRange(value: string | undefined): FinanceRange {
+  return value === "30d" || value === "90d" || value === "ytd" || value === "all" ? value : "all";
+}
+
+function rangeStart(range: FinanceRange, now: Date): Date | null {
+  if (range === "all") return null;
+  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  if (range === "30d") start.setUTCDate(start.getUTCDate() - 29);
+  if (range === "90d") start.setUTCDate(start.getUTCDate() - 89);
+  if (range === "ytd") start.setUTCMonth(0, 1);
+  return start;
+}
+
+const inRange = (value: Date, start: Date | null) => !start || value >= start;
+const validCurrency = (value: string | undefined) => value && /^[A-Z]{3}$/.test(value) ? value : null;
+
+export default async function RevenuePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ range?: string; currency?: string }>;
+}) {
   const context = await requirePermission("report.finance");
   const isExecutive = context.role.key === ROLE.CEO || context.role.key === ROLE.CO_FOUNDER;
+  const filters = await searchParams;
+  const range = selectedRange(filters.range);
+  const currency = validCurrency(filters.currency);
+  const rangeFrom = rangeStart(range, new Date());
   const currentEarningMonth = new Date().toISOString().slice(0, 7);
   const currentEarningRange = monthRange(currentEarningMonth)!;
 
   const [invoices, expenses, payouts, placements, prestartAssignments, earningInvoices, currentEarningPeople, earlyEarningReleases] = await Promise.all([
     db.invoice.findMany({
-      include: { client: { select: { name: true } }, project: { select: { name: true } }, creditNotes: { select: { amount: true } } },
+      include: {
+        client: { select: { name: true } }, project: { select: { id: true, name: true } }, creditNotes: { select: { amount: true } },
+        payments: { select: { id: true, amount: true, settlementAmount: true, settlementCurrency: true, realizedFxGainLoss: true, paidOn: true, method: true, reference: true } },
+      },
       orderBy: { issueDate: "desc" },
     }),
     db.expense.findMany({
@@ -131,7 +163,21 @@ export default async function RevenuePage() {
     !["VOID", "DRAFT"].includes(invoice.status) && ["STANDARD", "QONIC_TO_VENDOR"].includes(invoice.commercialKind)
   );
   const billed = totalsByCurrency(revenueInvoices.map((invoice) => ({ currency: invoice.currency, amount: netInvoiceValue(invoice) })));
-  const received = totalsByCurrency(revenueInvoices.map((invoice) => ({ currency: invoice.currency, amount: Math.min(invoice.paidAmount, netInvoiceValue(invoice)) })));
+  // Cash is reported in the currency that actually reached Qonic's bank. The
+  // USD (or other foreign-currency) amount still reduces the receivable, but
+  // never pretends to be a USD cash receipt when the vendor paid INR.
+  const received = totalsByCurrency(revenueInvoices.flatMap((invoice) => {
+    if (invoice.payments.length > 0) return invoice.payments.map((payment) => ({
+      currency: payment.settlementCurrency ?? invoice.currency,
+      amount: payment.settlementAmount ?? payment.amount,
+    }));
+    return invoice.paidAmount > 0 ? [{ currency: invoice.currency, amount: Math.min(invoice.paidAmount, netInvoiceValue(invoice)) }] : [];
+  }));
+  // FX is a separate disclosure: it is already inside actual INR cash
+  // received, so it must never be added to that cash figure a second time.
+  const realizedFxGainLoss = totalsByCurrency(revenueInvoices.flatMap((invoice) => invoice.payments
+    .filter((payment) => payment.realizedFxGainLoss !== null)
+    .map((payment) => ({ currency: payment.settlementCurrency ?? invoice.currency, amount: payment.realizedFxGainLoss! }))));
   const outstanding = totalsByCurrency(revenueInvoices.map((invoice) => ({ currency: invoice.currency, amount: netOutstanding(invoice) })));
 
   const approvedExpenses = totalsByCurrency(expenses.map((expense) => ({ currency: expense.currency, amount: expense.amount })));
@@ -168,8 +214,13 @@ export default async function RevenuePage() {
   const financeCurrencies = currencyKeys(
     billed, received, outstanding, approvedExpenses, reimbursedExpenses,
     awaitingExpensePayment, actualPayoutTotal, companyRetainedTotal, developerPaid,
-    salaryPayable, salaryPaid, salaryOutstanding, cashAfterReleasedPayments, operatingMargin
+    salaryPayable, salaryPaid, salaryOutstanding, cashAfterReleasedPayments, operatingMargin, realizedFxGainLoss
   );
+  const visibleCurrencies = currency ? financeCurrencies.filter((item) => item === currency) : financeCurrencies;
+  const displayTotals = (totals: CurrencyTotals): CurrencyTotals => currency
+    ? { [currency]: amountAt(totals, currency) }
+    : totals;
+  const periodLabel = range === "all" ? "All-time balances" : range === "ytd" ? "Year-to-date activity" : `Last ${range.slice(0, -1)} days of activity`;
 
   const ageing = new Map<AgeingBucket, CurrencyTotals>(BUCKETS.map((bucket) => [bucket, {}]));
   for (const invoice of revenueInvoices) {
@@ -373,7 +424,223 @@ export default async function RevenuePage() {
     });
   });
 
-  return <div className="portal-page company-finance">
+  type CashEvent = {
+    id: string;
+    occurredAt: Date;
+    currency: string;
+    amount: number;
+    direction: "INFLOW" | "OUTFLOW";
+    category: string;
+    description: string;
+    counterparty: string;
+    status: string;
+  };
+  const cashEvents: CashEvent[] = [
+    ...revenueInvoices.flatMap((invoice) => {
+      const recorded = invoice.payments.map((payment) => ({
+        id: `payment:${payment.id}`,
+        occurredAt: payment.paidOn,
+        currency: payment.settlementCurrency ?? invoice.currency,
+        amount: payment.settlementAmount ?? payment.amount,
+        direction: "INFLOW" as const,
+        category: "Client payment",
+        description: `${invoice.number}${payment.settlementAmount !== null ? ` · ${formatMoney(payment.amount, invoice.currency)} applied` : ""}${payment.reference ? ` · ${payment.reference}` : ""}`,
+        counterparty: invoice.client.name,
+        status: `${payment.method}${payment.realizedFxGainLoss === null ? "" : ` · FX ${payment.realizedFxGainLoss >= 0 ? "gain" : "loss"} ${formatMoney(Math.abs(payment.realizedFxGainLoss), payment.settlementCurrency ?? invoice.currency)}`}`,
+      }));
+      // Earlier data may have an aggregate paid amount without individual
+      // Payment records. Keep it visible rather than making historic cash
+      // disappear from the command centre.
+      return recorded.length > 0 || invoice.paidAmount <= 0 ? recorded : [{
+        id: `legacy-payment:${invoice.id}`,
+        occurredAt: invoice.sentAt ?? invoice.issueDate,
+        currency: invoice.currency,
+        amount: Math.min(invoice.paidAmount, netInvoiceValue(invoice)),
+        direction: "INFLOW" as const,
+        category: "Client payment",
+        description: `${invoice.number} · legacy payment total`,
+        counterparty: invoice.client.name,
+        status: "Historic record",
+      }];
+    }),
+    ...activeEarningInvoices.filter((invoice) => invoice.status === "PAID" && invoice.paidAt).map((invoice) => ({
+      id: `earning-payment:${invoice.id}`,
+      occurredAt: invoice.paidAt!,
+      currency: invoice.currency,
+      amount: invoice.amount,
+      direction: "OUTFLOW" as const,
+      category: invoice.source === "DELIVERY_PAYOUT" ? "Developer payment" : "People salary payment",
+      description: `${invoice.reference}${invoice.paymentReference ? ` · ${invoice.paymentReference}` : ""}`,
+      counterparty: invoice.user.name,
+      status: "Paid",
+    })),
+    ...expenses.filter((expense) => expense.status === "REIMBURSED").map((expense) => ({
+      id: `expense-payment:${expense.id}`,
+      occurredAt: expense.reimbursedAt ?? expense.spentOn,
+      currency: expense.currency,
+      amount: expense.amount,
+      direction: "OUTFLOW" as const,
+      category: "Expense reimbursement",
+      description: `${expense.category} · ${expense.description}`,
+      counterparty: expense.user.name,
+      status: "Reimbursed",
+    })),
+  ];
+  const cashFlowCurrency = currency ?? [...new Set(cashEvents.map((event) => event.currency))].sort()[0] ?? financeCurrencies[0] ?? null;
+  const selectedCashEvents = cashEvents.filter((event) => event.currency === cashFlowCurrency && inRange(event.occurredAt, rangeFrom));
+  const cashFlowByMonth = new Map<string, { date: Date; inflow: number; outflow: number }>();
+  for (const event of selectedCashEvents) {
+    const key = `${event.occurredAt.getUTCFullYear()}-${String(event.occurredAt.getUTCMonth() + 1).padStart(2, "0")}`;
+    const group = cashFlowByMonth.get(key) ?? { date: new Date(Date.UTC(event.occurredAt.getUTCFullYear(), event.occurredAt.getUTCMonth(), 1)), inflow: 0, outflow: 0 };
+    if (event.direction === "INFLOW") group.inflow += event.amount;
+    else group.outflow += event.amount;
+    cashFlowByMonth.set(key, group);
+  }
+  const cashFlow: FinanceCashFlowPoint[] = [...cashFlowByMonth.values()]
+    .sort((left, right) => left.date.getTime() - right.date.getTime())
+    .slice(-6)
+    .map((group) => ({
+      label: group.date.toLocaleDateString("en-GB", { month: "short", year: "2-digit", timeZone: "UTC" }),
+      inflow: group.inflow,
+      outflow: group.outflow,
+      net: group.inflow - group.outflow,
+    }));
+  const ledgerRows: FinanceLedgerRow[] = [
+    ...cashEvents.map((event) => ({
+      id: event.id,
+      occurredOn: date(event.occurredAt),
+      searchDate: event.occurredAt.toISOString(),
+      direction: event.direction,
+      category: event.category,
+      description: event.description,
+      counterparty: event.counterparty,
+      currency: event.currency,
+      amount: formatMoney(event.amount, event.currency),
+      status: event.status,
+      sortDate: event.occurredAt,
+    })),
+    ...revenueInvoices.map((invoice) => ({
+      id: `invoice:${invoice.id}`,
+      occurredOn: date(invoice.issueDate),
+      searchDate: invoice.issueDate.toISOString(),
+      direction: "NON_CASH" as const,
+      category: "Client invoice issued",
+      description: `${invoice.number}${invoice.project ? ` · ${invoice.project.name}` : ""}`,
+      counterparty: invoice.client.name,
+      currency: invoice.currency,
+      amount: formatMoney(netInvoiceValue(invoice), invoice.currency),
+      status: invoice.status,
+      sortDate: invoice.issueDate,
+    })),
+    ...actualPayouts.map((payout) => ({
+      id: `delivery-accrual:${payout.id}`,
+      occurredOn: date(payout.workDate),
+      searchDate: payout.workDate.toISOString(),
+      direction: "NON_CASH" as const,
+      category: "Developer payout accrued",
+      description: `${payout.project.name} · approved delivery`,
+      counterparty: payout.user.name,
+      currency: payout.currency,
+      amount: formatMoney(payout.amount, payout.currency),
+      status: "Accrued",
+      sortDate: payout.workDate,
+    })),
+    ...activeEarningInvoices.filter((invoice) => invoice.status !== "PAID").map((invoice) => ({
+      id: `earning-payable:${invoice.id}`,
+      occurredOn: date(invoice.submittedAt),
+      searchDate: invoice.submittedAt.toISOString(),
+      direction: "NON_CASH" as const,
+      category: invoice.source === "DELIVERY_PAYOUT" ? "Developer invoice payable" : "Salary invoice payable",
+      description: invoice.reference,
+      counterparty: invoice.user.name,
+      currency: invoice.currency,
+      amount: formatMoney(invoice.amount, invoice.currency),
+      status: invoice.status,
+      sortDate: invoice.submittedAt,
+    })),
+  ]
+    .filter((row) => (!currency || row.currency === currency) && inRange(row.sortDate, rangeFrom))
+    .sort((left, right) => right.sortDate.getTime() - left.sortDate.getTime())
+    .map(({ sortDate: _sortDate, ...row }) => row);
+
+  type ProjectEconomics = {
+    id: string;
+    project: string;
+    client: string;
+    currency: string;
+    billed: number;
+    invoiceSettled: number;
+    developerCost: number;
+    retained: number;
+  };
+  const projectEconomics = new Map<string, ProjectEconomics>();
+  const getProjectEconomics = (projectId: string, project: string, client: string, itemCurrency: string) => {
+    const key = `${projectId}:${itemCurrency}`;
+    const current = projectEconomics.get(key) ?? { id: key, project, client, currency: itemCurrency, billed: 0, invoiceSettled: 0, developerCost: 0, retained: 0 };
+    projectEconomics.set(key, current);
+    return current;
+  };
+  for (const invoice of revenueInvoices) {
+    if (!invoice.project) continue;
+    const economics = getProjectEconomics(invoice.project.id, invoice.project.name, invoice.client.name, invoice.currency);
+    economics.billed += netInvoiceValue(invoice);
+    economics.invoiceSettled += Math.min(invoice.paidAmount, netInvoiceValue(invoice));
+  }
+  for (const payout of payouts) {
+    const economics = getProjectEconomics(payout.project.id, payout.project.name, payout.project.client.name, payout.currency);
+    if (payout.category === "ACTUAL_PAYOUT") economics.developerCost += payout.amount;
+    else economics.retained += payout.amount;
+  }
+  const projectEconomicsRows = [...projectEconomics.values()]
+    .filter((row) => !currency || row.currency === currency)
+    .sort((left, right) => right.billed - left.billed || left.project.localeCompare(right.project));
+  const visibleOpenInvoices = openInvoices.filter((invoice) => !currency || invoice.currency === currency);
+  const visibleExpenses = expenses.filter((expense) => !currency || expense.currency === currency);
+  const visibleC2cInvoices = c2cInvoices.filter((invoice) => !currency || invoice.currency === currency);
+  const visiblePlacements = placements.filter((placement) => !currency || placement.currency === currency);
+  const foreignSettlementRows = revenueInvoices.flatMap((invoice) => {
+    if (!invoice.settlementCurrency || invoice.settlementCurrency === invoice.currency || invoice.lockedSettlementRate === null) return [];
+    const rate = Number(invoice.lockedSettlementRate);
+    if (!Number.isFinite(rate) || rate <= 0) return [];
+    const payments = invoice.payments.filter((payment) => payment.settlementAmount !== null && payment.settlementCurrency === invoice.settlementCurrency);
+    const applied = payments.reduce((sum, payment) => sum + payment.amount, 0);
+    const actualReceived = payments.reduce((sum, payment) => sum + payment.settlementAmount!, 0);
+    const realisedFx = payments.reduce((sum, payment) => sum + (payment.realizedFxGainLoss ?? 0), 0);
+    return [{
+      id: invoice.id,
+      number: invoice.number,
+      client: invoice.client.name,
+      invoiceCurrency: invoice.currency,
+      invoiceValue: formatMoney(netInvoiceValue(invoice), invoice.currency),
+      invoiceOutstanding: formatMoney(netOutstanding(invoice), invoice.currency),
+      settlementCurrency: invoice.settlementCurrency,
+      lockedRate: formatSettlementRate(rate, invoice.settlementCurrency, invoice.currency),
+      expectedAtIssueRate: formatMoney(settlementAmountAtLockedRate(netInvoiceValue(invoice), rate), invoice.settlementCurrency),
+      received: actualReceived > 0 ? formatMoney(actualReceived, invoice.settlementCurrency) : "—",
+      applied: applied > 0 ? formatMoney(applied, invoice.currency) : "—",
+      realisedFx: actualReceived > 0 ? `${realisedFx >= 0 ? "+" : "−"}${formatMoney(Math.abs(realisedFx), invoice.settlementCurrency)}` : "—",
+      status: invoice.status,
+    }];
+  }).filter((row) => !currency || currency === row.settlementCurrency || currency === row.invoiceCurrency);
+  const balanceTone = (totals: CurrencyTotals): FinanceMetric["tone"] => {
+    const values = Object.values(displayTotals(totals));
+    if (values.some((amount) => amount < 0)) return "negative";
+    return values.some((amount) => amount > 0) ? "positive" : "default";
+  };
+
+  const metrics: FinanceMetric[] = [
+    { label: "Net cash after payments", value: formatCurrencyTotals(displayTotals(cashAfterReleasedPayments)), detail: "All recorded client cash less released payments", tone: balanceTone(cashAfterReleasedPayments) },
+    { label: "Receivables", value: formatCurrencyTotals(displayTotals(outstanding)), detail: `${visibleOpenInvoices.length} client invoice${visibleOpenInvoices.length === 1 ? "" : "s"} still open`, tone: "warning" },
+    { label: "Net revenue before tax", value: formatCurrencyTotals(displayTotals(operatingMargin)), detail: "Accrual basis: billing less committed costs", tone: balanceTone(operatingMargin) },
+    { label: "Developer cost accrued", value: formatCurrencyTotals(displayTotals(actualPayoutTotal)), detail: `${actualPayouts.length} approved delivery day${actualPayouts.length === 1 ? "" : "s"}` },
+    { label: "People invoices due", value: formatCurrencyTotals(displayTotals(salaryOutstanding)), detail: "Submitted or approved salary claims", tone: "warning" },
+    { label: "Pre-start retained value", value: formatCurrencyTotals(displayTotals(companyRetainedTotal)), detail: "Disclosed separately; never extra revenue" },
+  ];
+
+  // This is an explicit operational rollback switch while the command centre
+  // rolls out. It is off in every normal environment; retaining it avoids
+  // losing access to a detailed audit view if an operator needs it urgently.
+  if (process.env.QONIC_LEGACY_FINANCE === "1") return <div className="portal-page company-finance">
     <header className="hero-panel">
       <span className="hero-eyebrow">Finance overview</span>
       <h1 className="hero-title">Company Finance</h1>
@@ -534,4 +801,101 @@ export default async function RevenuePage() {
       </table></div>
     </section>}
   </div>;
+
+  return <CompanyFinanceWorkspace
+    range={range}
+    currency={currency}
+    currencies={financeCurrencies}
+    metrics={metrics}
+    cashFlow={cashFlow}
+    cashFlowCurrency={cashFlowCurrency}
+    overview={<>
+      <section className="portal-section finance-workspace__summary">
+        <div className="finance-workspace__section-heading">
+          <div><span className="hero-eyebrow">Performance</span><h2>Net company revenue</h2></div>
+          <p>{periodLabel}. Revenue is shown on an accrual basis; cash is kept separately so developer payments are never deducted twice.</p>
+        </div>
+        {visibleCurrencies.length === 0 ? <p className="portal-muted">No finance activity has been recorded for this currency.</p> : <div className="matrix-scroll"><table className="matrix matrix--people">
+          <thead><tr><th scope="col">Currency</th><th scope="col">Net client billing</th><th scope="col">Delivery cost accrued</th><th scope="col">Salary invoices</th><th scope="col">Approved expenses</th><th scope="col">Net revenue before tax</th></tr></thead>
+          <tbody>{visibleCurrencies.map((item) => <tr key={item}>
+            <th scope="row">{item}</th><td>{formatMoney(amountAt(billed, item), item)}</td><td>−{formatMoney(amountAt(actualPayoutTotal, item), item)}</td><td>−{formatMoney(amountAt(salaryPayable, item), item)}</td><td>−{formatMoney(amountAt(approvedExpenses, item), item)}</td><td><strong>{formatMoney(amountAt(operatingMargin, item), item)}</strong></td>
+          </tr>)}</tbody>
+        </table></div>}
+        <p className="field-hint">Pre-start retained delivery value is disclosed in Projects. It is not a second invoice, cash receipt, or revenue line.</p>
+      </section>
+      <section className="portal-section">
+        <div className="finance-workspace__section-heading"><div><span className="hero-eyebrow">Attention</span><h2>Finance watchlist</h2></div><p>The items most likely to affect working capital or require action.</p></div>
+        <div className="finance-workspace__watchlist">
+          <article><span>Collection risk</span><strong>{formatCurrencyTotals(displayTotals(outstanding))}</strong><p>{visibleOpenInvoices.length} open client invoice{visibleOpenInvoices.length === 1 ? "" : "s"} across the selected currency view.</p></article>
+          <article><span>Payables awaiting release</span><strong>{formatCurrencyTotals(displayTotals(salaryOutstanding))}</strong><p>People invoices submitted or approved but not marked paid.</p></article>
+          <article><span>Missing pre-start time</span><strong>{isExecutive ? prestartBackfillFlags.length : "—"}</strong><p>{isExecutive ? "Executive-only delivery gaps that may need controlled reopening." : "Visible to CEO and Co-Founder only."}</p></article>
+        </div>
+      </section>
+    </>}
+    cash={<>
+      <section className="portal-section">
+        <div className="finance-workspace__section-heading"><div><span className="hero-eyebrow">Cash position</span><h2>Cash and commitments</h2></div><p>Actual cash reflects money received less money that has already left Qonic. It does not treat accrued delivery cost as a second cash payment.</p></div>
+        {visibleCurrencies.length === 0 ? <p className="portal-muted">No cash activity has been recorded for this currency.</p> : <div className="matrix-scroll"><table className="matrix matrix--people">
+          <thead><tr><th scope="col">Currency</th><th scope="col">Client cash received</th><th scope="col">Realised FX gain / loss*</th><th scope="col">Developer payments released</th><th scope="col">People salaries paid</th><th scope="col">Expenses reimbursed</th><th scope="col">Net cash after payments</th></tr></thead>
+          <tbody>{visibleCurrencies.map((item) => <tr key={item}><th scope="row">{item}</th><td>{formatMoney(amountAt(received, item), item)}</td><td>{amountAt(realizedFxGainLoss, item) < 0 ? "−" : amountAt(realizedFxGainLoss, item) > 0 ? "+" : ""}{formatMoney(Math.abs(amountAt(realizedFxGainLoss, item)), item)}</td><td>−{formatMoney(amountAt(developerPaid, item), item)}</td><td>−{formatMoney(amountAt(salaryPaid, item), item)}</td><td>−{formatMoney(amountAt(reimbursedExpenses, item), item)}</td><td><strong>{formatMoney(amountAt(cashAfterReleasedPayments, item), item)}</strong></td></tr>)}</tbody>
+        </table></div>}
+        <p className="field-hint">*Realised FX is already included in client cash received. It is shown separately for reconciliation and is never added to cash a second time.</p>
+      </section>
+      <section className="portal-section">
+        <div className="finance-workspace__section-heading"><div><span className="hero-eyebrow">Commitments</span><h2>Cash not released yet</h2></div><p>These are approved or invoiced obligations, not deductions from cash until a payment is recorded.</p></div>
+        <div className="finance-workspace__watchlist">
+          <article><span>Developer payout accrued</span><strong>{formatCurrencyTotals(displayTotals(actualPayoutTotal))}</strong><p>Approved delivery from each Developer&apos;s Actual Start Date.</p></article>
+          <article><span>Salary invoices awaiting payment</span><strong>{formatCurrencyTotals(displayTotals(salaryOutstanding))}</strong><p>Only invoices raised by People appear here.</p></article>
+          <article><span>Expense reimbursement pending</span><strong>{formatCurrencyTotals(displayTotals(awaitingExpensePayment))}</strong><p>Approved expense claims still awaiting reimbursement.</p></article>
+        </div>
+      </section>
+    </>}
+    collections={<>
+      <section className="portal-section">
+        <div className="finance-workspace__section-heading"><div><span className="hero-eyebrow">Accounts receivable</span><h2>Collection queue</h2></div><p>Issued is net of credit notes. Outstanding remains visible until the invoice is settled or voided.</p></div>
+        {visibleOpenInvoices.length === 0 ? <p className="portal-muted">No client receivables are outstanding.</p> : <div className="matrix-scroll"><table className="matrix matrix--people">
+          <thead><tr><th scope="col">Invoice</th><th scope="col">Client / Project</th><th scope="col">Due / age</th><th scope="col">Status</th><th scope="col">Net issued</th><th scope="col">Received</th><th scope="col">Outstanding</th></tr></thead>
+          <tbody>{visibleOpenInvoices.map((invoice) => <tr key={invoice.id}><th scope="row"><strong>{invoice.number}</strong><span>{invoice.commercialKind === "QONIC_TO_VENDOR" ? "C2C Qonic claim" : "Client invoice"}</span></th><td>{invoice.client.name}<span>{invoice.project?.name ?? "No project"}</span></td><td>{date(invoice.dueDate)}<span>{BUCKET_LABELS[ageingBucket(invoice.dueDate)]}</span></td><td><StatusChip status={invoice.status} /></td><td>{formatMoney(netInvoiceValue(invoice), invoice.currency)}</td><td>{formatMoney(Math.min(invoice.paidAmount, netInvoiceValue(invoice)), invoice.currency)}</td><td><strong>{formatMoney(netOutstanding(invoice), invoice.currency)}</strong></td></tr>)}</tbody>
+        </table></div>}
+        <div className="matrix-scroll"><table className="matrix matrix--people finance-workspace__ageing"><thead><tr><th scope="col">Receivable age</th><th scope="col">Outstanding amount</th></tr></thead><tbody>{BUCKETS.map((bucket) => <tr key={bucket}><th scope="row">{BUCKET_LABELS[bucket]}</th><td>{formatCurrencyTotals(displayTotals(ageing.get(bucket) ?? {}))}</td></tr>)}</tbody></table></div>
+      </section>
+      {visibleC2cInvoices.length > 0 && <section className="portal-section">
+        <div className="finance-workspace__section-heading"><div><span className="hero-eyebrow">C2C</span><h2>Commercial reconciliation</h2></div><p>Only the Qonic claim is company revenue; vendor and Global Candidate commissions remain vendor-held money.</p></div>
+        <div className="matrix-scroll"><table className="matrix matrix--people"><thead><tr><th scope="col">Invoice / client</th><th scope="col">Gross client amount</th><th scope="col">Qonic claim</th><th scope="col">Vendor commission</th><th scope="col">Global Candidate commission</th><th scope="col">Status</th></tr></thead><tbody>{visibleC2cInvoices.map((invoice) => <tr key={invoice.id}><th scope="row"><strong>{invoice.number}</strong><span>{invoice.client.name}</span></th><td>{formatMoney(invoice.grossClientAmount, invoice.currency)}</td><td>{formatMoney(invoice.qonicRevenueAmount, invoice.currency)}</td><td>{formatMoney(invoice.vendorCommissionAmount, invoice.currency)}</td><td>{formatMoney(invoice.globalCandidateCommissionAmount, invoice.currency)}</td><td><StatusChip status={invoice.status} /></td></tr>)}</tbody></table></div>
+      </section>}
+      {foreignSettlementRows.length > 0 && <section className="portal-section">
+        <div className="finance-workspace__section-heading"><div><span className="hero-eyebrow">FX settlement</span><h2>Foreign invoice to INR reconciliation</h2></div><p>The invoice stays in its contractual currency. The difference between its locked INR value and the actual bank receipt is a realised FX gain or loss, not a revenue correction.</p></div>
+        <div className="matrix-scroll"><table className="matrix matrix--people"><thead><tr><th scope="col">Invoice / client</th><th scope="col">Contract invoice</th><th scope="col">Locked settlement rate</th><th scope="col">Expected at issue rate</th><th scope="col">Actual INR received</th><th scope="col">Applied / outstanding</th><th scope="col">Realised FX</th><th scope="col">Status</th></tr></thead><tbody>{foreignSettlementRows.map((row) => <tr key={row.id}><th scope="row"><strong>{row.number}</strong><span>{row.client}</span></th><td>{row.invoiceValue}</td><td>{row.lockedRate}</td><td>{row.expectedAtIssueRate}</td><td>{row.received}</td><td>{row.applied}<span>Outstanding: {row.invoiceOutstanding}</span></td><td>{row.realisedFx}</td><td><StatusChip status={row.status} /></td></tr>)}</tbody></table></div>
+      </section>}
+    </>}
+    payables={<>
+      <section className="portal-section">
+        <div className="finance-workspace__section-heading"><div><span className="hero-eyebrow">People payables</span><h2>Earnings invoice queue</h2></div><p>Every Qonic account raises an invoice from My Earnings. Developer invoices settle delivery payout already accrued; salary invoices follow the effective-dated compensation schedule.</p></div>
+        <div className="finance-workspace__watchlist"><article><span>People salary invoices due</span><strong>{formatCurrencyTotals(displayTotals(salaryOutstanding))}</strong><p>Submitted or approved monthly salary claims.</p></article><article><span>Salary invoices paid</span><strong>{formatCurrencyTotals(displayTotals(salaryPaid))}</strong><p>Cash already released to People.</p></article><article><span>Developer invoices paid</span><strong>{formatCurrencyTotals(displayTotals(developerPaid))}</strong><p>Delivery payouts released against approved work.</p></article></div>
+        <EarningsInvoiceManager invoices={earningsInvoiceRows} />
+      </section>
+      <section className="portal-section">
+        <div className="finance-workspace__section-heading"><div><span className="hero-eyebrow">Expenses</span><h2>Operating expense claims</h2></div><p>Approved claims are commitments. Reimbursed claims are cash outflows and appear in the ledger.</p></div>
+        {visibleExpenses.length === 0 ? <p className="portal-muted">No approved or reimbursed expenses are recorded for this currency.</p> : <div className="matrix-scroll"><table className="matrix matrix--people"><thead><tr><th scope="col">Date</th><th scope="col">Expense</th><th scope="col">Claimed by</th><th scope="col">Project</th><th scope="col">Status</th><th scope="col">Amount</th></tr></thead><tbody>{visibleExpenses.map((expense) => <tr key={expense.id}><td>{date(expense.spentOn)}</td><th scope="row"><strong>{expense.category}</strong><span>{expense.description}</span></th><td>{expense.user.name}</td><td>{expense.project?.name ?? "Company-wide"}</td><td><StatusChip status={expense.status} /></td><td>{formatMoney(expense.amount, expense.currency)}</td></tr>)}</tbody></table></div>}
+      </section>
+    </>}
+    delivery={<>
+      <section className="portal-section">
+        <div className="finance-workspace__section-heading"><div><span className="hero-eyebrow">Project economics</span><h2>Billing and delivery cost</h2></div><p>Each project and currency is kept separate. Pre-start value is a retained payout classification, not additional client revenue.</p></div>
+        {projectEconomicsRows.length === 0 ? <p className="portal-muted">Project economics appear after client billing or approved delivery is recorded.</p> : <div className="matrix-scroll"><table className="matrix matrix--people"><thead><tr><th scope="col">Project / client</th><th scope="col">Billed</th><th scope="col">Invoice amount settled</th><th scope="col">Developer cost accrued</th><th scope="col">Pre-start retained</th><th scope="col">Gross contribution*</th></tr></thead><tbody>{projectEconomicsRows.map((row) => <tr key={row.id}><th scope="row"><strong>{row.project}</strong><span>{row.client} · {row.currency}</span></th><td>{formatMoney(row.billed, row.currency)}</td><td>{formatMoney(row.invoiceSettled, row.currency)}</td><td>−{formatMoney(row.developerCost, row.currency)}</td><td>{formatMoney(row.retained, row.currency)}</td><td><strong>{formatMoney(row.billed - row.developerCost, row.currency)}</strong></td></tr>)}</tbody></table></div>}
+        <p className="field-hint">*Before people salaries, operating expenses, tax, and other company costs.</p>
+      </section>
+      <section className="portal-section">
+        <div className="finance-workspace__section-heading"><div><span className="hero-eyebrow">Daily audit</span><h2>Developer payout and retained delivery</h2></div><p>Expand a Developer–Project row to see every approved date, its billable hours, invoice state, and payout classification.</p></div>
+        {deliveryFinanceAssignments.length === 0 ? <p className="portal-muted">Daily finance entries appear when approved billable timesheets exist.</p> : <ExpandableDeliveryFinance assignments={deliveryFinanceAssignments} />}
+      </section>
+    </>}
+    ledger={<section className="portal-section"><div className="finance-workspace__section-heading"><div><span className="hero-eyebrow">Audit trail</span><h2>Finance ledger</h2></div><p>{periodLabel}. Cash receipts and payments sit beside non-cash accruals, with movement type clearly labelled.</p></div><FinanceLedger rows={ledgerRows} /></section>}
+    operations={<>
+      {canDecideEarnings && <section className="portal-section"><div className="finance-workspace__section-heading"><div><span className="hero-eyebrow">Controlled exception</span><h2>Urgent invoice access</h2></div><p>CEO and Co-Founder can enable one auditable current-month invoice raise for one person and currency. It never opens invoice raising globally.</p></div><EarningsEarlyReleaseManager releases={earningEarlyReleaseRows} /></section>}
+      {isExecutive && prestartBackfillFlags.length > 0 && <section className="portal-section company-finance__prestart-flags"><div className="finance-workspace__section-heading"><div><span className="hero-eyebrow">Delivery exception</span><h2>Missing pre-start delivery time</h2></div><p>Only unfiled weekdays between project start and the Developer&apos;s Actual Start Date appear. Reopening creates editable drafts; it does not create hours, revenue, or payout.</p></div><PrestartBackfillFlags flags={prestartBackfillFlags} /><p className="field-hint">Invoiced weeks stay flagged but cannot be reopened here, preserving invoice history.</p></section>}
+      {visiblePlacements.length > 0 && <section className="portal-section"><div className="finance-workspace__section-heading"><div><span className="hero-eyebrow">Pipeline</span><h2>Placement fee pipeline</h2></div><p>Earned placement fees remain separate from client cash until an invoice is issued and paid.</p></div><div className="matrix-scroll"><table className="matrix matrix--people"><thead><tr><th scope="col">Candidate</th><th scope="col">Client</th><th scope="col">Start</th><th scope="col">Fee</th><th scope="col">Recruiter</th></tr></thead><tbody>{visiblePlacements.map((placement) => <tr key={placement.id}><th scope="row"><strong>{placement.application.candidate.name}</strong><span>{placement.application.job.title}</span></th><td>{placement.application.job.client.name}</td><td>{date(placement.startDate)}</td><td>{formatMoney(placement.feeAmount, placement.currency)}<span>{placement.feePercent}%</span></td><td>{placement.recruiter?.name ?? "—"}</td></tr>)}</tbody></table></div></section>}
+      {!canDecideEarnings && !isExecutive && visiblePlacements.length === 0 && <section className="portal-section"><p className="portal-muted">No finance controls are available for your role.</p></section>}
+    </>}
+  />;
 }

@@ -5,6 +5,7 @@ import { CLIENT_STATUSES, toMinorUnits, validateClient } from "@/lib/delivery/va
 import { isLeadershipRank } from "@/lib/auth/roles";
 import { db } from "@/lib/db";
 import { c2cCommissionBreakdown } from "@/lib/finance/c2c";
+import { orphanedDeliveryEarningInvoiceIds } from "@/lib/finance/delivery-earning-cleanup";
 
 export const runtime = "nodejs";
 
@@ -188,6 +189,29 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
       await tx.project.deleteMany({ where: { id: { in: projectIds } } });
     }
 
+    // Delivery earnings invoices are derived from payout-ledger days, not
+    // directly related to a client. Project deletion cascades those ledger
+    // rows, so remove only an invoice whose entire person/currency/month no
+    // longer has any backing payout day. This prevents a deleted client from
+    // leaving a false paid developer amount in Company Finance.
+    const [deliveryEarningInvoices, remainingPayoutEntries] = await Promise.all([
+      tx.earningInvoice.findMany({
+        where: { source: "DELIVERY_PAYOUT" },
+        select: { id: true, userId: true, currency: true, period: true },
+      }),
+      tx.payoutLedgerEntry.findMany({
+        where: { category: "ACTUAL_PAYOUT" },
+        select: { userId: true, currency: true, workDate: true },
+      }),
+    ]);
+    const orphanedEarningInvoiceIds = orphanedDeliveryEarningInvoiceIds(
+      deliveryEarningInvoices,
+      remainingPayoutEntries,
+    );
+    if (orphanedEarningInvoiceIds.length > 0) {
+      await tx.earningInvoice.deleteMany({ where: { id: { in: orphanedEarningInvoiceIds } } });
+    }
+
     // 3. Clean up linked Invoices: Lines, Payments, CreditNotes -> Invoices
     const invoiceIds = existing.invoices.map((i) => i.id);
     if (invoiceIds.length > 0) {
@@ -207,6 +231,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
       entityType: "Client",
       entityId: id,
       before: { name: existing.name, code: existing.code },
+      after: { deletedDerivedDeliveryEarnings: orphanedEarningInvoiceIds.length },
       ipAddress: clientIp(request),
     }, tx);
     await tx.client.delete({ where: { id } });

@@ -14,6 +14,8 @@ type InvoiceDocumentForEmail = {
   issueDate: Date;
   dueDate: Date;
   currency: string;
+  settlementCurrency: string | null;
+  lockedSettlementRate: number | null;
   subtotal: number;
   taxPercent: number;
   taxAmount: number;
@@ -49,6 +51,7 @@ async function emailInvoicePdf(invoice: InvoiceDocumentForEmail, event: "issued"
     const pdf = await renderInvoicePdf({
       number: invoice.number, status: invoice.status,
       issueDate: invoice.issueDate, dueDate: invoice.dueDate, currency: invoice.currency,
+      settlementCurrency: invoice.settlementCurrency, lockedSettlementRate: invoice.lockedSettlementRate,
       clientName: invoice.client.name, projectName: invoice.project?.name ?? null,
       lines: invoice.lines, subtotal: invoice.subtotal, taxPercent: invoice.taxPercent,
       taxAmount: invoice.taxAmount, total: invoice.total, paidAmount: invoice.paidAmount,
@@ -103,7 +106,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       await tx.invoice.update({ where: { id }, data: { status: "SENT", sentAt: new Date() } });
       await recordAudit({ actorId: context.user.id, action: "invoice.send", entityType: "Invoice", entityId: id, after: { number: invoice.number, total: invoice.total }, ipAddress: clientIp(request) }, tx);
     });
-    const delivery = await emailInvoicePdf({ ...invoice, status: "SENT" }, "issued");
+    const delivery = await emailInvoicePdf({ ...invoice, status: "SENT", lockedSettlementRate: invoice.lockedSettlementRate === null ? null : Number(invoice.lockedSettlementRate) }, "issued");
     return NextResponse.json({
       message: delivery.emailSent
         ? `${invoice.number} issued and its PDF email was sent to ${delivery.recipient}.`
@@ -119,7 +122,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (!["SENT", "PART_PAID", "OVERDUE"].includes(invoice.status)) {
       return NextResponse.json({ message: "Only an unpaid issued invoice can be reissued." }, { status: 409 });
     }
-    const delivery = await emailInvoicePdf(invoice, "reissued");
+    const delivery = await emailInvoicePdf({ ...invoice, lockedSettlementRate: invoice.lockedSettlementRate === null ? null : Number(invoice.lockedSettlementRate) }, "reissued");
     await recordAudit({
       actorId: context.user.id, action: "invoice.reissue", entityType: "Invoice", entityId: id,
       after: { number: invoice.number, status: invoice.status, recipient: delivery.recipient, pdfPrepared: delivery.pdfPrepared, emailSent: delivery.emailSent }, ipAddress: clientIp(request),

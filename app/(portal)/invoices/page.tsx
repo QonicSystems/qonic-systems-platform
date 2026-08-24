@@ -1,6 +1,8 @@
 import { InvoiceManager } from "@/components/finance/invoice-manager";
 import { can, requirePermission } from "@/lib/auth/guard";
 import { ageingBucket, formatMoney } from "@/lib/money";
+import { formatSettlementRate, settlementAmountAtLockedRate } from "@/lib/finance/fx-settlement";
+import { formatCurrencyTotals, totalsByCurrency } from "@/lib/finance/summary";
 import { db } from "@/lib/db";
 
 export const metadata = { title: "Invoices" };
@@ -21,7 +23,7 @@ export default async function InvoicesPage() {
       },
       orderBy: { issueDate: "desc" },
     }),
-    db.client.findMany({ where: { status: { in: ["ACTIVE", "PROSPECT"] } }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
+    db.client.findMany({ where: { status: { in: ["ACTIVE", "PROSPECT"] } }, select: { id: true, name: true, rateCurrency: true }, orderBy: { name: "asc" } }),
     db.project.findMany({ where: { status: { in: ["ACTIVE", "COMPLETED"] } }, select: { id: true, name: true, clientId: true }, orderBy: { name: "asc" } }),
   ]);
 
@@ -42,6 +44,13 @@ export default async function InvoicesPage() {
   const outstanding = revenueInvoices.filter((i) => !["PAID", "VOID", "DRAFT"].includes(i.status));
   const overdue = outstanding.filter((i) => ageingBucket(i.dueDate) !== "current");
 
+  const outstandingByCurrency = totalsByCurrency(outstanding.map((invoice) => ({ currency: invoice.currency, amount: invoice.total - invoice.paidAmount })));
+  const overdueByCurrency = totalsByCurrency(overdue.map((invoice) => ({ currency: invoice.currency, amount: invoice.total - invoice.paidAmount })));
+  const receivedCash = totalsByCurrency(revenueInvoices.flatMap((invoice) => invoice.payments.map((payment) => ({
+    currency: payment.settlementCurrency ?? invoice.currency,
+    amount: payment.settlementAmount ?? payment.amount,
+  }))));
+
   return <div className="portal-page">
     <header className="portal-page-head">
       <p className="eyebrow">Finance</p>
@@ -50,20 +59,27 @@ export default async function InvoicesPage() {
     </header>
 
     <div className="portal-grid">
-      <article className="portal-card"><span className="portal-stat">{formatMoney(outstanding.reduce((s, i) => s + (i.total - i.paidAmount), 0))}</span><p>Outstanding</p></article>
-      <article className="portal-card"><span className="portal-stat">{formatMoney(overdue.reduce((s, i) => s + (i.total - i.paidAmount), 0))}</span><p>Overdue</p></article>
-      <article className="portal-card"><span className="portal-stat">{formatMoney(revenueInvoices.filter((i) => i.status === "PAID").reduce((s, i) => s + i.paidAmount, 0))}</span><p>Qonic revenue received</p></article>
+      <article className="portal-card"><span className="portal-stat">{formatCurrencyTotals(outstandingByCurrency)}</span><p>Outstanding receivables</p></article>
+      <article className="portal-card"><span className="portal-stat">{formatCurrencyTotals(overdueByCurrency)}</span><p>Overdue receivables</p></article>
+      <article className="portal-card"><span className="portal-stat">{formatCurrencyTotals(receivedCash)}</span><p>Actual cash received</p></article>
     </div>
 
     <InvoiceManager
       invoices={invoices.map((invoice) => ({
         id: invoice.id, number: invoice.number, client: invoice.client.name,
+        currency: invoice.currency,
+        settlementCurrency: invoice.settlementCurrency ?? invoice.currency,
+        lockedSettlementRate: invoice.lockedSettlementRate === null ? "" : formatSettlementRate(Number(invoice.lockedSettlementRate), invoice.settlementCurrency ?? invoice.currency, invoice.currency),
+        expectedSettlement: invoice.lockedSettlementRate === null || !invoice.settlementCurrency
+          ? ""
+          : formatMoney(settlementAmountAtLockedRate(invoice.total, Number(invoice.lockedSettlementRate)), invoice.settlementCurrency),
         commercialKind: invoice.commercialKind, billingRecipient: invoice.billingRecipient ?? "",
         project: invoice.project?.name ?? "—", status: invoice.status,
         issued: invoice.issueDate.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }),
         due: invoice.dueDate.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }),
         total: formatMoney(invoice.total, invoice.currency),
         outstanding: formatMoney(invoice.total - invoice.paidAmount, invoice.currency),
+        outstandingAmount: ((invoice.total - invoice.paidAmount) / 100).toFixed(2),
         ageing: ["PAID", "VOID", "DRAFT"].includes(invoice.status) ? "—" : ageingBucket(invoice.dueDate),
         subtotal: formatMoney(invoice.subtotal, invoice.currency),
         taxPercent: invoice.taxPercent,
@@ -84,6 +100,8 @@ export default async function InvoicesPage() {
         payments: invoice.payments.map((p) => ({
           id: p.id,
           amount: formatMoney(p.amount, invoice.currency),
+          settlementAmount: p.settlementAmount === null ? "" : formatMoney(p.settlementAmount, p.settlementCurrency ?? invoice.currency),
+          realizedFxGainLoss: p.realizedFxGainLoss === null ? "" : `${p.realizedFxGainLoss >= 0 ? "FX gain" : "FX loss"} ${formatMoney(Math.abs(p.realizedFxGainLoss), p.settlementCurrency ?? invoice.currency)}`,
           paidOn: p.paidOn.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }),
           method: p.method ?? "",
           reference: p.reference ?? "",
