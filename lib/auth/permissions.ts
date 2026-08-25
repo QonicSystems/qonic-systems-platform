@@ -56,6 +56,7 @@ export const PERMISSIONS = [
   // Administration access is deliberately split by screen and action. A role
   // can, for example, maintain the holiday calendar without access to People.
   { key: "admin.access", group: "Administration", label: "Access Administration", description: "Open the Administration workspace.", sortOrder: 90 },
+  { key: "announcement.publish", group: "Administration", label: "Release company announcements", description: "Publish a mandatory company-wide announcement and monitor acknowledgements. CEO only.", sortOrder: 92 },
 
   // People
   { key: "user.view", group: "People", label: "View People", description: "List and inspect People accounts.", sortOrder: 100 },
@@ -111,7 +112,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Readonly<Record<Exclude<RoleKey, "ceo">, 
 };
 
 /** Granting this is equivalent to granting everything, so it stays CEO-only. */
-export const SUPER_ADMIN_ONLY_PERMISSIONS: ReadonlySet<string> = new Set(["rbac.manage", "user.purge", "audit.purge"]);
+export const SUPER_ADMIN_ONLY_PERMISSIONS: ReadonlySet<string> = new Set(["announcement.publish", "rbac.manage", "user.purge", "audit.purge"]);
 
 // --------------------------------------------------------------- resolution --
 

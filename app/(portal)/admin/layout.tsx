@@ -1,5 +1,6 @@
 import { PageTabs } from "@/components/portal/page-tabs";
 import { can, requirePermission } from "@/lib/auth/guard";
+import { mayPublishCompanyAnnouncements } from "@/lib/company-announcements";
 
 const tabs = [
   { label: "People", href: "/admin", permission: "user.view" },
@@ -8,11 +9,12 @@ const tabs = [
   { label: "Roles & Permissions", href: "/admin/permissions", permission: "rbac.manage" },
   { label: "Holidays", href: "/admin/holidays", permission: "holiday.view" },
   { label: "Audit Log", href: "/admin/audit", permission: "audit.view" },
+  { label: "Announcements", href: "/admin/announcements", permission: "announcement.publish", ceoOnly: true },
 ];
 
 export default async function AdminLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const context = await requirePermission("admin.access");
-  const visible = tabs.filter((tab) => can(context, tab.permission));
+  const visible = tabs.filter((tab) => can(context, tab.permission) && (!tab.ceoOnly || mayPublishCompanyAnnouncements(context.role)));
 
   return <div className="portal-page">
     <header className="portal-page-head">
