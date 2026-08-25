@@ -3,12 +3,13 @@ import { NextResponse } from "next/server";
 import { clientIp, recordAudit } from "@/lib/audit";
 import { canAssignRole } from "@/lib/auth/authority";
 import { guardRoute } from "@/lib/auth/guard";
+import { CEO_ALREADY_ASSIGNED_MESSAGE, CEO_TRANSFER_EXISTING_PERSON_MESSAGE, ceoSingletonValue } from "@/lib/auth/single-ceo";
 import { deliverInvite } from "@/lib/auth/invite";
 import { hashPassword } from "@/lib/auth/password";
 import { INVITE_TTL_MS, createResetToken, hashResetToken } from "@/lib/auth/reset";
 import { emailPattern } from "@/lib/contact";
 import { db } from "@/lib/db";
-import { isUniqueEmailViolation } from "@/lib/db-errors";
+import { isUniqueCeoSingletonViolation, isUniqueEmailViolation } from "@/lib/db-errors";
 import { parseCompensationInput } from "@/lib/finance/compensation";
 
 export const runtime = "nodejs";
@@ -64,6 +65,13 @@ export async function POST(request: Request) {
   const assignable = canAssignRole(context, role);
   if (!assignable.ok) return NextResponse.json({ message: assignable.reason }, { status: assignable.status });
 
+  if (ceoSingletonValue(role.key)) {
+    return NextResponse.json({
+      message: CEO_TRANSFER_EXISTING_PERSON_MESSAGE,
+      errors: { roleId: CEO_TRANSFER_EXISTING_PERSON_MESSAGE },
+    }, { status: 409 });
+  }
+
   // Employee, and any other role the CEO marks the same way, is created
   // from the Candidate Pool so the account always has a candidate record and a
   // contract letter behind it. Creating one here would produce a delivery
@@ -111,6 +119,7 @@ export async function POST(request: Request) {
           jobTitle: data.jobTitle || null,
           techStack: techStack || null,
           roleId: role.id,
+          ceoSingletonKey: ceoSingletonValue(role.key),
           passwordHash,
           mustChangePassword: true,
           resetTokens: { create: { tokenHash, expiresAt } },
@@ -137,6 +146,9 @@ export async function POST(request: Request) {
   } catch (error) {
     if (isUniqueEmailViolation(error)) {
       return NextResponse.json({ message: "Please correct the highlighted fields.", errors: { email: "Another account already uses that email address." } }, { status: 422 });
+    }
+    if (isUniqueCeoSingletonViolation(error)) {
+      return NextResponse.json({ message: CEO_ALREADY_ASSIGNED_MESSAGE, errors: { roleId: CEO_ALREADY_ASSIGNED_MESSAGE } }, { status: 409 });
     }
     throw error;
   }

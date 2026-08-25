@@ -4,6 +4,7 @@ import { PrismaClient } from "../lib/generated/prisma/client";
 import { hashPassword } from "../lib/auth/password";
 import { DEFAULT_ROLE_PERMISSIONS, PERMISSIONS } from "../lib/auth/permissions";
 import { ROLE, SEEDED_ROLES } from "../lib/auth/roles";
+import { ceoSingletonValue } from "../lib/auth/single-ceo";
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) throw new Error("DATABASE_URL is not set.");
@@ -242,6 +243,7 @@ async function bootstrapCeo() {
       name,
       passwordHash: await hashPassword(password),
       roleId: ceo.id,
+      ceoSingletonKey: ceoSingletonValue(ceo.key),
       jobTitle: "CEO & Founder",
       mustChangePassword: process.env.BOOTSTRAP_CEO_MUST_CHANGE === "true",
     },

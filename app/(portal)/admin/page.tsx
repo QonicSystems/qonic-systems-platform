@@ -2,6 +2,8 @@ import { PeopleTable, type PersonRow } from "@/components/admin/people-table";
 import { RoleManager, type RoleRow } from "@/components/admin/role-manager";
 import { canAdminister, canAssignRole, canEditIdentity, describeAuthority } from "@/lib/auth/authority";
 import { can, requirePermission } from "@/lib/auth/guard";
+import { ROLE } from "@/lib/auth/roles";
+import { CEO_SINGLETON_KEY } from "@/lib/auth/single-ceo";
 import { db } from "@/lib/db";
 import { formatMoney } from "@/lib/money";
 
@@ -74,10 +76,16 @@ export default async function AdminPeoplePage() {
     })),
   }));
 
+  const currentCeo = users.find((user) => user.ceoSingletonKey === CEO_SINGLETON_KEY) ?? null;
+  const viewerIsCurrentCeo = currentCeo?.id === context.user.id && context.role.key === ROLE.CEO;
   const roleOptions = roles.map((role) => ({
     id: role.id,
     label: role.label,
-    assignable: canAssignRole(context, role).ok,
+    isCeo: role.key === ROLE.CEO,
+    assignable: canAssignRole(context, role).ok && !(role.key === ROLE.CEO && currentCeo && !viewerIsCurrentCeo),
+    unavailableReason: role.key === ROLE.CEO && currentCeo && !viewerIsCurrentCeo
+      ? `CEO is already assigned to ${currentCeo.name}`
+      : null,
     // Developer is assigned by the Candidate Pool, so People leaves it out of
     // the role dropdown. Both user endpoints re-check this; the flag is carried
     // here only so the dialogs know what to omit.

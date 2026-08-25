@@ -2,9 +2,11 @@ import { NextResponse } from "next/server";
 import { clientIp, recordAudit } from "@/lib/audit";
 import { canAdminister, canAssignRole, canChangeOwnRole, canEditIdentity } from "@/lib/auth/authority";
 import { guardRoute } from "@/lib/auth/guard";
+import { ROLE } from "@/lib/auth/roles";
+import { CEO_ALREADY_ASSIGNED_MESSAGE, CEO_TRANSFER_ACTIVE_PERSON_MESSAGE, CEO_TRANSFER_ONLY_MESSAGE, CEO_SINGLETON_KEY, ceoSingletonValue, mayTransferCeo } from "@/lib/auth/single-ceo";
 import { emailPattern } from "@/lib/contact";
 import { db } from "@/lib/db";
-import { isForeignKeyViolation, isRecordNotFound, isUniqueEmailViolation } from "@/lib/db-errors";
+import { isForeignKeyViolation, isRecordNotFound, isUniqueCeoSingletonViolation, isUniqueEmailViolation } from "@/lib/db-errors";
 import { notify } from "@/lib/notify";
 
 export const runtime = "nodejs";
@@ -58,6 +60,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (Object.keys(errors).length) return NextResponse.json({ message: "Please correct the highlighted fields.", errors }, { status: 422 });
 
   const roleChanged = nextRole!.id !== target.roleId;
+  let formerCeo: { id: string; name: string } | null = null;
 
   // Self-edits are permitted for identity but never for role, so this is
   // checked separately from canAdminister rather than folded into it.
@@ -67,6 +70,23 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (roleChanged) {
     const assignable = canAssignRole(context, nextRole!);
     if (!assignable.ok) return NextResponse.json({ message: assignable.reason }, { status: assignable.status });
+
+    if (ceoSingletonValue(nextRole!.key)) {
+      const currentCeo = await db.user.findUnique({
+        where: { ceoSingletonKey: CEO_SINGLETON_KEY },
+        select: { id: true, name: true },
+      });
+      if (!currentCeo) {
+        return NextResponse.json({ message: CEO_ALREADY_ASSIGNED_MESSAGE, errors: { roleId: CEO_ALREADY_ASSIGNED_MESSAGE } }, { status: 409 });
+      }
+      if (!mayTransferCeo(context.user.id, currentCeo.id)) {
+        return NextResponse.json({ message: CEO_TRANSFER_ONLY_MESSAGE, errors: { roleId: CEO_TRANSFER_ONLY_MESSAGE } }, { status: 403 });
+      }
+      if (target.status !== "ACTIVE") {
+        return NextResponse.json({ message: CEO_TRANSFER_ACTIVE_PERSON_MESSAGE, errors: { roleId: CEO_TRANSFER_ACTIVE_PERSON_MESSAGE } }, { status: 422 });
+      }
+      formerCeo = currentCeo;
+    }
 
     // Guarded here as well as on create, or the create restriction is one click
     // from being bypassed: add the person as a Co-Founder, then edit them down
@@ -88,6 +108,25 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
   try {
     await db.$transaction(async (tx) => {
+      if (formerCeo) {
+        const coFounderRole = await tx.role.findUnique({ where: { key: ROLE.CO_FOUNDER }, select: { id: true } });
+        if (!coFounderRole) throw new Error("The Co-Founder role is unavailable for the CEO transfer.");
+
+        // Demote first so the database singleton remains valid throughout the
+        // transaction, then make the selected person the sole CEO.
+        await tx.user.update({
+          where: { id: formerCeo.id },
+          data: { roleId: coFounderRole.id, ceoSingletonKey: null },
+        });
+        await tx.session.deleteMany({ where: { userId: formerCeo.id } });
+        await notify({
+          userId: formerCeo.id,
+          kind: "SYSTEM",
+          title: "CEO role transferred",
+          body: `${target.name} is now CEO & Founder. Your role is now Co-Founder; sign in again to continue.`,
+        }, tx);
+      }
+
       await tx.user.update({
         where: { id: target.id },
         data: {
@@ -97,6 +136,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
           jobTitle: data.jobTitle || null,
           techStack: data.techStack || null,
           roleId: nextRole!.id,
+          ceoSingletonKey: ceoSingletonValue(nextRole!.key),
         },
       });
     // A role change is a large enough authority shift to require re-authentication,
@@ -112,7 +152,15 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         body: "You were signed out so the change takes effect. Sign in again to continue.",
       }, tx);
     }
-    await recordAudit({ actorId: context.user.id, action: roleChanged ? "user.update.role" : "user.update", entityType: "User", entityId: target.id, before, after, ipAddress: clientIp(request) }, tx);
+    await recordAudit({
+      actorId: context.user.id,
+      action: formerCeo ? "ceo.transfer" : (roleChanged ? "user.update.role" : "user.update"),
+      entityType: "User",
+      entityId: target.id,
+      before,
+      after: formerCeo ? { ...after, formerCeo: { id: formerCeo.id, role: ROLE.CO_FOUNDER } } : after,
+      ipAddress: clientIp(request),
+    }, tx);
     });
   } catch (error) {
     // The uniqueness pre-check above is a read, so a concurrent write can still
@@ -121,10 +169,17 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (isUniqueEmailViolation(error)) {
       return NextResponse.json({ message: "Please correct the highlighted fields.", errors: { email: "Another account already uses that email address." } }, { status: 422 });
     }
+    if (isUniqueCeoSingletonViolation(error)) {
+      return NextResponse.json({ message: CEO_ALREADY_ASSIGNED_MESSAGE, errors: { roleId: CEO_ALREADY_ASSIGNED_MESSAGE } }, { status: 409 });
+    }
     throw error;
   }
 
-  return NextResponse.json({ message: roleChanged ? `${data.name} updated and signed out to re-authenticate.` : `${data.name} updated.` });
+  return NextResponse.json({
+    message: formerCeo
+      ? `${data.name} is now CEO & Founder. You are now Co-Founder and have been signed out; sign in again to continue.`
+      : (roleChanged ? `${data.name} updated and signed out to re-authenticate.` : `${data.name} updated.`),
+  });
 }
 
 /** Remove an account by archiving it. Requires user.delete — super admin only by default. */

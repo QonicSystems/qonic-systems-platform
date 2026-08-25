@@ -28,6 +28,11 @@ export function isUniqueEmailViolation(error: unknown): boolean {
   return codeOf(error) === "P2002" && targets(error).some((field) => field.toLowerCase().includes("email"));
 }
 
+/** P2002: a concurrent request tried to appoint a second CEO. */
+export function isUniqueCeoSingletonViolation(error: unknown): boolean {
+  return codeOf(error) === "P2002" && targets(error).some((field) => field.toLowerCase().includes("ceosingletonkey"));
+}
+
 /** P2003: a foreign key still references this row — e.g. a contract letter. */
 export function isForeignKeyViolation(error: unknown): boolean {
   return codeOf(error) === "P2003";

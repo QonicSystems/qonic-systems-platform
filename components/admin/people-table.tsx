@@ -48,7 +48,7 @@ export type Override = {
 
 export type PermissionOption = { key: string; label: string; group: string };
 
-type RoleOption = { id: string; label: string; assignable: boolean; viaCandidatePool: boolean };
+type RoleOption = { id: string; label: string; isCeo: boolean; assignable: boolean; unavailableReason: string | null; viaCandidatePool: boolean };
 
 /**
  * Roles this dialog offers at all.
@@ -59,12 +59,13 @@ type RoleOption = { id: string; label: string; assignable: boolean; viaCandidate
  * role you merely lack the seniority to assign is different — that one stays
  * visible, disabled, with the reason (see `roleUnavailableReason`).
  */
-function selectableRoles(roles: ReadonlyArray<RoleOption>): ReadonlyArray<RoleOption> {
-  return roles.filter((role) => !role.viaCandidatePool);
+function selectableRoles(roles: ReadonlyArray<RoleOption>, includeCeo = true): ReadonlyArray<RoleOption> {
+  return roles.filter((role) => !role.viaCandidatePool && (includeCeo || !role.isCeo));
 }
 
 /** Why a listed role cannot be chosen, or "" when it can. */
 function roleUnavailableReason(role: RoleOption): string {
+  if (role.unavailableReason) return ` — ${role.unavailableReason}`;
   return role.assignable ? "" : " — not assignable by you";
 }
 /** Success is explicit; `errors` is only ever present on a 422. */
@@ -546,7 +547,9 @@ function EditDialog({ person, roles, busy, onClose, onSave }: {
             </select>
             {person.isSelf ? <p className="field-hint">You cannot change your own role — ask another administrator.</p> : null}
             {errors.roleId ? <p className="form-error">{errors.roleId}</p>
-              : <p className="field-hint">Changing someone&apos;s role signs them out so their new access takes effect.</p>}
+              : data.roleId !== person.roleId && roles.find((role) => role.id === data.roleId)?.isCeo
+                ? <p className="field-hint">This transfers the CEO role to {person.name}. You become Co-Founder and both accounts must sign in again.</p>
+                : <p className="field-hint">Changing someone&apos;s role signs them out so their new access takes effect.</p>}
           </div>
         </div>
 
@@ -572,7 +575,7 @@ function AddDialog({ roles, canSetCompensation, today, busy, onClose, onSave }: 
   onClose: () => void;
   onSave: (payload: Record<string, string>) => Promise<Errors>;
 }) {
-  const assignable = selectableRoles(roles).filter((role) => !roleUnavailableReason(role));
+  const assignable = selectableRoles(roles, false).filter((role) => !roleUnavailableReason(role));
   const [data, setData] = useState({ name: "", email: "", phone: "", jobTitle: "", techStack: "", roleId: assignable[0]?.id ?? "", monthlyCompensation: "", currency: "INR", effectiveFrom: today, note: "" });
   const [errors, setErrors] = useState<Errors>({});
 
@@ -631,7 +634,7 @@ function AddDialog({ roles, canSetCompensation, today, busy, onClose, onSave }: 
           <div className="sm:col-span-2">
             <label htmlFor="add-role">Role <em>*</em></label>
             <select id="add-role" value={data.roleId} onChange={(event) => update("roleId", event.target.value)} aria-invalid={Boolean(errors.roleId)}>
-              {selectableRoles(roles).map((role) => {
+              {selectableRoles(roles, false).map((role) => {
                 const reason = roleUnavailableReason(role);
                 return <option key={role.id} value={role.id} disabled={Boolean(reason)}>
                   {role.label}{reason}
