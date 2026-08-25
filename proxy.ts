@@ -87,7 +87,7 @@ async function withStatus(url: URL, status: number, headers: Record<string, stri
   });
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // The fetch above re-enters middleware; let the real files through, or it loops.
