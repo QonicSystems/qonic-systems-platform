@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../lib/generated/prisma/client";
+import { normalizeDatabaseUrl } from "../lib/database-url";
 import { emailPattern } from "../lib/contact";
 
 /**
@@ -30,7 +31,7 @@ async function main() {
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) throw new Error("DATABASE_URL is not set.");
 
-  const db = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
+  const db = new PrismaClient({ adapter: new PrismaPg({ connectionString: normalizeDatabaseUrl(connectionString) }) });
   try {
     const user = await db.user.findUnique({ where: { email: current }, include: { role: { select: { label: true } } } });
     if (!user) throw new Error(`No account found for ${current}.`);

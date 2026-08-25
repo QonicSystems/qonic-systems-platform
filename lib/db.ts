@@ -1,5 +1,6 @@
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@/lib/generated/prisma/client";
+import { normalizeDatabaseUrl } from "@/lib/database-url";
 
 // Prisma 7 dropped the bundled query engine: the client is constructed with a
 // driver adapter and an explicit connection string rather than reading `url`
@@ -10,7 +11,7 @@ function createClient() {
   // Each cold Vercel function instance builds its own pool; pg's default max
   // of 10 per pool can exhaust a small Postgres's connection limit under
   // concurrent serverless invocations even with a pooled connection string.
-  return new PrismaClient({ adapter: new PrismaPg({ connectionString, max: 3 }) });
+  return new PrismaClient({ adapter: new PrismaPg({ connectionString: normalizeDatabaseUrl(connectionString), max: 3 }) });
 }
 
 // Dev HMR re-evaluates modules on every edit. Without a globalThis guard each
