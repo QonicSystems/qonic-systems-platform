@@ -2,6 +2,7 @@ import "dotenv/config";
 import { randomBytes } from "node:crypto";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../lib/generated/prisma/client";
+import { normalizeDatabaseUrl } from "../lib/database-url";
 import { describePasswordProblem, hashPassword } from "../lib/auth/password";
 import { emailPattern } from "../lib/contact";
 import { CEO_ALREADY_ASSIGNED_MESSAGE, CEO_SINGLETON_KEY, ceoSingletonValue } from "../lib/auth/single-ceo";
@@ -38,7 +39,7 @@ async function main() {
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) throw new Error("DATABASE_URL is not set.");
 
-  const db = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
+  const db = new PrismaClient({ adapter: new PrismaPg({ connectionString: normalizeDatabaseUrl(connectionString) }) });
   try {
     const clash = await db.user.findUnique({ where: { email: address } });
     if (clash) throw new Error(`${address} already exists — use db:set-password or db:set-email instead.`);

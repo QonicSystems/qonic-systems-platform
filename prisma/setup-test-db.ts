@@ -2,6 +2,7 @@ import "dotenv/config";
 import { execFileSync } from "node:child_process";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../lib/generated/prisma/client";
+import { normalizeDatabaseUrl } from "../lib/database-url";
 
 /**
  * Prepares the disposable database used by the Playwright suite: applies
@@ -16,7 +17,7 @@ if (url === process.env.DATABASE_URL) throw new Error("TEST_DATABASE_URL must di
 
 const env = {
   ...process.env,
-  DATABASE_URL: url,
+  DATABASE_URL: normalizeDatabaseUrl(url),
   // The bootstrap CEO is never used by the e2e suite, but the seed requires it.
   BOOTSTRAP_CEO_EMAIL: process.env.BOOTSTRAP_CEO_EMAIL ?? "founder@qonicsystems.com",
   BOOTSTRAP_CEO_NAME: process.env.BOOTSTRAP_CEO_NAME ?? "Test Founder",
@@ -38,7 +39,7 @@ const run = (command: string, args: string[]) => execFileSync(command, args, { e
  * consent prompt. TRUNCATE of the data tables is the narrower, safer tool.
  */
 async function clearData() {
-  const db = new PrismaClient({ adapter: new PrismaPg({ connectionString: url! }) });
+  const db = new PrismaClient({ adapter: new PrismaPg({ connectionString: normalizeDatabaseUrl(url!) }) });
   // CASCADE handles the foreign keys between these in one statement, so the
   // order below does not have to be dependency-perfect.
   await db.$executeRawUnsafe(`TRUNCATE TABLE

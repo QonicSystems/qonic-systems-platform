@@ -26,6 +26,12 @@
     "db:add-user": "tsx prisma/add-user.ts",
     "db:seed:holidays": "tsx prisma/seed-holidays.ts"
   },
+  "allowScripts": {
+    "@prisma/engines@7.9.1": true,
+    "esbuild@0.28.1": true,
+    "prisma@7.9.1": true,
+    "unrs-resolver@1.12.2": true
+  },
   "dependencies": {
     "@node-rs/argon2": "^2.0.2",
     "@prisma/adapter-pg": "^7.8.0",

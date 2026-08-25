@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../lib/generated/prisma/client";
+import { normalizeDatabaseUrl } from "../lib/database-url";
 import { hashPassword } from "../lib/auth/password";
 import { DEFAULT_ROLE_PERMISSIONS, PERMISSIONS } from "../lib/auth/permissions";
 import { ROLE, SEEDED_ROLES } from "../lib/auth/roles";
@@ -8,7 +9,7 @@ import { ceoSingletonValue } from "../lib/auth/single-ceo";
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) throw new Error("DATABASE_URL is not set.");
-const db = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
+const db = new PrismaClient({ adapter: new PrismaPg({ connectionString: normalizeDatabaseUrl(connectionString) }) });
 
 const FOUNDER_NAME = "Avinash Singh";
 const FOUNDER_EMAIL = "avinash.singh@qonicsystems.com";
