@@ -59,6 +59,9 @@ model User {
   expenses                         Expense[]                    @relation("ExpenseOwner")
   expenseDecisions                 Expense[]                    @relation("ExpenseApprover")
   notifications                    Notification[]               @relation("NotificationRecipient")
+  announcementsReleased            CompanyAnnouncement[]        @relation("CompanyAnnouncementPublisher")
+  announcementsRevoked             CompanyAnnouncement[]        @relation("CompanyAnnouncementRevoker")
+  announcementReceipts             CompanyAnnouncementRecipient[] @relation("CompanyAnnouncementRecipient")
   bankDetail                       BankDetail?
   linkedCandidate                  Candidate?                   @relation("CandidateLink")
   projectsManaged                  Project[]                    @relation("ProjectManager")
@@ -1394,6 +1397,11 @@ enum NotificationKind {
   SYSTEM
 }
 
+enum CompanyAnnouncementStatus {
+  RELEASED
+  REVOKED
+}
+
 /// In-app inbox. Written by the same transaction as the event it describes, so
 /// a notification can never reference something that did not happen.
 model Notification {
@@ -1411,6 +1419,46 @@ model Notification {
 
   @@index([userId, readAt])
   @@index([createdAt])
+}
+
+/// A company-wide notice released by the CEO. This is deliberately separate
+/// from Notification: inbox items can be dismissed, whereas each announcement
+/// has a durable acknowledgement requirement for every person who was active
+/// when it was released.
+model CompanyAnnouncement {
+  id          String                    @id @default(cuid())
+  title       String
+  message     String                    @db.Text
+  status      CompanyAnnouncementStatus @default(RELEASED)
+  releasedById String
+  releasedBy  User                      @relation("CompanyAnnouncementPublisher", fields: [releasedById], references: [id], onDelete: Restrict)
+  releasedAt  DateTime                  @default(now())
+  revokedAt   DateTime?
+  revokedById String?
+  revokedBy   User?                     @relation("CompanyAnnouncementRevoker", fields: [revokedById], references: [id], onDelete: SetNull)
+
+  recipients CompanyAnnouncementRecipient[]
+
+  @@index([releasedAt])
+  @@index([status, releasedAt])
+  @@index([releasedById])
+  @@index([revokedById])
+}
+
+/// Snapshot of who must acknowledge an announcement. New hires do not inherit
+/// historical notices, and each acknowledgement stays auditable after it has
+/// been made.
+model CompanyAnnouncementRecipient {
+  announcementId String
+  userId         String
+  acknowledgedAt DateTime?
+
+  announcement CompanyAnnouncement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  user         User                @relation("CompanyAnnouncementRecipient", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([announcementId, userId])
+  @@index([userId, acknowledgedAt])
+  @@index([announcementId, acknowledgedAt])
 }
 
 /// Payment details, encrypted at rest with AES-256-GCM (see lib/crypto.ts).

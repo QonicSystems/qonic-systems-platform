@@ -1,8 +1,10 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { ErrorPage } from "@/components/error-page";
+import { CompanyAnnouncementGate, type PendingCompanyAnnouncement } from "@/components/portal/company-announcement-gate";
 import { PortalShell } from "@/components/portal/portal-shell";
 import { can, requireAuth } from "@/lib/auth/guard";
+import { companyAnnouncementAudienceWhere } from "@/lib/company-announcements";
 import type { ContractPayload } from "@/lib/contracts/payload";
 import { db } from "@/lib/db";
 import { isGroup, portalNavigation, type NavGroup, type NavItem } from "@/lib/portal-nav";
@@ -44,16 +46,51 @@ export default async function PortalLayout({ children }: Readonly<{ children: Re
   // Employment type is a term of the contract, not a field on the person — it
   // lives in the frozen payload of whichever letter last set it (see
   // docs/ROADMAP.md: letters are immutable once issued), not on User.
-  const latestLetter = await db.contractLetter.findFirst({
-    where: { subjectUserId: context.user.id, status: { in: ["RELEASED", "ACKNOWLEDGED"] } },
-    orderBy: { updatedAt: "desc" },
-    select: { payload: true },
-  });
+  const [latestLetter, pendingAnnouncementReceipts] = await Promise.all([
+    db.contractLetter.findFirst({
+      where: { subjectUserId: context.user.id, status: { in: ["RELEASED", "ACKNOWLEDGED"] } },
+      orderBy: { updatedAt: "desc" },
+      select: { payload: true },
+    }),
+    db.companyAnnouncementRecipient.findMany({
+      // Defensive audience check as well as the recipient snapshot. It means
+      // a legacy, wrongly-linked Candidate account can never be blocked by an
+      // old announcement while the forward data repair is deploying.
+      where: {
+        userId: context.user.id,
+        acknowledgedAt: null,
+        user: companyAnnouncementAudienceWhere,
+        announcement: { status: "RELEASED" },
+      },
+      orderBy: { announcement: { releasedAt: "asc" } },
+      select: {
+        announcement: {
+          select: {
+            id: true,
+            title: true,
+            message: true,
+            releasedAt: true,
+            releasedBy: { select: { name: true } },
+          },
+        },
+      },
+    }),
+  ]);
   const employmentType = latestLetter ? (latestLetter.payload as unknown as ContractPayload).employmentType : null;
+  const pendingAnnouncements: PendingCompanyAnnouncement[] = pendingAnnouncementReceipts.map(({ announcement }) => ({
+    id: announcement.id,
+    title: announcement.title,
+    message: announcement.message,
+    releasedAt: announcement.releasedAt.toISOString(),
+    releasedBy: announcement.releasedBy.name,
+  }));
 
-  return <PortalShell
-    user={{ name: context.user.name, email: context.user.email, roleLabel: context.role.label, photoUrl: context.user.photoUrl, employmentType }}
-    links={links}
-    unreadCount={context.user.unreadNotificationCount}
-  >{children}</PortalShell>;
+  return <>
+    <PortalShell
+      user={{ name: context.user.name, email: context.user.email, roleLabel: context.role.label, photoUrl: context.user.photoUrl, employmentType }}
+      links={links}
+      unreadCount={context.user.unreadNotificationCount}
+    >{children}</PortalShell>
+    <CompanyAnnouncementGate initialAnnouncements={pendingAnnouncements} />
+  </>;
 }

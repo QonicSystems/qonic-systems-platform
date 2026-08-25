@@ -87,6 +87,13 @@ describe("capability catalog", () => {
     expect(permissionKeys.has("audit.export")).toBe(true);
   });
 
+  it("registers the CEO-only company announcement release capability", () => {
+    const release = PERMISSIONS.find((permission) => permission.key === "announcement.publish");
+    expect(release).toMatchObject({ group: "Administration", label: "Release company announcements" });
+    expect(SUPER_ADMIN_ONLY_PERMISSIONS.has("announcement.publish")).toBe(true);
+    expect(DEFAULT_ROLE_PERMISSIONS[ROLE.CO_FOUNDER]).not.toContain("announcement.publish");
+  });
+
   it("keeps every default and CEO-only capability registered in the catalog", () => {
     for (const permissions of Object.values(DEFAULT_ROLE_PERMISSIONS)) {
       for (const permission of permissions) expect(permissionKeys.has(permission)).toBe(true);

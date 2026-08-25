@@ -1480,6 +1480,110 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
   gap: 0.65rem; margin-top: 1.85rem;
 }
 
+/* ── Company announcements ──────────────────────────────────────────────
+   A release is intentionally a different interaction from an inbox item: it
+   blocks the portal until the signed-in person has recorded acknowledgement.
+   The CEO workspace below uses the same palette, while making the release
+   control and the audit-style progress table easy to scan at larger scale. */
+.company-announcement-gate {
+  position: fixed; inset: 0; z-index: 120;
+  display: grid; place-items: center; padding: 1.25rem;
+  background: rgba(9, 11, 14, 0.78);
+  backdrop-filter: blur(9px) saturate(0.85); -webkit-backdrop-filter: blur(9px) saturate(0.85);
+  animation: fade-in 0.2s var(--ease);
+}
+.company-announcement-gate__dialog {
+  width: min(100%, 42rem); max-height: calc(100dvh - 2.5rem); overflow-y: auto;
+  border: 1px solid rgba(255, 215, 0, 0.55); border-radius: 1.35rem;
+  background: linear-gradient(145deg, #1e1e19, #111111 62%);
+  padding: clamp(1.5rem, 4vw, 2.5rem); color: #f8f7f1;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.48), 0 0 0 5px rgba(255, 215, 0, 0.08);
+  animation: scale-in 0.22s var(--ease);
+}
+.company-announcement-gate__dialog:focus { outline: none; }
+.company-announcement-gate__dialog .eyebrow { color: #ffe36a; }
+.company-announcement-gate__mark {
+  display: grid; width: 2.7rem; height: 2.7rem; place-items: center; margin-bottom: 1.25rem;
+  border-radius: 0.8rem; background: var(--accent); color: var(--ink);
+  font-family: var(--font-display), sans-serif; font-size: 1.5rem; font-weight: 900;
+  box-shadow: 0 0 0 0.45rem rgba(255, 215, 0, 0.12);
+}
+.company-announcement-gate h2 {
+  margin: 0.45rem 0 0; color: #ffffff; font-family: var(--font-display), sans-serif;
+  font-size: clamp(1.65rem, 4vw, 2.35rem); font-weight: 800; letter-spacing: -0.035em;
+}
+.company-announcement-gate__message {
+  margin: 1.25rem 0 0; white-space: pre-wrap; color: rgba(255, 255, 255, 0.86);
+  font-size: 1rem; line-height: 1.75;
+}
+.company-announcement-gate__meta, .company-announcement-gate__queue {
+  margin: 1rem 0 0; color: rgba(255, 255, 255, 0.62); font-size: 0.82rem; line-height: 1.55;
+}
+.company-announcement-gate__queue {
+  border-left: 2px solid var(--accent); padding-left: 0.75rem; color: #f7eab0;
+}
+.company-announcement-gate .form-status { margin-top: 1.2rem; }
+.company-announcement-gate__actions {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: 1rem; margin-top: 1.8rem; padding-top: 1.25rem; border-top: 1px solid rgba(255, 255, 255, 0.14);
+}
+.company-announcement-gate__actions p { margin: 0; max-width: 22rem; color: rgba(255, 255, 255, 0.64); font-size: 0.82rem; line-height: 1.5; }
+.company-announcement-gate__actions .button { flex: none; }
+
+.announcement-workspace { display: grid; gap: 1.6rem; margin-top: 1.45rem; }
+.announcement-composer, .announcement-history {
+  border: 1px solid var(--line); border-radius: 1.1rem; background: var(--canvas);
+  padding: clamp(1.1rem, 3vw, 1.6rem); box-shadow: var(--shadow-xs);
+}
+.announcement-composer {
+  display: grid; grid-template-columns: minmax(14rem, 0.7fr) minmax(0, 1.3fr); gap: clamp(1.25rem, 4vw, 2.5rem);
+  border-top: 3px solid var(--accent);
+}
+.announcement-composer__lead h3, .announcement-history h3 {
+  margin: 0.35rem 0 0; color: var(--ink); font-family: var(--font-display), sans-serif;
+  font-size: 1.25rem; font-weight: 800; letter-spacing: -0.02em;
+}
+.announcement-composer__lead > p:last-child { margin: 0.75rem 0 0; color: var(--body); font-size: 0.9rem; line-height: 1.65; }
+.announcement-composer__form { display: grid; gap: 1rem; }
+.announcement-composer__form label, .announcement-detail__search label {
+  display: block; margin-bottom: 0.35rem; color: var(--ink); font-size: 0.84rem; font-weight: 700;
+}
+.announcement-composer__form input, .announcement-composer__form textarea, .announcement-detail__search input {
+  width: 100%; border: 1px solid var(--line); border-radius: 0.65rem; background: #ffffff;
+  padding: 0.7rem 0.8rem; color: var(--ink); outline: none; transition: border-color 0.15s, box-shadow 0.15s;
+}
+.announcement-composer__form textarea { min-height: 8rem; resize: vertical; line-height: 1.55; }
+.announcement-composer__form input:focus, .announcement-composer__form textarea:focus, .announcement-detail__search input:focus { border-color: var(--accent-deep); box-shadow: var(--ring-focus); }
+.announcement-composer__actions { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 1rem; }
+.announcement-composer__actions p { margin: 0; max-width: 31rem; color: var(--faint); font-size: 0.76rem; line-height: 1.55; }
+.announcement-history { display: grid; gap: 1rem; }
+.announcement-history__head { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 0.75rem 1.5rem; }
+.announcement-history__head > p { margin: 0; color: var(--faint); font-size: 0.82rem; }
+.announcement-table { min-width: 55rem; }
+.announcement-table th:first-child { min-width: 20rem; }
+.announcement-table__message { display: -webkit-box; max-width: 34rem; margin: 0.35rem 0 0; overflow: hidden; color: var(--body); font-size: 0.82rem; font-weight: 400; line-height: 1.45; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.announcement-table .portal-muted, .announcement-recipients .portal-muted { display: block; }
+.announcement-detail > td { padding: 0 !important; background: var(--canvas-sub); }
+.announcement-detail__panel { display: grid; gap: 1rem; padding: 1.15rem; border-block: 1px solid var(--line); }
+.announcement-detail__head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.8rem; }
+.announcement-detail__head strong { color: var(--ink); }
+.announcement-detail__head p { margin: 0.25rem 0 0; color: var(--faint); font-size: 0.78rem; }
+.announcement-detail__filters { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.announcement-detail__search { display: grid; grid-template-columns: auto minmax(12rem, 20rem) auto; align-items: end; gap: 0.5rem; }
+.announcement-detail__search label { margin: 0; white-space: nowrap; }
+.announcement-recipients { min-width: 38rem; }
+.announcement-detail__pagination { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 0.6rem; }
+
+@media (max-width: 720px) {
+  .company-announcement-gate { padding: 0.8rem; }
+  .company-announcement-gate__dialog { max-height: calc(100dvh - 1.6rem); border-radius: 1rem; }
+  .company-announcement-gate__actions { align-items: stretch; }
+  .company-announcement-gate__actions .button { width: 100%; justify-content: center; }
+  .announcement-composer { grid-template-columns: 1fr; }
+  .announcement-detail__search { grid-template-columns: 1fr; }
+  .announcement-detail__search .row-action { width: fit-content; }
+}
+
 /* --- Action Bars & Toolbars --- */
 .action-bar { display: flex; flex-wrap: wrap; gap: 0.65rem; align-items: center; }
 .action-bar--split {
