@@ -30,30 +30,37 @@ WHERE "rate" IS NOT NULL;
 -- AlterTable
 ALTER TABLE "ProjectAssignment" DROP COLUMN "rate";
 
--- CreateTable
-CREATE TABLE "DealRate" (
-    "id" TEXT NOT NULL,
-    "dealId" TEXT NOT NULL,
-    "monthlyAmount" INTEGER NOT NULL,
-    "effectiveFrom" DATE NOT NULL,
-    "effectiveTo" DATE,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+-- ResourceDeal was an experimental Rate Management table. Some early
+-- environments were baselined after PayoutLedgerEntry existed but before that
+-- table was introduced, despite recording the payout-ledger migration as
+-- applied. The rate history was retired in a later migration, so preserving
+-- its temporary backfill only when the source table actually exists keeps both
+-- histories valid and does not invent commercial data.
+DO $$
+BEGIN
+  IF to_regclass(format('%I.%I', current_schema(), 'ResourceDeal')) IS NOT NULL THEN
+    CREATE TABLE "DealRate" (
+        "id" TEXT NOT NULL,
+        "dealId" TEXT NOT NULL,
+        "monthlyAmount" INTEGER NOT NULL,
+        "effectiveFrom" DATE NOT NULL,
+        "effectiveTo" DATE,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-    CONSTRAINT "DealRate_pkey" PRIMARY KEY ("id")
-);
+        CONSTRAINT "DealRate_pkey" PRIMARY KEY ("id")
+    );
 
--- CreateIndex
-CREATE INDEX "DealRate_dealId_effectiveFrom_idx" ON "DealRate"("dealId", "effectiveFrom");
+    CREATE INDEX "DealRate_dealId_effectiveFrom_idx" ON "DealRate"("dealId", "effectiveFrom");
 
--- AddForeignKey
-ALTER TABLE "DealRate" ADD CONSTRAINT "DealRate_dealId_fkey" FOREIGN KEY ("dealId") REFERENCES "ResourceDeal"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+    ALTER TABLE "DealRate" ADD CONSTRAINT "DealRate_dealId_fkey"
+      FOREIGN KEY ("dealId") REFERENCES "ResourceDeal"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
--- Backfill: unlike AssignmentRate, ResourceDeal already had a real
--- effectiveFrom on each row, so this is an exact carry-over, not a guess.
-INSERT INTO "DealRate" ("id", "dealId", "monthlyAmount", "effectiveFrom", "effectiveTo")
-SELECT gen_random_uuid()::text, "id", "monthlyAmount", "effectiveFrom", NULL
-FROM "ResourceDeal";
+    -- Unlike AssignmentRate, ResourceDeal already had a real effectiveFrom on
+    -- each row, so this is an exact carry-over rather than a guessed date.
+    INSERT INTO "DealRate" ("id", "dealId", "monthlyAmount", "effectiveFrom", "effectiveTo")
+    SELECT gen_random_uuid()::text, "id", "monthlyAmount", "effectiveFrom", NULL
+    FROM "ResourceDeal";
 
--- AlterTable
-ALTER TABLE "ResourceDeal" DROP COLUMN "monthlyAmount",
-DROP COLUMN "effectiveFrom";
+    ALTER TABLE "ResourceDeal" DROP COLUMN "monthlyAmount", DROP COLUMN "effectiveFrom";
+  END IF;
+END $$;

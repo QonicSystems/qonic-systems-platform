@@ -5,7 +5,14 @@ CREATE TYPE "VendorStatus" AS ENUM ('ACTIVE', 'INACTIVE', 'PROSPECT', 'ARCHIVED'
 CREATE TYPE "CandidateKind" AS ENUM ('GLOBAL', 'DEVELOPER', 'DIRECT');
 CREATE TYPE "CandidateConsentStatus" AS ENUM ('NOT_REQUIRED', 'PENDING', 'CONSENTED', 'DECLINED');
 CREATE TYPE "CommercialInvoiceKind" AS ENUM ('STANDARD', 'QONIC_TO_VENDOR', 'VENDOR_TO_GLOBAL_CANDIDATE', 'GLOBAL_CANDIDATE_COMMISSION_RECORD');
-CREATE TYPE "ReminderChannel" AS ENUM ('EMAIL', 'WHATSAPP');
+-- Payment reminders introduced this shared delivery-channel vocabulary first.
+-- Keep the commercial-flow migration compatible with databases where that
+-- earlier feature was already present.
+DO $$ BEGIN
+  CREATE TYPE "ReminderChannel" AS ENUM ('EMAIL', 'WHATSAPP');
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
 
 CREATE TABLE "Vendor" (
   "id" TEXT NOT NULL,

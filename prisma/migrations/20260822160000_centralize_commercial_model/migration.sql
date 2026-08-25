@@ -7,33 +7,93 @@ ALTER TYPE "EmploymentType" ADD VALUE 'FULL_TIME';
 -- DropTable (orphaned rate-history tables — superseded by frozen figures on
 -- Placement/PayoutLedgerEntry; the retroactive-rate-drift problem these
 -- would solve does not otherwise exist in this app. Zero rows, verified.)
-DROP TABLE "AssignmentRate";
-DROP TABLE "DealRate";
+DROP TABLE IF EXISTS "AssignmentRate";
+DROP TABLE IF EXISTS "DealRate";
 
--- AlterTable CandidateProfile: trim to only what genuinely varies per
--- technology. Identity/legal fields stay on Candidate itself. Zero rows,
--- verified — nothing to migrate.
-ALTER TABLE "CandidateProfile"
-  DROP COLUMN "ssn",
-  DROP COLUMN "visaType",
-  DROP COLUMN "visaStatus",
-  DROP COLUMN "visaExpiry",
-  DROP COLUMN "address",
-  DROP COLUMN "commissionPaid",
-  DROP COLUMN "techStack",
-  DROP COLUMN "location",
-  DROP COLUMN "currentSalary",
-  DROP COLUMN "expectedSalary",
-  DROP COLUMN "noticePeriod";
+-- Undo the short-lived CandidateProfile split. The final recruitment model
+-- keeps one Candidate record with its legal/profile data and later adds a
+-- separate CandidateMarketingProfile only for multi-technology marketing.
+--
+-- The original migration dropped CandidateProfile fields without first putting
+-- them back on Candidate, while the next migration attempted a separate
+-- Candidate → User merge that was immediately contradicted by later migrations
+-- still referencing Candidate. Restore the actual final model here, preserving
+-- every supported field and each application's candidate relationship.
+ALTER TABLE "Candidate"
+  ADD COLUMN IF NOT EXISTS "ssn" TEXT,
+  ADD COLUMN IF NOT EXISTS "visaType" TEXT,
+  ADD COLUMN IF NOT EXISTS "visaStatus" TEXT,
+  ADD COLUMN IF NOT EXISTS "visaExpiry" TIMESTAMP(3),
+  ADD COLUMN IF NOT EXISTS "address" TEXT,
+  ADD COLUMN IF NOT EXISTS "commissionPaid" INTEGER,
+  ADD COLUMN IF NOT EXISTS "techStack" TEXT,
+  ADD COLUMN IF NOT EXISTS "benchStatus" TEXT DEFAULT 'Available / On Bench',
+  ADD COLUMN IF NOT EXISTS "resumeUrl" TEXT,
+  ADD COLUMN IF NOT EXISTS "location" TEXT,
+  ADD COLUMN IF NOT EXISTS "headline" TEXT,
+  ADD COLUMN IF NOT EXISTS "skills" TEXT,
+  ADD COLUMN IF NOT EXISTS "source" TEXT DEFAULT 'Direct',
+  ADD COLUMN IF NOT EXISTS "currentSalary" INTEGER,
+  ADD COLUMN IF NOT EXISTS "expectedSalary" INTEGER,
+  ADD COLUMN IF NOT EXISTS "noticePeriod" TEXT,
+  ADD COLUMN IF NOT EXISTS "notes" TEXT;
 
--- AlterTable Application: candidateProfileId is descriptive metadata, not a
--- second identity/dedup key — the real dedup rule stays candidateId+jobId
--- (restored in the prior migration). isDirect/appliedAt were unrelated,
--- unwired WIP. Zero non-default rows, verified.
-DROP INDEX "Application_jobId_candidateProfileId_key";
+-- CandidateProfile was created as one profile per Candidate. DISTINCT ON is a
+-- defensive choice for legacy data with duplicates: retain the earliest profile
+-- rather than nondeterministically mixing fields from different records.
+WITH primary_profile AS (
+  SELECT DISTINCT ON ("candidateId") *
+  FROM "CandidateProfile"
+  ORDER BY "candidateId", "createdAt", "id"
+)
+UPDATE "Candidate" candidate
+SET
+  "ssn" = profile."ssn",
+  "visaType" = profile."visaType",
+  "visaStatus" = profile."visaStatus",
+  "visaExpiry" = profile."visaExpiry",
+  "address" = profile."address",
+  "commissionPaid" = profile."commissionPaid",
+  "techStack" = profile."techStack",
+  "benchStatus" = COALESCE(profile."benchStatus", candidate."benchStatus"),
+  "resumeUrl" = profile."resumeUrl",
+  "location" = profile."location",
+  "headline" = profile."headline",
+  "skills" = profile."skills",
+  "source" = COALESCE(profile."source", candidate."source"),
+  "currentSalary" = profile."currentSalary",
+  "expectedSalary" = profile."expectedSalary",
+  "noticePeriod" = profile."noticePeriod",
+  "notes" = profile."notes"
+FROM primary_profile profile
+WHERE candidate.id = profile."candidateId";
+
+UPDATE "Candidate" SET "source" = 'Direct' WHERE "source" IS NULL;
+ALTER TABLE "Candidate" ALTER COLUMN "source" SET DEFAULT 'Direct';
+ALTER TABLE "Candidate" ALTER COLUMN "source" SET NOT NULL;
+CREATE INDEX IF NOT EXISTS "Candidate_benchStatus_idx" ON "Candidate"("benchStatus");
+
+ALTER TABLE "Application" ADD COLUMN IF NOT EXISTS "candidateId" TEXT;
+UPDATE "Application" application
+SET "candidateId" = profile."candidateId"
+FROM "CandidateProfile" profile
+WHERE application."candidateProfileId" = profile.id;
+ALTER TABLE "Application" ALTER COLUMN "candidateId" SET NOT NULL;
+ALTER TABLE "Application" DROP CONSTRAINT IF EXISTS "Application_candidateProfileId_fkey";
+DROP INDEX IF EXISTS "Application_jobId_candidateProfileId_key";
+ALTER TABLE "Application" DROP COLUMN IF EXISTS "candidateProfileId";
+CREATE UNIQUE INDEX IF NOT EXISTS "Application_jobId_candidateId_key" ON "Application"("jobId", "candidateId");
+ALTER TABLE "Application" ADD CONSTRAINT "Application_candidateId_fkey"
+  FOREIGN KEY ("candidateId") REFERENCES "Candidate"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+DROP TABLE IF EXISTS "CandidateProfile";
+
+-- isDirect/appliedAt were unrelated, unwired WIP columns in one branch of the
+-- application. They do not exist in the canonical schema but may exist in an
+-- old database, so remove them only when present.
 ALTER TABLE "Application"
-  DROP COLUMN "isDirect",
-  DROP COLUMN "appliedAt";
+  DROP COLUMN IF EXISTS "isDirect",
+  DROP COLUMN IF EXISTS "appliedAt";
 
 -- AlterTable ProjectAssignment: replace free-text workLocation/engagementModel
 -- with the canonical WorkMode/EmploymentType enums (one vocabulary used
