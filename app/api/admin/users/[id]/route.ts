@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { clientIp, recordAudit } from "@/lib/audit";
 import { canAdminister, canAssignRole, canChangeOwnRole, canEditIdentity } from "@/lib/auth/authority";
-import { guardRoute } from "@/lib/auth/guard";
+import { can, guardRoute } from "@/lib/auth/guard";
 import { ROLE } from "@/lib/auth/roles";
 import { CEO_ALREADY_ASSIGNED_MESSAGE, CEO_TRANSFER_ACTIVE_PERSON_MESSAGE, CEO_TRANSFER_ONLY_MESSAGE, CEO_SINGLETON_KEY, ceoSingletonValue, mayTransferCeo } from "@/lib/auth/single-ceo";
 import { emailPattern } from "@/lib/contact";
@@ -196,7 +196,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
 
   // If the user is already ARCHIVED, only Founder & CEO (Super Admin) can permanently delete
   if (target.status === "ARCHIVED") {
-    if (!context.role.isSuperAdmin) {
+    if (!context.role.isSuperAdmin || !can(context, "user.purge")) {
       return NextResponse.json(
         { message: "Only the Founder & CEO has the authority to permanently delete archived users and purge their associated data." },
         { status: 403 }

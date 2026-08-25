@@ -22,7 +22,7 @@ export const MINIMUM_RETAIN_DAYS = 30;
  * is always an entry saying it happened, who did it, and how much went.
  */
 export async function DELETE(request: Request) {
-  const { context, response } = await guardRoute("audit.view");
+  const { context, response } = await guardRoute("audit.purge");
   if (response) return response;
 
   // Deliberately stricter than a permission toggle. Erasing the accountability

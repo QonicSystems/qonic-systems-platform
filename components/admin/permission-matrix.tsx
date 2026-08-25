@@ -1,7 +1,10 @@
 "use client";
 
-import { Fragment, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { EmptyState } from "@/components/portal/empty-state";
+import { TableToolbar } from "@/components/portal/table-toolbar";
+import { useFilter } from "@/lib/ui/filter";
 
 type Role = { id: string; key: string; label: string; isSuperAdmin: boolean; rank: number };
 type Permission = { key: string; group: string; label: string; description: string };
@@ -32,6 +35,12 @@ export function PermissionMatrix({ roles, permissions, initial, superAdminOnly, 
   // shared flag let whichever finished last re-enable all of them.
   const [pending, setPending] = useState<Record<string, boolean>>({});
   const [message, setMessage] = useState<{ tone: "success" | "error"; text: string } | null>(null);
+  const { query, setQuery, rows: searchedPermissions, isFiltered: isSearching } = useFilter(
+    permissions,
+    (permission) => [permission.key, permission.group, permission.label, permission.description],
+  );
+  const [groupFilter, setGroupFilter] = useState("ALL");
+  const [roleFilter, setRoleFilter] = useState("ALL");
 
   const toggle = async (role: Role, permission: Permission) => {
     const cell = `${role.id}:${permission.key}`;
@@ -66,11 +75,43 @@ export function PermissionMatrix({ roles, permissions, initial, superAdminOnly, 
   };
 
   const groups = [...new Set(permissions.map((permission) => permission.group))];
+  const filteredPermissions = useMemo(() => searchedPermissions.filter((permission) => {
+    if (groupFilter !== "ALL" && permission.group !== groupFilter) return false;
+    if (roleFilter === "ALL") return true;
+    const role = roles.find((candidate) => candidate.id === roleFilter);
+    return Boolean(role?.isSuperAdmin || (role && state[`${role.id}:${permission.key}`]));
+  }), [groupFilter, roleFilter, roles, searchedPermissions, state]);
+  const isFiltered = isSearching || groupFilter !== "ALL" || roleFilter !== "ALL";
+  const clearFilters = () => {
+    setQuery("");
+    setGroupFilter("ALL");
+    setRoleFilter("ALL");
+  };
 
   return <div>
     {message && <p className={`form-status form-status--${message.tone}`} role="status">{message.text}</p>}
 
-    <div className="matrix-scroll">
+    <TableToolbar search={query} onSearch={setQuery} placeholder="Search capabilities…" label="Search capabilities">
+      <label className="flex items-center gap-2 text-sm font-medium text-ink-muted">
+        <span>Area</span>
+        <select className="row-select" value={groupFilter} onChange={(event) => setGroupFilter(event.target.value)}>
+          <option value="ALL">All areas</option>
+          {groups.map((group) => <option key={group} value={group}>{group}</option>)}
+        </select>
+      </label>
+      <label className="flex items-center gap-2 text-sm font-medium text-ink-muted">
+        <span>Enabled for</span>
+        <select className="row-select" value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)}>
+          <option value="ALL">All roles</option>
+          {roles.map((role) => <option key={role.id} value={role.id}>{role.label}</option>)}
+        </select>
+      </label>
+      {isFiltered && <button type="button" className="row-action" onClick={clearFilters}>Clear filters</button>}
+    </TableToolbar>
+
+    {filteredPermissions.length === 0
+      ? <EmptyState message="No capabilities are configured." filteredMessage="No capabilities match those filters." isFiltered={isFiltered} />
+      : <div className="matrix-scroll">
       <table className="matrix">
         <thead>
           <tr>
@@ -82,9 +123,12 @@ export function PermissionMatrix({ roles, permissions, initial, superAdminOnly, 
           </tr>
         </thead>
         <tbody>
-          {groups.map((group) => <Fragment key={group}>
-            <tr className="matrix-group"><th scope="rowgroup" colSpan={roles.length + 1}>{group}</th></tr>
-            {permissions.filter((permission) => permission.group === group).map((permission) => <tr key={permission.key}>
+          {groups.map((group) => {
+            const groupPermissions = filteredPermissions.filter((permission) => permission.group === group);
+            if (groupPermissions.length === 0) return null;
+            return <Fragment key={group}>
+              <tr className="matrix-group"><th scope="rowgroup" colSpan={roles.length + 1}>{group}</th></tr>
+              {groupPermissions.map((permission) => <tr key={permission.key}>
               <th scope="row">
                 <strong>{permission.label}</strong>
                 <span>{permission.description}</span>
@@ -113,10 +157,11 @@ export function PermissionMatrix({ roles, permissions, initial, superAdminOnly, 
                   {locked && <span className="matrix-locked" title="Only the super admin holds this">CEO only</span>}
                 </td>;
               })}
-            </tr>)}
-          </Fragment>)}
+              </tr>)}
+            </Fragment>;
+          })}
         </tbody>
       </table>
-    </div>
+    </div>}
   </div>;
 }

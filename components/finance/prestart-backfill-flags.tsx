@@ -2,6 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { EmptyState } from "@/components/portal/empty-state";
+import { TableToolbar } from "@/components/portal/table-toolbar";
+import { useFilter } from "@/lib/ui/filter";
 
 export type PrestartBackfillFlag = {
   projectId: string;
@@ -19,6 +22,9 @@ export function PrestartBackfillFlags({ flags }: { flags: PrestartBackfillFlag[]
   const router = useRouter();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ tone: "success" | "error"; text: string } | null>(null);
+  const { query, setQuery, rows, isFiltered } = useFilter(flags, (flag) => [
+    flag.developer, flag.clientProject, flag.projectStart, flag.actualStart, ...flag.unfiledDays,
+  ]);
 
   async function reopen(flag: PrestartBackfillFlag) {
     const id = `${flag.projectId}:${flag.userId}`;
@@ -41,9 +47,12 @@ export function PrestartBackfillFlags({ flags }: { flags: PrestartBackfillFlag[]
 
   return <div>
     {notice && <p className={`form-status form-status--${notice.tone}`} role="status">{notice.text}</p>}
-    <div className="matrix-scroll"><table className="matrix matrix--people">
+    <TableToolbar search={query} onSearch={setQuery} placeholder="Search developer, client, project, or date…" label="Search pre-start backfill flags" />
+    {rows.length === 0
+      ? <EmptyState message="No pre-start timesheet gaps need attention." filteredMessage="No pre-start gaps match that search." isFiltered={isFiltered} />
+      : <div className="matrix-scroll"><table className="matrix matrix--people">
       <thead><tr><th scope="col">Developer</th><th scope="col">Client / Project</th><th scope="col">Project start</th><th scope="col">Actual start</th><th scope="col">Unfiled pre-start days</th><th scope="col">Action</th></tr></thead>
-      <tbody>{flags.map((flag) => {
+      <tbody>{rows.map((flag) => {
         const id = `${flag.projectId}:${flag.userId}`;
         return <tr key={id}>
           <th scope="row">{flag.developer}</th>
@@ -57,6 +66,6 @@ export function PrestartBackfillFlags({ flags }: { flags: PrestartBackfillFlag[]
           </td>
         </tr>;
       })}</tbody>
-    </table></div>
+    </table></div>}
   </div>;
 }

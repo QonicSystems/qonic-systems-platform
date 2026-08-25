@@ -2,6 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { EmptyState } from "@/components/portal/empty-state";
+import { TableToolbar } from "@/components/portal/table-toolbar";
+import { useFilter } from "@/lib/ui/filter";
 
 export type PendingSheet = { id: string; name: string; week: string; total: string; billable: string };
 
@@ -11,6 +14,7 @@ export function TimesheetApprovals({ sheets }: { sheets: ReadonlyArray<PendingSh
   const [rejecting, setRejecting] = useState<PendingSheet | null>(null);
   const [note, setNote] = useState("");
   const [notice, setNotice] = useState<{ tone: "success" | "error"; text: string } | null>(null);
+  const { query, setQuery, rows, isFiltered } = useFilter(sheets, (sheet) => [sheet.name, sheet.week, sheet.total, sheet.billable]);
 
   const decide = async (id: string, decision: "APPROVED" | "REJECTED", reason = "") => {
     setBusy(true); setNotice(null);
@@ -28,11 +32,14 @@ export function TimesheetApprovals({ sheets }: { sheets: ReadonlyArray<PendingSh
   return <div>
     {notice && <p className={`form-status form-status--${notice.tone}`} role="status">{notice.text}</p>}
 
-    <div className="matrix-scroll">
+    <TableToolbar search={query} onSearch={setQuery} placeholder="Search employee or week…" label="Search timesheets awaiting approval" />
+    {rows.length === 0
+      ? <EmptyState message="No timesheets are awaiting approval." filteredMessage="No timesheets match that search." isFiltered={isFiltered} />
+      : <div className="matrix-scroll">
       <table className="matrix matrix--people">
         <thead><tr><th scope="col">Employee</th><th scope="col">Week</th><th scope="col">Total</th><th scope="col">Billable</th><th scope="col">Actions</th></tr></thead>
         <tbody>
-          {sheets.map((sheet) => <tr key={sheet.id}>
+          {rows.map((sheet) => <tr key={sheet.id}>
             <th scope="row"><strong>{sheet.name}</strong></th>
             <td>{sheet.week}</td>
             <td>{sheet.total}</td>
@@ -46,7 +53,7 @@ export function TimesheetApprovals({ sheets }: { sheets: ReadonlyArray<PendingSh
           </tr>)}
         </tbody>
       </table>
-    </div>
+    </div>}
 
     {rejecting && <div className="dialog-backdrop" role="dialog" aria-modal="true" aria-labelledby="reject-title">
       <div className="dialog">

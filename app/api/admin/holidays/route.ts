@@ -12,14 +12,14 @@ type HolidayErrors = Partial<Record<"date" | "name", string>>;
  *
  * Until now the only way to add one was editing prisma/seed-holidays.ts and
  * running it — despite that script's own comment saying HR adds the movable
- * feasts each year. `leave.manage` gates this because whoever administers leave
- * is who needs it.
+ * feasts each year. `holiday.manage` is deliberately separate from deciding
+ * leave, so the calendar can be delegated without granting leave approvals.
  *
  * Note `Holiday.date` is unique on its own, so a date can only exist once
  * regardless of region; upsert-by-date is therefore the honest semantic.
  */
 export async function POST(request: Request) {
-  const { context, response } = await guardRoute("leave.manage");
+  const { context, response } = await guardRoute("holiday.manage");
   if (response) return response;
 
   let body: unknown;
@@ -53,7 +53,7 @@ export async function POST(request: Request) {
 
 /** Remove a holiday, so a date reverts to being a normal working day. */
 export async function DELETE(request: Request) {
-  const { context, response } = await guardRoute("leave.manage");
+  const { context, response } = await guardRoute("holiday.manage");
   if (response) return response;
 
   let body: unknown;

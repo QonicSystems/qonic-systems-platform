@@ -8,11 +8,11 @@ export const metadata = { title: "Holidays" };
  * Public holidays feed the working-day count in lib/leave/leave.ts. They were
  * previously seed-script-only, so keeping them current needed a developer.
  *
- * Viewing needs only `leave.request` — anyone booking leave benefits from
- * seeing which days are already excluded. Editing needs `leave.manage`.
+ * Viewing and maintaining the company calendar are separately permissioned;
+ * requesting leave itself remains available independently to every employee.
  */
 export default async function HolidaysPage() {
-  const context = await requirePermission("admin.access");
+  const context = await requirePermission("holiday.view");
   const holidays = await db.holiday.findMany({ orderBy: { date: "asc" } });
 
   const startOfToday = new Date();
@@ -26,7 +26,7 @@ export default async function HolidaysPage() {
     </p>
 
     <HolidayTable
-      canManage={can(context, "leave.manage")}
+      canManage={can(context, "holiday.manage")}
       holidays={holidays.map((holiday) => ({
         id: holiday.id,
         date: holiday.date.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }),

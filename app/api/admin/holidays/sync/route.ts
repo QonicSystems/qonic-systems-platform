@@ -8,10 +8,10 @@ export const runtime = "nodejs";
 
 /**
  * Pull and sync Indian Public Holidays in real time.
- * Gated by `leave.manage`.
+ * Gated by `holiday.manage`.
  */
 export async function POST(request: Request) {
-  const { context, response } = await guardRoute("leave.manage");
+  const { context, response } = await guardRoute("holiday.manage");
   if (response) return response;
 
   try {

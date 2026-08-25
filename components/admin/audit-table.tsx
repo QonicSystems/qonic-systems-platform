@@ -31,13 +31,14 @@ export type AuditRow = {
  * Filters are URL state, not component state: a filtered view of an audit log
  * is exactly the kind of thing you paste into a ticket.
  */
-export function AuditTable({ entries, actors, actions, filters, page, pageCount }: {
+export function AuditTable({ entries, actors, actions, filters, page, pageCount, canExport }: {
   entries: ReadonlyArray<AuditRow>;
   actors: ReadonlyArray<{ id: string; name: string }>;
   actions: ReadonlyArray<string>;
   filters: { actor: string; action: string; from: string; to: string };
   page: number;
   pageCount: number;
+  canExport: boolean;
 }) {
   const router = useRouter();
   const search = useSearchParams();
@@ -85,8 +86,7 @@ export function AuditTable({ entries, actors, actions, filters, page, pageCount 
       </div>
       <div className="audit-filter-actions">
         {isFiltered && <button type="button" className="row-action" onClick={() => router.push("/admin/audit")}>Clear filters</button>}
-        {/* Built and gated on audit.view already, but nothing linked to it. */}
-        <a className="row-action" href="/api/export?type=audit">Export CSV</a>
+        {canExport && <a className="row-action" href="/api/export?type=audit">Export CSV</a>}
       </div>
     </div>
 

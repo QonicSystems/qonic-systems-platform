@@ -43,23 +43,38 @@ export const PERMISSIONS = [
   { key: "expense.submit", group: "Finance", label: "Claim expenses", description: "Submit your own expense claims.", sortOrder: 70 },
   { key: "expense.approve", group: "Finance", label: "Approve expenses", description: "Approve, reject, and mark expenses reimbursed.", sortOrder: 72 },
   { key: "report.finance", group: "Finance", label: "View company finance", description: "Revenue, collections, receivables, costs, payouts, and placement fees.", sortOrder: 74 },
-  { key: "payout.view_own", group: "Finance", label: "View own earnings", description: "See earnings and raise monthly payment invoices to Qonic Systems.", sortOrder: 75 },
-  { key: "payout.view_all", group: "Finance", label: "View all payout data", description: "See every resource's payout breakdown, not only your own.", sortOrder: 76 },
-  { key: "compensation.manage", group: "Finance", label: "Set salaries and decide earnings invoices", description: "Set People salaries and approve, reject, or record payment of Qonic earning invoices.", sortOrder: 77 },
+  { key: "finance.export", group: "Finance", label: "Export financial data", description: "Download invoice, payment, expense, and approved-time CSV data.", sortOrder: 75 },
+  { key: "payout.view_own", group: "Finance", label: "View own earnings", description: "See earnings and raise monthly payment invoices to Qonic Systems.", sortOrder: 76 },
+  { key: "payout.view_all", group: "Finance", label: "View all payout data", description: "See every resource's payout breakdown, not only your own.", sortOrder: 77 },
+  { key: "compensation.manage", group: "Finance", label: "Set salaries and decide earnings invoices", description: "Set People salaries and approve, reject, or record payment of Qonic earning invoices.", sortOrder: 78 },
 
   // Leave
   { key: "leave.request", group: "Leave", label: "Request leave", description: "Submit leave requests and see your own balances.", sortOrder: 82 },
   { key: "leave.approve", group: "Leave", label: "Approve leave", description: "Approve or reject leave for the people who report to you.", sortOrder: 84 },
   { key: "leave.manage", group: "Leave", label: "Manage leave for everyone", description: "See and decide any request, and adjust entitlements.", sortOrder: 86 },
 
-  // People administration
-  { key: "admin.access", group: "Administration", label: "Access the admin console", description: "Open the administration area.", sortOrder: 90 },
-  { key: "user.view", group: "Administration", label: "View staff accounts", description: "List and inspect user accounts.", sortOrder: 100 },
-  { key: "user.manage", group: "Administration", label: "Edit staff profiles", description: "Create accounts and edit their details. Limited to roles junior to your own.", sortOrder: 110 },
-  { key: "user.deactivate", group: "Administration", label: "Deactivate staff accounts", description: "Suspend or restore an account. Suspending signs the person out everywhere.", sortOrder: 112 },
-  { key: "user.delete", group: "Administration", label: "Remove staff accounts", description: "Permanently delete an account. Blocked when the person has contract letters on record.", sortOrder: 114 },
-  { key: "rbac.manage", group: "Administration", label: "Manage roles and permissions", description: "Create roles and toggle what each role can do. Equivalent to full control.", sortOrder: 120 },
-  { key: "audit.view", group: "Administration", label: "View the audit log", description: "Read the record of privileged actions.", sortOrder: 130 },
+  // Administration access is deliberately split by screen and action. A role
+  // can, for example, maintain the holiday calendar without access to People.
+  { key: "admin.access", group: "Administration", label: "Access Administration", description: "Open the Administration workspace.", sortOrder: 90 },
+
+  // People
+  { key: "user.view", group: "People", label: "View People", description: "List and inspect People accounts.", sortOrder: 100 },
+  { key: "user.manage", group: "People", label: "Manage People", description: "Create accounts and edit their details. Limited to roles junior to your own.", sortOrder: 110 },
+  { key: "user.deactivate", group: "People", label: "Deactivate People", description: "Suspend or restore an account. Suspending signs the person out everywhere.", sortOrder: 112 },
+  { key: "user.delete", group: "People", label: "Archive People", description: "Archive an account while preserving its business history.", sortOrder: 114 },
+  { key: "user.purge", group: "People", label: "Permanently purge People", description: "Permanently remove an already archived account and its associated records. CEO only.", sortOrder: 116 },
+
+  // Roles & Permissions
+  { key: "rbac.manage", group: "Roles & Permissions", label: "Manage Roles & Permissions", description: "Create roles and toggle what each role can do. This capability is controlled by the CEO.", sortOrder: 120 },
+
+  // Holidays
+  { key: "holiday.view", group: "Holidays", label: "View Holidays", description: "Open the public holiday calendar used by leave calculations.", sortOrder: 122 },
+  { key: "holiday.manage", group: "Holidays", label: "Manage Holidays", description: "Add, remove, and sync public holidays.", sortOrder: 124 },
+
+  // Audit Log
+  { key: "audit.view", group: "Audit Log", label: "View Audit Log", description: "Read the record of privileged actions.", sortOrder: 130 },
+  { key: "audit.export", group: "Audit Log", label: "Export Audit Log", description: "Download audit-log entries as a CSV file.", sortOrder: 132 },
+  { key: "audit.purge", group: "Audit Log", label: "Purge Audit Log", description: "Permanently remove old audit entries after password confirmation. CEO only.", sortOrder: 134 },
 ] as const satisfies ReadonlyArray<{
   key: string;
   group: string;
@@ -84,10 +99,11 @@ export const DEFAULT_ROLE_PERMISSIONS: Readonly<Record<Exclude<RoleKey, "ceo">, 
     "client.view", "client.manage", "project.view", "project.manage",
     "timesheet.submit", "timesheet.approve",
     "job.view", "job.manage", "candidate.view", "candidate.manage", "placement.manage",
-    "invoice.view", "invoice.manage", "payment.record", "report.finance",
+    "invoice.view", "invoice.manage", "payment.record", "report.finance", "finance.export",
     "payout.view_own", "payout.view_all", "compensation.manage",
     "leave.request", "leave.approve", "leave.manage",
-    "admin.access", "user.view", "user.manage", "user.deactivate", "audit.view",
+    "admin.access", "user.view", "user.manage", "user.deactivate",
+    "holiday.view", "holiday.manage", "audit.view", "audit.export",
   ],
   [ROLE.DEVELOPER]: [
     "portal.access", "directory.view", "contract.view_own", "leave.request", "timesheet.submit", "payout.view_own",
@@ -95,7 +111,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Readonly<Record<Exclude<RoleKey, "ceo">, 
 };
 
 /** Granting this is equivalent to granting everything, so it stays CEO-only. */
-export const SUPER_ADMIN_ONLY_PERMISSIONS: ReadonlySet<string> = new Set(["rbac.manage"]);
+export const SUPER_ADMIN_ONLY_PERMISSIONS: ReadonlySet<string> = new Set(["rbac.manage", "user.purge", "audit.purge"]);
 
 // --------------------------------------------------------------- resolution --
 

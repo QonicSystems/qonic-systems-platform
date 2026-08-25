@@ -30,8 +30,9 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const type = searchParams.get("type") ?? "invoices";
 
-  // The audit export is a compliance artefact, so it sits behind its own right.
-  const permission = type === "audit" ? "audit.view" : "report.finance";
+  // Exports are a separate disclosure capability: page access does not grant a
+  // bulk download of its underlying records.
+  const permission = type === "audit" ? "audit.export" : "finance.export";
   const { context, response } = await guardRoute(permission);
   if (response) return response;
 

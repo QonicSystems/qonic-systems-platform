@@ -1,7 +1,10 @@
 "use client";
 
 import { Fragment, useRef, useState } from "react";
+import { EmptyState } from "@/components/portal/empty-state";
+import { TableToolbar } from "@/components/portal/table-toolbar";
 import { StatusChip } from "@/components/status-chip";
+import { useFilter } from "@/lib/ui/filter";
 
 export type DeliveryFinanceAssignment = {
   id: string;
@@ -39,6 +42,13 @@ const billingLabel: Record<DeliveryFinanceAssignment["days"][number]["billingSta
 export function ExpandableDeliveryFinance({ assignments }: { assignments: DeliveryFinanceAssignment[] }) {
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
   const tableScrollRef = useRef<HTMLDivElement>(null);
+  const { query, setQuery, rows, isFiltered } = useFilter(assignments, (assignment) => [
+    assignment.developer,
+    assignment.clientProject,
+    assignment.projectStart,
+    assignment.actualStart,
+    ...assignment.days.flatMap((day) => [day.workDate, billingLabel[day.billingStatus], day.payoutCategory]),
+  ]);
 
   function toggle(id: string) {
     const opening = !expanded.has(id);
@@ -54,9 +64,13 @@ export function ExpandableDeliveryFinance({ assignments }: { assignments: Delive
     if (opening) requestAnimationFrame(() => tableScrollRef.current?.scrollTo({ left: 0 }));
   }
 
-  return <div ref={tableScrollRef} className="matrix-scroll"><table className="matrix matrix--people delivery-finance-table">
+  return <>
+    <TableToolbar search={query} onSearch={setQuery} placeholder="Search developer, client, project, date, or status…" label="Search delivery finance" />
+    {rows.length === 0
+      ? <EmptyState message="No delivery finance has been generated." filteredMessage="No delivery finance rows match that search." isFiltered={isFiltered} />
+      : <div ref={tableScrollRef} className="matrix-scroll"><table className="matrix matrix--people delivery-finance-table">
     <thead><tr><th scope="col">Developer</th><th scope="col">Client / Project</th><th scope="col">Project start</th><th scope="col">Actual start</th><th scope="col" className="num">Billable hours</th><th scope="col" className="num">Client billable value</th><th scope="col" className="num">Developer payout</th><th scope="col" className="num">Retained value</th><th scope="col"><span className="sr-only">Daily finance</span></th></tr></thead>
-    <tbody>{assignments.map((assignment) => {
+    <tbody>{rows.map((assignment) => {
       const isExpanded = expanded.has(assignment.id);
       const detailId = `delivery-finance-${assignment.id}`;
       return <Fragment key={assignment.id}>
@@ -104,5 +118,6 @@ export function ExpandableDeliveryFinance({ assignments }: { assignments: Delive
         </tr> : null}
       </Fragment>;
     })}</tbody>
-  </table></div>;
+  </table></div>}
+  </>;
 }

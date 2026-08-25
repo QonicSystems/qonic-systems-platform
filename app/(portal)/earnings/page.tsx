@@ -6,6 +6,7 @@ import { EarningsInvoiceActions } from "@/components/finance/earnings-invoice-ac
 import { db } from "@/lib/db";
 import { monthlySalaryValues } from "@/lib/finance/compensation";
 import { remainingEarningAmount } from "@/lib/finance/earnings";
+import { formatCurrencyTotals } from "@/lib/finance/summary";
 
 export const metadata = { title: "My Earnings" };
 
@@ -102,6 +103,10 @@ export default async function EarningsPage({ searchParams }: { searchParams: Pro
       invoices: raised,
     };
   });
+  // Salary schedules may be set in more than one currency. Keep their
+  // earnings side-by-side: a count of currencies is not an earnings figure,
+  // and adding currencies would invent a conversion rate.
+  const salaryAccrued = formatCurrencyTotals(Object.fromEntries(expectedCandidates.map((candidate) => [candidate.currency, candidate.amount])));
   const monthLabel = start.toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" });
 
   return <div className="portal-page">
@@ -117,10 +122,10 @@ export default async function EarningsPage({ searchParams }: { searchParams: Pro
       </p>
       <div className="hero-stats">
         <div>
-          <span className="hero-stat-value" style={{ fontSize: "2rem" }}>
-          <AnimatedNumber value={deliveryPayee ? sum(actual) : invoiceCandidates.length} />
+          <span className="hero-stat-value" style={{ fontSize: deliveryPayee ? "2rem" : "1.6rem" }}>
+          {deliveryPayee ? <AnimatedNumber value={sum(actual)} /> : salaryAccrued}
           </span>
-          <p className="hero-stat-label">{deliveryPayee ? "Actual payout" : "Salary currencies"}</p>
+          <p className="hero-stat-label">{deliveryPayee ? "Actual payout" : "Salary accrued · not paid"}</p>
         </div>
         {canViewAll && (
           <div>

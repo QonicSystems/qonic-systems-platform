@@ -1,6 +1,6 @@
 import { AuditTable } from "@/components/admin/audit-table";
 import { PurgeAudit } from "@/components/admin/purge-audit";
-import { requirePermission } from "@/lib/auth/guard";
+import { can, requirePermission } from "@/lib/auth/guard";
 import { db } from "@/lib/db";
 
 export const metadata = { title: "Audit Log" };
@@ -76,8 +76,9 @@ export default async function AuditPage({ searchParams }: {
       filters={{ actor: actorId ?? "", action: action ?? "", from: params.from ?? "", to: params.to ?? "" }}
       page={page}
       pageCount={Math.max(1, Math.ceil(matching / PAGE_SIZE))}
+      canExport={can(context, "audit.export")}
     />
 
-    {context.role.isSuperAdmin && <PurgeAudit olderThanOptions={olderThanOptions} totalEntries={total} />}
+    {context.role.isSuperAdmin && can(context, "audit.purge") && <PurgeAudit olderThanOptions={olderThanOptions} totalEntries={total} />}
   </section>;
 }

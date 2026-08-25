@@ -3,7 +3,10 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { EmptyState } from "@/components/portal/empty-state";
+import { TableToolbar } from "@/components/portal/table-toolbar";
 import { LEADERSHIP_MAX_RANK } from "@/lib/auth/roles";
+import { useFilter } from "@/lib/ui/filter";
 
 export type RoleRow = {
   id: string;
@@ -59,6 +62,9 @@ export function RoleManager({ roles }: { roles: ReadonlyArray<RoleRow> }) {
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<RoleRow | null>(null);
   const [deleting, setDeleting] = useState<RoleRow | null>(null);
+  const { query, setQuery, rows, isFiltered } = useFilter(roles, (role) => [
+    role.label, role.key, role.description, String(role.rank), role.viaCandidatePool ? "candidate pool" : "people",
+  ]);
 
   const act = async (url: string, init: RequestInit): Promise<ActResult> => {
     setBusy(true);
@@ -102,7 +108,11 @@ export function RoleManager({ roles }: { roles: ReadonlyArray<RoleRow> }) {
       </button>
     </div>
 
-    <div className="matrix-scroll">
+    <TableToolbar search={query} onSearch={setQuery} placeholder="Search roles…" label="Search roles" />
+
+    {rows.length === 0
+      ? <EmptyState message="No roles are configured." filteredMessage="No roles match that search." isFiltered={isFiltered} />
+      : <div className="matrix-scroll">
       <table className="matrix matrix--people">
         <thead>
           <tr>
@@ -114,7 +124,7 @@ export function RoleManager({ roles }: { roles: ReadonlyArray<RoleRow> }) {
           </tr>
         </thead>
         <tbody>
-          {roles.map((role) => <tr key={role.id}>
+          {rows.map((role) => <tr key={role.id}>
             <th scope="row">
               <strong>{role.label}</strong>
               <span className="font-mono text-xs text-slate-500">{role.key}{role.isSystem ? " · built-in" : ""}</span>
@@ -153,7 +163,7 @@ export function RoleManager({ roles }: { roles: ReadonlyArray<RoleRow> }) {
           </tr>)}
         </tbody>
       </table>
-    </div>
+    </div>}
 
     {creating && <RoleDialog
       title="Create a role"
