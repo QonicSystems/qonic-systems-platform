@@ -30,4 +30,4 @@ ALTER TABLE "PayoutLedgerEntry"
   DROP COLUMN "overrideNote";
 
 -- DropTable
-DROP TABLE "ResourceDeal";
+DROP TABLE IF EXISTS "ResourceDeal";
