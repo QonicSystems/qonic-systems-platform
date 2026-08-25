@@ -32,6 +32,18 @@ const nextConfig: NextConfig = {
    * reCAPTCHA script and frame — that belongs in its own change with its own
    * verification, not bundled into a security fix that must ship today.
    */
+  /**
+   * `/reports` was the Utilisation report and the index of the Reports group.
+   * Both are gone; Revenue is the only report left and now lives under Finance.
+   * Redirecting rather than moving the page keeps `/reports/revenue` — the URL
+   * in bookmarks, docs and tests/redirect-safety.test.ts — stable.
+   *
+   * 307, not 308: a permanent redirect is cached by the browser forever, and a
+   * real `/reports` index could legitimately return later.
+   */
+  async redirects() {
+    return [{ source: "/reports", destination: "/reports/revenue", permanent: false }];
+  },
   async headers() {
     return [{
       source: "/:path*",

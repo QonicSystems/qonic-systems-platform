@@ -6,15 +6,19 @@ import { EmptyState } from "@/components/portal/empty-state";
 import { StatusChip } from "@/components/status-chip";
 import { TableToolbar } from "@/components/portal/table-toolbar";
 import { useFilter } from "@/lib/ui/filter";
+import { COMMERCIAL_INVOICE_LABEL } from "@/lib/finance/c2c";
 
 export type InvoiceLine = { id: string; description: string; quantity: string; unitRate: string; amount: string };
-export type InvoicePayment = { id: string; amount: string; paidOn: string; method: string; reference: string };
+export type InvoicePayment = { id: string; amount: string; settlementAmount: string; realizedFxGainLoss: string; paidOn: string; method: string; reference: string };
 export type InvoiceCreditNote = { id: string; number: string; amount: string; reason: string; issuedOn: string; issuedBy: string };
 
 type Row = {
   id: string; number: string; client: string; project: string; status: string;
+  currency: string; settlementCurrency: string; lockedSettlementRate: string; expectedSettlement: string; outstandingAmount: string;
+  commercialKind: string; billingRecipient: string;
   issued: string; due: string; total: string; outstanding: string; ageing: string;
   subtotal: string; taxPercent: number; taxAmount: string; notes: string;
+  grossClientAmount: string; vendorCommissionAmount: string; globalCandidateCommissionAmount: string; qonicRevenueAmount: string;
   lines: ReadonlyArray<InvoiceLine>;
   payments: ReadonlyArray<InvoicePayment>;
   creditNotes: ReadonlyArray<InvoiceCreditNote>;
@@ -26,7 +30,7 @@ const blankLine: Draft = { description: "", quantity: "1", unitRate: "" };
 
 export function InvoiceManager({ invoices, clients, projects, canManage, canRecordPayment, today, dueDefault }: {
   invoices: ReadonlyArray<Row>;
-  clients: ReadonlyArray<{ id: string; name: string }>;
+  clients: ReadonlyArray<{ id: string; name: string; rateCurrency: string }>;
   projects: ReadonlyArray<{ id: string; name: string; clientId: string }>;
   canManage: boolean;
   canRecordPayment: boolean;
@@ -35,8 +39,8 @@ export function InvoiceManager({ invoices, clients, projects, canManage, canReco
   dueDefault: string;
 }) {
   const router = useRouter();
-  const empty = { clientId: clients[0]?.id ?? "", projectId: "", issueDate: today, dueDate: dueDefault, taxPercent: "18", fromTimesheets: true, notes: "", currency: "INR" };
-  const { query, setQuery, rows, isFiltered } = useFilter(invoices, (invoice) => [invoice.number, invoice.client, invoice.project, invoice.status]);
+  const empty = { clientId: clients[0]?.id ?? "", projectId: "", issueDate: today, dueDate: dueDefault, taxPercent: "18", fromTimesheets: true, notes: "", currency: "INR", settlementCurrency: clients[0]?.rateCurrency ?? "INR", lockedSettlementRate: "" };
+  const { query, setQuery, rows, isFiltered } = useFilter(invoices, (invoice) => [invoice.number, invoice.client, invoice.billingRecipient, invoice.project, invoice.status, invoice.commercialKind]);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(empty);
   // Manual lines. The API has always accepted them when `fromTimesheets` is
@@ -44,10 +48,11 @@ export function InvoiceManager({ invoices, clients, projects, canManage, canReco
   // so unchecking the box could only ever fail.
   const [lines, setLines] = useState<Draft[]>([{ ...blankLine }]);
   const [paying, setPaying] = useState<Row | null>(null);
-  const [payment, setPayment] = useState({ amount: "", paidOn: today, method: "Bank transfer", reference: "" });
+  const [payment, setPayment] = useState({ amount: "", settlementAmount: "", paidOn: today, method: "Bank transfer", reference: "" });
   const [crediting, setCrediting] = useState<Row | null>(null);
   const [credit, setCredit] = useState({ amount: "", reason: "" });
   const [detailId, setDetailId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<Row | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ tone: "success" | "error"; text: string } | null>(null);
 
@@ -77,6 +82,8 @@ export function InvoiceManager({ invoices, clients, projects, canManage, canReco
   };
 
   const clientProjects = projects.filter((p) => p.clientId === form.clientId);
+  const selectedClient = clients.find((client) => client.id === form.clientId) ?? null;
+  const isForeignSettlement = Boolean(selectedClient && selectedClient.rateCurrency !== "INR" && form.settlementCurrency === "INR");
   const setLine = (index: number, patch: Partial<Draft>) =>
     setLines((current) => current.map((line, i) => (i === index ? { ...line, ...patch } : line)));
   const usableLines = lines.filter((l) => l.description.trim() && l.unitRate.trim());
@@ -92,18 +99,18 @@ export function InvoiceManager({ invoices, clients, projects, canManage, canReco
       ? <EmptyState message="No invoices yet." filteredMessage="Nothing matches that search." isFiltered={isFiltered} />
       : <div className="matrix-scroll">
       <table className="matrix matrix--people">
-        <thead><tr><th scope="col">Invoice</th><th scope="col">Client</th><th scope="col">Due</th><th scope="col">Total</th><th scope="col">Outstanding</th><th scope="col">Status</th><th scope="col">Actions</th></tr></thead>
+        <thead><tr><th scope="col">Invoice</th><th scope="col">Client / Recipient</th><th scope="col">Due</th><th scope="col">Total</th><th scope="col">Outstanding</th><th scope="col">Status</th><th scope="col">Actions</th></tr></thead>
         <tbody>
           {rows.map((invoice) => <tr key={invoice.id}>
             <th scope="row">
               <strong>{invoice.number}</strong>
-              <span>{invoice.project} · issued {invoice.issued}</span>
+              <span>{COMMERCIAL_INVOICE_LABEL[invoice.commercialKind] ?? invoice.commercialKind} · {invoice.project} · issued {invoice.issued}</span>
               <span className="matrix-tags">
                 {invoice.payments.length > 0 && <span className="pill">{invoice.payments.length} payment{invoice.payments.length === 1 ? "" : "s"}</span>}
                 {invoice.creditNotes.length > 0 && <span className="pill pill--warn">{invoice.creditNotes.length} credit note{invoice.creditNotes.length === 1 ? "" : "s"}</span>}
               </span>
             </th>
-            <td>{invoice.client}</td>
+            <td>{invoice.client}{invoice.billingRecipient && <span className="portal-muted">To: {invoice.billingRecipient}</span>}</td>
             <td>{invoice.due}{invoice.ageing !== "—" && invoice.ageing !== "current" && <span className="portal-muted text-over">{invoice.ageing} days late</span>}</td>
             <td>{invoice.total}</td>
             <td>{invoice.outstanding}</td>
@@ -113,22 +120,19 @@ export function InvoiceManager({ invoices, clients, projects, canManage, canReco
                 <button type="button" className="row-action" onClick={() => setDetailId(invoice.id)}>Open</button>
                 <a className="row-action" href={`/api/invoices/${invoice.id}/pdf`} target="_blank" rel="noreferrer noopener">PDF</a>
                 {canManage && invoice.status === "DRAFT" && <button type="button" className="row-action" disabled={busy} onClick={() => call(`/api/invoices/${invoice.id}`, { action: "send" })}>Issue</button>}
+                {canManage && ["SENT", "PART_PAID", "OVERDUE"].includes(invoice.status) && <button type="button" className="row-action" disabled={busy} onClick={() => call(`/api/invoices/${invoice.id}`, { action: "reissue" })}>Reissue</button>}
                 {canManage && !["PAID", "VOID"].includes(invoice.status) && <button type="button" className="row-action row-action--danger" disabled={busy} onClick={() => call(`/api/invoices/${invoice.id}`, { action: "void" })}>Void</button>}
                 {canManage && ["DRAFT", "VOID"].includes(invoice.status) && (
                   <button
                     type="button"
                     className="row-action row-action--danger"
                     disabled={busy}
-                    onClick={() => {
-                      if (window.confirm(`Permanently delete ${invoice.number}? This cannot be undone.`)) {
-                        call(`/api/invoices/${invoice.id}`, {}, "DELETE");
-                      }
-                    }}
+                    onClick={() => setDeleting(invoice)}
                   >
                     Delete
                   </button>
                 )}
-                {canRecordPayment && ["SENT", "PART_PAID", "OVERDUE"].includes(invoice.status) && <button type="button" className="row-action" disabled={busy} onClick={() => { setPaying(invoice); setPayment({ ...payment, amount: "" }); }}>Record payment</button>}
+                {canRecordPayment && ["SENT", "PART_PAID", "OVERDUE"].includes(invoice.status) && <button type="button" className="row-action" disabled={busy} onClick={() => { setPaying(invoice); setPayment({ amount: invoice.outstandingAmount, settlementAmount: "", paidOn: today, method: "Bank transfer", reference: "" }); }}>Record payment</button>}
                 {canManage && !["DRAFT", "VOID"].includes(invoice.status) && <button type="button" className="row-action" disabled={busy} onClick={() => { setCrediting(invoice); setCredit({ amount: "", reason: "" }); }}>Credit note</button>}
               </div>
             </td>
@@ -141,7 +145,7 @@ export function InvoiceManager({ invoices, clients, projects, canManage, canReco
     {detail && <div className="dialog-backdrop" role="dialog" aria-modal="true" aria-labelledby="inv-detail-title">
       <div className="dialog dialog--wide">
         <h3 id="inv-detail-title" className="dialog-title">{detail.number}</h3>
-        <p className="portal-note">{detail.client}{detail.project !== "—" && ` · ${detail.project}`} · issued {detail.issued} · due {detail.due}</p>
+        <p className="portal-note">{COMMERCIAL_INVOICE_LABEL[detail.commercialKind] ?? detail.commercialKind} · {detail.client}{detail.billingRecipient && ` → ${detail.billingRecipient}`}{detail.project !== "—" && ` · ${detail.project}`} · issued {detail.issued} · due {detail.due}</p>
 
         <section className="panel-block">
           <div className="panel-block__head"><h4>Lines</h4></div>
@@ -165,6 +169,16 @@ export function InvoiceManager({ invoices, clients, projects, canManage, canReco
           </p>
         </section>
 
+        {detail.grossClientAmount && <section className="panel-block">
+          <div className="panel-block__head"><h4>C2C reconciliation</h4></div>
+          <p className="portal-note">Gross client amount {detail.grossClientAmount} = Qonic revenue {detail.qonicRevenueAmount} + vendor commission {detail.vendorCommissionAmount} + Global Candidate commission {detail.globalCandidateCommissionAmount}.</p>
+        </section>}
+
+        {detail.lockedSettlementRate && <section className="panel-block">
+          <div className="panel-block__head"><h4>Foreign-currency settlement</h4></div>
+          <p className="portal-note">This {detail.currency} invoice is contractually settled in {detail.settlementCurrency}. The invoice rate is locked at <strong>{detail.lockedSettlementRate}</strong>{detail.expectedSettlement && <>; its full invoice value at that rate is <strong>{detail.expectedSettlement}</strong></>}. Actual bank receipts may differ and are recorded as realised FX gain or loss, without changing this invoice.</p>
+        </section>}
+
         <section className="panel-block">
           <div className="panel-block__head"><h4>Payments received</h4></div>
           {detail.payments.length === 0
@@ -173,9 +187,10 @@ export function InvoiceManager({ invoices, clients, projects, canManage, canReco
                 {detail.payments.map((p) => <li key={p.id} className="timeline__item">
                   <div className="timeline__head">
                     <strong>{p.method || "Payment"}</strong>
-                    <span className="timeline__amount">{p.amount}</span>
+                    <span className="timeline__amount">{p.settlementAmount || p.amount}</span>
                   </div>
-                  <p className="timeline__meta">{p.paidOn}{p.reference && ` · ref ${p.reference}`}</p>
+                  <p className="timeline__meta">{p.paidOn}{p.settlementAmount && ` · ${p.amount} applied to invoice`}{p.reference && ` · ref ${p.reference}`}</p>
+                  {p.realizedFxGainLoss && <p className="timeline__note">{p.realizedFxGainLoss}</p>}
                 </li>)}
               </ul>}
         </section>
@@ -192,6 +207,7 @@ export function InvoiceManager({ invoices, clients, projects, canManage, canReco
                   </div>
                   <p className="timeline__meta">{n.issuedOn} · {n.issuedBy}</p>
                   <p className="timeline__note">{n.reason}</p>
+                  <a className="row-action" href={`/api/credit-notes/${n.id}/pdf`} target="_blank" rel="noreferrer noopener">Credit note PDF</a>
                 </li>)}
               </ul>}
         </section>
@@ -207,6 +223,19 @@ export function InvoiceManager({ invoices, clients, projects, canManage, canReco
       </div>
     </div>}
 
+    {deleting && <div className="dialog-backdrop" role="dialog" aria-modal="true" aria-labelledby="delete-invoice-title">
+      <div className="dialog">
+        <h3 id="delete-invoice-title" className="dialog-title">Permanently delete invoice?</h3>
+        <p className="portal-note"><strong>{deleting.number}</strong> will be permanently deleted. This cannot be undone.</p>
+        <div className="dialog-actions">
+          <button type="button" className="button button-outline" disabled={busy} onClick={() => setDeleting(null)}>Cancel</button>
+          <button type="button" className="button button-danger" disabled={busy} onClick={async () => {
+            if (await call(`/api/invoices/${deleting.id}`, {}, "DELETE")) setDeleting(null);
+          }}>{busy ? "Deleting…" : "Delete permanently"}</button>
+        </div>
+      </div>
+    </div>}
+
     {open && <div className="dialog-backdrop" role="dialog" aria-modal="true" aria-labelledby="inv-title">
       <div className="dialog dialog--wide">
         <h3 id="inv-title" className="dialog-title">Raise an invoice</h3>
@@ -214,7 +243,10 @@ export function InvoiceManager({ invoices, clients, projects, canManage, canReco
           <div className="grid gap-5 sm:grid-cols-2">
             <div>
               <label htmlFor="i-client">Client <em>*</em></label>
-              <select id="i-client" value={form.clientId} onChange={(e) => setForm({ ...form, clientId: e.target.value, projectId: "" })}>
+              <select id="i-client" value={form.clientId} onChange={(e) => {
+                const nextClient = clients.find((client) => client.id === e.target.value);
+                setForm({ ...form, clientId: e.target.value, projectId: "", settlementCurrency: nextClient?.rateCurrency ?? "INR", lockedSettlementRate: "" });
+              }}>
                 {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
@@ -228,6 +260,20 @@ export function InvoiceManager({ invoices, clients, projects, canManage, canReco
             <div><label htmlFor="i-issue">Issue Date</label><input id="i-issue" type="date" value={form.issueDate} onChange={(e) => setForm({ ...form, issueDate: e.target.value })} /></div>
             <div><label htmlFor="i-due">Due Date</label><input id="i-due" type="date" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} /></div>
             <div><label htmlFor="i-tax">Tax %</label><input id="i-tax" inputMode="decimal" value={form.taxPercent} onChange={(e) => setForm({ ...form, taxPercent: e.target.value })} /></div>
+            {selectedClient && selectedClient.rateCurrency !== "INR" && <>
+              <div>
+                <label htmlFor="i-settlement">Settlement currency</label>
+                <select id="i-settlement" value={form.settlementCurrency} onChange={(e) => setForm({ ...form, settlementCurrency: e.target.value, lockedSettlementRate: "" })}>
+                  <option value={selectedClient.rateCurrency}>{selectedClient.rateCurrency} (same as invoice)</option>
+                  <option value="INR">INR (Qonic bank account)</option>
+                </select>
+              </div>
+              {isForeignSettlement && <div>
+                <label htmlFor="i-fx-rate">Locked INR rate per {selectedClient.rateCurrency} <em>*</em></label>
+                <input id="i-fx-rate" inputMode="decimal" value={form.lockedSettlementRate} onChange={(e) => setForm({ ...form, lockedSettlementRate: e.target.value })} placeholder="e.g. 95.00" />
+                <p className="field-hint">Frozen for realised FX reporting; it does not change the invoice&apos;s {selectedClient.rateCurrency} value.</p>
+              </div>}
+            </>}
             <div className="sm:col-span-2">
               <label className="inline-check">
                 <input type="checkbox" checked={form.fromTimesheets} onChange={(e) => setForm({ ...form, fromTimesheets: e.target.checked })} />
@@ -288,16 +334,17 @@ export function InvoiceManager({ invoices, clients, projects, canManage, canReco
     {paying && <div className="dialog-backdrop" role="dialog" aria-modal="true">
       <div className="dialog">
         <h3 className="dialog-title">Record payment — {paying.number}</h3>
-        <p className="portal-note">{paying.outstanding} outstanding.</p>
+        <p className="portal-note">{paying.outstanding} outstanding.{paying.lockedSettlementRate && <> This invoice is settled in {paying.settlementCurrency} at the locked rate of {paying.lockedSettlementRate}; a different bank receipt becomes realised FX gain or loss.</>}</p>
         <div className="contact-form mt-4 grid gap-4 sm:grid-cols-2">
-          <div><label htmlFor="p-amt">Amount</label><input id="p-amt" inputMode="decimal" value={payment.amount} onChange={(e) => setPayment({ ...payment, amount: e.target.value })} /></div>
+          <div><label htmlFor="p-amt">Invoice amount applied ({paying.currency})</label><input id="p-amt" inputMode="decimal" value={payment.amount} onChange={(e) => setPayment({ ...payment, amount: e.target.value })} /></div>
+          {paying.lockedSettlementRate && <div><label htmlFor="p-settlement-amt">Actual amount received ({paying.settlementCurrency})</label><input id="p-settlement-amt" inputMode="decimal" value={payment.settlementAmount} onChange={(e) => setPayment({ ...payment, settlementAmount: e.target.value })} placeholder={paying.expectedSettlement || "Enter bank receipt"} /></div>}
           <div><label htmlFor="p-date">Received On</label><input id="p-date" type="date" value={payment.paidOn} onChange={(e) => setPayment({ ...payment, paidOn: e.target.value })} /></div>
           <div><label htmlFor="p-method">Method</label><input id="p-method" value={payment.method} onChange={(e) => setPayment({ ...payment, method: e.target.value })} /></div>
           <div><label htmlFor="p-ref">Reference</label><input id="p-ref" value={payment.reference} onChange={(e) => setPayment({ ...payment, reference: e.target.value })} /></div>
         </div>
         <div className="dialog-actions">
           <button type="button" className="button button-outline" onClick={() => setPaying(null)} disabled={busy}>Cancel</button>
-          <button type="button" className="button button-primary" disabled={busy || !payment.amount}
+          <button type="button" className="button button-primary" disabled={busy || !payment.amount || (Boolean(paying.lockedSettlementRate) && !payment.settlementAmount)}
             onClick={async () => { if (await call(`/api/invoices/${paying.id}/payments`, payment)) setPaying(null); }}>Record</button>
         </div>
       </div>

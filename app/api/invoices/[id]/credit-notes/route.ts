@@ -3,6 +3,8 @@ import { clientIp, recordAudit } from "@/lib/audit";
 import { guardRoute } from "@/lib/auth/guard";
 import { formatMoney, toMinor } from "@/lib/money";
 import { db } from "@/lib/db";
+import { renderCreditNotePdf } from "@/lib/finance/invoice-pdf";
+import { sendEmail } from "@/lib/notify";
 import { nextReferenceFrom, referenceWhere } from "@/lib/reference";
 
 export const runtime = "nodejs";
@@ -28,7 +30,20 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (response) return response;
 
   const { id } = await params;
-  const invoice = await db.invoice.findUnique({ where: { id }, include: { creditNotes: true } });
+  const invoice = await db.invoice.findUnique({
+    where: { id },
+    include: {
+      creditNotes: true,
+      project: { select: { name: true } },
+      client: {
+        include: {
+          contacts: { where: { email: { not: null } }, orderBy: { isPrimary: "desc" }, select: { email: true, isPrimary: true } },
+          vendor: { select: { email: true } },
+          globalCandidate: { select: { email: true } },
+        },
+      },
+    },
+  });
   if (!invoice) return NextResponse.json({ message: "That invoice could not be found." }, { status: 404 });
   if (invoice.status === "DRAFT") return NextResponse.json({ message: "A draft invoice can simply be edited or voided." }, { status: 409 });
   if (invoice.status === "VOID") return NextResponse.json({ message: "That invoice is void." }, { status: 409 });
@@ -62,5 +77,45 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return note;
   });
 
-  return NextResponse.json({ message: `${created.number} issued for ${formatMoney(amount, invoice.currency)}.`, id: created.id });
+  const recipient = ["QONIC_TO_VENDOR", "VENDOR_TO_GLOBAL_CANDIDATE"].includes(invoice.commercialKind)
+    ? invoice.client.vendor?.email
+    : invoice.commercialKind === "GLOBAL_CANDIDATE_COMMISSION_RECORD"
+      ? invoice.client.globalCandidate?.email
+      : invoice.client.contacts.find((contact) => contact.isPrimary)?.email ?? invoice.client.contacts.find((contact) => contact.email)?.email;
+
+  let attachmentSent = false;
+  let pdfPrepared = false;
+  let pdfPreparationFailed = false;
+  if (recipient) {
+    try {
+      const pdf = await renderCreditNotePdf({
+        number: created.number, issuedAt: created.issuedAt, currency: invoice.currency,
+        clientName: invoice.client.name, projectName: invoice.project?.name ?? null,
+        invoiceNumber: invoice.number, invoiceIssueDate: invoice.issueDate,
+        invoiceTotal: invoice.total, creditAmount: created.amount, reason: created.reason,
+      });
+      pdfPrepared = true;
+      attachmentSent = await sendEmail(
+        [recipient],
+        `Credit note issued: ${created.number}`,
+        `${created.number} for ${formatMoney(created.amount, invoice.currency)} is attached as a PDF. It adjusts invoice ${invoice.number}.`,
+        "/invoices",
+        [{ filename: `${created.number}.pdf`, content: pdf }]
+      );
+    } catch (error) {
+      console.error(`Credit-note PDF email preparation failed for ${created.number}`, error);
+      pdfPreparationFailed = true;
+    }
+  }
+
+  return NextResponse.json({
+    message: attachmentSent
+      ? `${created.number} issued for ${formatMoney(amount, invoice.currency)} and its PDF email was sent to ${recipient}.`
+      : pdfPrepared
+        ? `${created.number} issued for ${formatMoney(amount, invoice.currency)} and its PDF was prepared, but email delivery could not be completed.`
+      : pdfPreparationFailed
+        ? `${created.number} issued for ${formatMoney(amount, invoice.currency)}, but its PDF could not be prepared for email. Download it from Invoices and try again.`
+        : `${created.number} issued for ${formatMoney(amount, invoice.currency)}. Add a billing email before sending the PDF.`,
+    id: created.id,
+  });
 }

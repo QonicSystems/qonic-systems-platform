@@ -20,7 +20,7 @@ describe("candidate resource type", () => {
     expect(resourceTypeOf("  global visa resource  ")).toBe(RESOURCE_TYPE.GLOBAL);
   });
 
-  it("groups both developer-sourcing channels as Employee Dev", () => {
+  it("groups both developer-sourcing channels as Developer", () => {
     expect(resourceTypeOf("Direct / LinkedIn")).toBe(RESOURCE_TYPE.EMPLOYEE_DEV);
     expect(resourceTypeOf("Internal Connection")).toBe(RESOURCE_TYPE.EMPLOYEE_DEV);
   });

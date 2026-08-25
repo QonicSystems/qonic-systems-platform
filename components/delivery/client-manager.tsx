@@ -2,7 +2,7 @@
 
 import { FormEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CLIENT_ARCHIVED_STATUS, CLIENT_STATUSES, CLIENT_STATUS_LABELS } from "@/lib/delivery/validate";
+import { CLIENT_ARCHIVED_STATUS, CLIENT_STATUSES, CLIENT_STATUS_LABELS, EMPLOYMENT_TYPES, WORK_ARRANGEMENTS } from "@/lib/delivery/validate";
 import { EmptyState } from "@/components/portal/empty-state";
 import { StatusChip } from "@/components/status-chip";
 import { TableToolbar } from "@/components/portal/table-toolbar";
@@ -27,19 +27,38 @@ type Row = {
   notes: string;
   ownerId: string;
   owner: string;
+  vendorId: string;
+  vendor: string;
+  globalCandidateId: string;
+  globalCandidate: string;
+  employmentType: string;
+  workArrangement: string;
+  startDate: string;
+  endDate: string;
+  actualClientRate: string;
+  rateCurrency: string;
+  globalCandidateCommissionPercent: string;
+  vendorCommissionPercent: string;
   projectCount: number;
   jobCount: number;
   invoiceCount: number;
   contacts: ReadonlyArray<Contact>;
 };
-type Errors = Partial<Record<"name" | "code" | "status" | "website" | "ownerId", string>>;
-type Form = { name: string; code: string; status: string; industry: string; website: string; ownerId: string; notes: string };
+type Errors = Partial<Record<"name" | "code" | "status" | "website" | "ownerId" | "vendorId" | "globalCandidateId" | "employmentType" | "workArrangement" | "startDate" | "endDate" | "actualClientRate" | "rateCurrency" | "globalCandidateCommissionPercent" | "vendorCommissionPercent" | "projectName", string>>;
+type Form = {
+  name: string; code: string; status: string; industry: string; website: string; ownerId: string; notes: string;
+  vendorId: string; globalCandidateId: string; employmentType: string; workArrangement: string;
+  startDate: string; endDate: string; actualClientRate: string; rateCurrency: string;
+  globalCandidateCommissionPercent: string; vendorCommissionPercent: string; projectName: string;
+};
 
-const blank: Form = { name: "", code: "", status: "ACTIVE", industry: "", website: "", ownerId: "", notes: "" };
+const blank: Form = { name: "", code: "", status: "ACTIVE", industry: "", website: "", ownerId: "", notes: "", vendorId: "", globalCandidateId: "", employmentType: "", workArrangement: "", startDate: "", endDate: "", actualClientRate: "", rateCurrency: "USD", globalCandidateCommissionPercent: "", vendorCommissionPercent: "", projectName: "" };
 
-export function ClientManager({ clients, owners, canManage }: {
+export function ClientManager({ clients, owners, vendors, globalCandidates, canManage }: {
   clients: ReadonlyArray<Row>;
   owners: ReadonlyArray<{ id: string; name: string }>;
+  vendors: ReadonlyArray<{ id: string; name: string }>;
+  globalCandidates: ReadonlyArray<{ id: string; name: string }>;
   canManage: boolean;
 }) {
   const router = useRouter();
@@ -56,7 +75,7 @@ export function ClientManager({ clients, owners, canManage }: {
     return clients.filter((c) => c.status !== CLIENT_ARCHIVED_STATUS);
   }, [clients, statusFilter]);
 
-  const { query, setQuery, rows, isFiltered } = useFilter(visible, (client) => [client.name, client.code, client.industry, client.status, client.owner]);
+  const { query, setQuery, rows, isFiltered } = useFilter(visible, (client) => [client.name, client.code, client.industry, client.status, client.owner, client.vendor, client.globalCandidate]);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Row | null>(null);
   const [deleting, setDeleting] = useState<Row | null>(null);
@@ -123,6 +142,11 @@ export function ClientManager({ clients, owners, canManage }: {
       name: client.name, code: client.code, status: client.status,
       industry: client.industry, website: client.website,
       ownerId: client.ownerId, notes: client.notes,
+      vendorId: client.vendorId, globalCandidateId: client.globalCandidateId,
+      employmentType: client.employmentType, workArrangement: client.workArrangement,
+      startDate: client.startDate, endDate: client.endDate, actualClientRate: client.actualClientRate,
+      rateCurrency: client.rateCurrency, globalCandidateCommissionPercent: client.globalCandidateCommissionPercent,
+      vendorCommissionPercent: client.vendorCommissionPercent, projectName: "",
     });
     setErrors({});
     setNotice(null);
@@ -181,14 +205,16 @@ export function ClientManager({ clients, owners, canManage }: {
       : <div className="matrix-scroll">
       <table className="matrix matrix--people">
         <thead><tr>
-          <th scope="col">Client</th><th scope="col">Industry</th><th scope="col">Owner</th>
+          <th scope="col">Client / Job</th><th scope="col">Vendor</th><th scope="col">Global Candidate</th><th scope="col">Terms</th><th scope="col">Owner</th>
           <th scope="col">Projects</th><th scope="col">Status</th>
           {canManage && <th scope="col">Actions</th>}
         </tr></thead>
         <tbody>
           {rows.map((client) => <tr key={client.id} className={client.status === CLIENT_ARCHIVED_STATUS ? "opacity-70" : undefined}>
             <th scope="row"><strong>{client.name}</strong><span>{client.code}</span></th>
-            <td>{client.industry || "—"}</td>
+            <td>{client.vendor}</td>
+            <td>{client.globalCandidate}</td>
+            <td>{client.employmentType ? <><span className="matrix-cell-primary">{client.employmentType.replace("_", " ")} · {client.workArrangement || "—"}</span>{client.actualClientRate && <span className="matrix-cell-subline portal-muted">{client.rateCurrency} {client.actualClientRate}/hr</span>}</> : <span className="matrix-cell-primary">{client.industry || "—"}</span>}</td>
             <td>{client.owner}</td>
             <td>{client.projectCount}</td>
             <td><StatusChip status={client.status} label={CLIENT_STATUS_LABELS[client.status]} /></td>
@@ -281,6 +307,82 @@ export function ClientManager({ clients, owners, canManage }: {
                 {owners.map((owner) => <option key={owner.id} value={owner.id}>{owner.name}</option>)}
               </select>
             </div>
+            <div className="sm:col-span-2 border-t border-[#e7e4da] pt-4 mt-1">
+              <p className="text-xs font-bold uppercase tracking-wider text-[#4f4f4f]">Procured job terms</p>
+              <p className="field-hint">Existing data is reused to create the internal project automatically. Leave blank for a general client record.</p>
+            </div>
+            <div>
+              <label htmlFor="c-candidate">Global Candidate</label>
+              <select id="c-candidate" value={form.globalCandidateId} onChange={(e) => setForm({ ...form, globalCandidateId: e.target.value })} aria-invalid={Boolean(errors.globalCandidateId)}>
+                <option value="">Not a procured Global Candidate job</option>
+                {globalCandidates.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.name}</option>)}
+              </select>
+              {errors.globalCandidateId && <p className="form-error">{errors.globalCandidateId}</p>}
+            </div>
+            <div>
+              <label htmlFor="c-vendor">Vendor</label>
+              <select id="c-vendor" value={form.vendorId} onChange={(e) => setForm({ ...form, vendorId: e.target.value })} aria-invalid={Boolean(errors.vendorId)}>
+                <option value="">No vendor selected</option>
+                {vendors.map((vendor) => <option key={vendor.id} value={vendor.id}>{vendor.name}</option>)}
+              </select>
+              {errors.vendorId && <p className="form-error">{errors.vendorId}</p>}
+            </div>
+            <div>
+              <label htmlFor="c-employment">Employment Type</label>
+              <select id="c-employment" value={form.employmentType} onChange={(e) => setForm({ ...form, employmentType: e.target.value })} aria-invalid={Boolean(errors.employmentType)}>
+                <option value="">Select type</option>
+                {EMPLOYMENT_TYPES.map((type) => <option key={type} value={type}>{type === "FULL_TIME" ? "Full Time" : type}</option>)}
+              </select>
+              {errors.employmentType && <p className="form-error">{errors.employmentType}</p>}
+            </div>
+            <div>
+              <label htmlFor="c-arrangement">Work Arrangement</label>
+              <select id="c-arrangement" value={form.workArrangement} onChange={(e) => setForm({ ...form, workArrangement: e.target.value })} aria-invalid={Boolean(errors.workArrangement)}>
+                <option value="">Select arrangement</option>
+                {WORK_ARRANGEMENTS.map((arrangement) => <option key={arrangement} value={arrangement}>{arrangement === "WFO" ? "WFO" : arrangement[0] + arrangement.slice(1).toLowerCase()}</option>)}
+              </select>
+              {errors.workArrangement && <p className="form-error">{errors.workArrangement}</p>}
+            </div>
+            <div>
+              <label htmlFor="c-start">Start Date</label>
+              <input id="c-start" type="date" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} aria-invalid={Boolean(errors.startDate)} />
+              {errors.startDate && <p className="form-error">{errors.startDate}</p>}
+            </div>
+            <div>
+              <label htmlFor="c-end">End Date</label>
+              <input id="c-end" type="date" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} aria-invalid={Boolean(errors.endDate)} />
+              {errors.endDate && <p className="form-error">{errors.endDate}</p>}
+            </div>
+            <div className="grid grid-cols-[5rem_1fr] gap-3">
+              <div>
+                <label htmlFor="c-currency">Currency</label>
+                <select id="c-currency" value={form.rateCurrency} onChange={(e) => setForm({ ...form, rateCurrency: e.target.value })}>
+                  {["USD", "INR", "GBP", "EUR", "AED"].map((currency) => <option key={currency} value={currency}>{currency}</option>)}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="c-rate">Actual Client Rate / hour</label>
+                <input id="c-rate" inputMode="decimal" value={form.actualClientRate} onChange={(e) => setForm({ ...form, actualClientRate: e.target.value })} aria-invalid={Boolean(errors.actualClientRate)} placeholder="80" />
+                {errors.actualClientRate && <p className="form-error">{errors.actualClientRate}</p>}
+              </div>
+            </div>
+            <div>
+              <label htmlFor="c-project-name">Internal Project Name</label>
+              <input id="c-project-name" value={form.projectName} onChange={(e) => setForm({ ...form, projectName: e.target.value })} aria-invalid={Boolean(errors.projectName)} placeholder="Java Delivery — ACME" />
+              {errors.projectName && <p className="form-error">{errors.projectName}</p>}
+            </div>
+            {form.employmentType === "C2C" && <>
+              <div>
+                <label htmlFor="c-gc-commission">Global Candidate Commission %</label>
+                <input id="c-gc-commission" inputMode="decimal" value={form.globalCandidateCommissionPercent} onChange={(e) => setForm({ ...form, globalCandidateCommissionPercent: e.target.value })} aria-invalid={Boolean(errors.globalCandidateCommissionPercent)} placeholder="Policy default" />
+                {errors.globalCandidateCommissionPercent && <p className="form-error">{errors.globalCandidateCommissionPercent}</p>}
+              </div>
+              <div>
+                <label htmlFor="c-vendor-commission">Vendor Commission %</label>
+                <input id="c-vendor-commission" inputMode="decimal" value={form.vendorCommissionPercent} onChange={(e) => setForm({ ...form, vendorCommissionPercent: e.target.value })} aria-invalid={Boolean(errors.vendorCommissionPercent)} placeholder="Policy default" />
+                {errors.vendorCommissionPercent && <p className="form-error">{errors.vendorCommissionPercent}</p>}
+              </div>
+            </>}
           </div>
           <div className="dialog-actions">
             <button type="button" className="button button-outline" onClick={closeDialog} disabled={busy}>Cancel</button>

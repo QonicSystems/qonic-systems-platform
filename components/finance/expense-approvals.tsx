@@ -2,7 +2,10 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { EmptyState } from "@/components/portal/empty-state";
 import { StatusChip } from "@/components/status-chip";
+import { TableToolbar } from "@/components/portal/table-toolbar";
+import { useFilter } from "@/lib/ui/filter";
 
 type Claim = { id: string; name: string; spentOn: string; category: string; amount: string; description: string; project: string; status: string; billable: boolean; receiptUrl: string | null };
 
@@ -12,6 +15,9 @@ export function ExpenseApprovals({ claims }: { claims: ReadonlyArray<Claim> }) {
   const [rejecting, setRejecting] = useState<Claim | null>(null);
   const [note, setNote] = useState("");
   const [notice, setNotice] = useState<{ tone: "success" | "error"; text: string } | null>(null);
+  const { query, setQuery, rows, isFiltered } = useFilter(claims, (claim) => [
+    claim.name, claim.spentOn, claim.category, claim.description, claim.project, claim.status, claim.amount,
+  ]);
 
   const decide = async (id: string, decision: string, reason = "") => {
     setBusy(true); setNotice(null);
@@ -28,11 +34,14 @@ export function ExpenseApprovals({ claims }: { claims: ReadonlyArray<Claim> }) {
 
   return <div>
     {notice && <p className={`form-status form-status--${notice.tone}`} role="status">{notice.text}</p>}
-    <div className="matrix-scroll">
+    <TableToolbar search={query} onSearch={setQuery} placeholder="Search claimant, project, category…" label="Search expense approvals" />
+    {rows.length === 0
+      ? <EmptyState message="Nothing to review." filteredMessage="No expense claims match that search." isFiltered={isFiltered} />
+      : <div className="matrix-scroll">
       <table className="matrix matrix--people">
         <thead><tr><th scope="col">Claim</th><th scope="col">Date</th><th scope="col">Project</th><th scope="col">Amount</th><th scope="col">Status</th><th scope="col">Actions</th></tr></thead>
         <tbody>
-          {claims.map((claim) => <tr key={claim.id}>
+          {rows.map((claim) => <tr key={claim.id}>
             <th scope="row"><strong>{claim.name}</strong><span>{claim.description} · {claim.category}{claim.billable ? " · rebillable" : ""}</span></th>
             <td>{claim.spentOn}</td>
             <td>{claim.project}</td>
@@ -51,7 +60,7 @@ export function ExpenseApprovals({ claims }: { claims: ReadonlyArray<Claim> }) {
           </tr>)}
         </tbody>
       </table>
-    </div>
+    </div>}
 
     {rejecting && <div className="dialog-backdrop" role="dialog" aria-modal="true">
       <div className="dialog">

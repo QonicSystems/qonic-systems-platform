@@ -30,8 +30,9 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const type = searchParams.get("type") ?? "invoices";
 
-  // The audit export is a compliance artefact, so it sits behind its own right.
-  const permission = type === "audit" ? "audit.view" : "report.finance";
+  // Exports are a separate disclosure capability: page access does not grant a
+  // bulk download of its underlying records.
+  const permission = type === "audit" ? "audit.export" : "finance.export";
   const { context, response } = await guardRoute(permission);
   if (response) return response;
 
@@ -55,8 +56,12 @@ export async function GET(request: Request) {
   } else if (type === "payments") {
     const payments = await db.payment.findMany({ include: { invoice: { include: { client: true } } }, orderBy: { paidOn: "asc" } });
     csv = toCsv(
-      ["Invoice", "Client", "Received", "Amount", "Method", "Reference"],
-      payments.map((payment) => [payment.invoice.number, payment.invoice.client.name, day(payment.paidOn), money(payment.amount), payment.method, payment.reference ?? ""]),
+      ["Invoice", "Client", "Received", "Invoice Currency", "Invoice Amount Applied", "Settlement Currency", "Actual Bank Receipt", "Realised FX Gain/Loss", "Method", "Reference"],
+      payments.map((payment) => [
+        payment.invoice.number, payment.invoice.client.name, day(payment.paidOn), payment.invoice.currency, money(payment.amount),
+        payment.settlementCurrency ?? payment.invoice.currency, money(payment.settlementAmount ?? payment.amount), money(payment.realizedFxGainLoss ?? 0),
+        payment.method, payment.reference ?? "",
+      ]),
     );
   } else if (type === "expenses") {
     const expenses = await db.expense.findMany({ include: { user: true, project: true }, orderBy: { spentOn: "asc" } });

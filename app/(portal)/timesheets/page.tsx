@@ -2,7 +2,7 @@ import Link from "next/link";
 import { TimesheetGrid, type GridProject, type GridRow } from "@/components/delivery/timesheet-grid";
 import { TimesheetApprovals } from "@/components/delivery/timesheet-approvals";
 import { can, requirePermission } from "@/lib/auth/guard";
-import { canEditTimesheet, formatDuration, isDayBookable, weekDays, weekStartOf } from "@/lib/delivery/timesheet";
+import { canEditTimesheet, formatDuration, isDayBookable, projectBookingStart, weekDays, weekStartOf } from "@/lib/delivery/timesheet";
 import type { TimesheetStatus } from "@/lib/generated/prisma/enums";
 import { db } from "@/lib/db";
 
@@ -27,13 +27,11 @@ export default async function TimesheetsPage({ searchParams }: { searchParams: P
 
   const today = new Date();
   const activeAssignments = assignments.filter((assignment) => ["PLANNED", "ACTIVE"].includes(assignment.project.status));
-  // Per project, not per person: "since project started" is Project.startDate
-  // when set — someone can backfill down to it even if they joined later,
-  // which is exactly the handover case (an incoming resource, or an approver
-  // acting for one who has already left, covering days before the new
-  // resource's own assignment began). Falls back to the assignment date only
-  // for a project with no startDate on record.
-  const bookableFrom = (assignment: (typeof activeAssignments)[number]) => assignment.project.startDate ?? assignment.createdAt;
+  // Project Start Date controls client-delivery time. The Developer's Actual
+  // Start Date remains independent and is used only to distinguish their
+  // payable days from company-retained pre-start delivery days.
+  const bookableFrom = (assignment: (typeof activeAssignments)[number]) =>
+    projectBookingStart(assignment.project.startDate, assignment.createdAt);
 
   // A week with no bookable day on any assigned project no longer gets a
   // database row just for being viewed — only create one when there's

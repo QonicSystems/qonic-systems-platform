@@ -1,4 +1,5 @@
 import nodemailer from "nodemailer";
+import { leadershipRoleWhere } from "@/lib/auth/roles";
 import { db } from "@/lib/db";
 import type { NotificationKind } from "@/lib/generated/prisma/enums";
 import type { Prisma } from "@/lib/generated/prisma/client";
@@ -9,6 +10,13 @@ export type NotifyInput = {
   title: string;
   body?: string | null;
   link?: string | null;
+};
+
+/** A generated document attached to a transactional email. */
+export type EmailAttachment = {
+  filename: string;
+  content: Buffer;
+  contentType?: string;
 };
 
 function getSmtpConfig() {
@@ -28,14 +36,15 @@ function getSmtpConfig() {
   };
 }
 
-async function sendNotificationEmails(
+export async function sendEmail(
   recipients: ReadonlyArray<string>,
   title: string,
   body?: string | null,
-  link?: string | null
-): Promise<void> {
+  link?: string | null,
+  attachments: ReadonlyArray<EmailAttachment> = []
+): Promise<boolean> {
   const config = getSmtpConfig();
-  if (!config || recipients.length === 0) return;
+  if (!config || recipients.length === 0) return false;
 
   try {
     const transporter = nodemailer.createTransport({
@@ -52,21 +61,30 @@ async function sendNotificationEmails(
       : "";
     const emailText = `${title}\n\n${body ?? ""}\n\n${fullLink ? `View details: ${fullLink}` : ""}\n\n— Qonic Systems Platform`;
 
+    let delivered = false;
     for (const email of recipients) {
       if (!email || !email.includes("@")) continue;
-      await transporter
-        .sendMail({
+      try {
+        await transporter.sendMail({
           from: config.from,
           to: email,
           subject: `[Qonic Systems] ${title}`,
           text: emailText,
-        })
-        .catch((err) => {
-          console.error(`[notification-email] Failed to dispatch email to ${email}:`, err);
+          attachments: attachments.map((attachment) => ({
+            filename: attachment.filename,
+            content: attachment.content,
+            contentType: attachment.contentType ?? "application/pdf",
+          })),
         });
+        delivered = true;
+      } catch (err) {
+        console.error(`[notification-email] Failed to dispatch email to ${email}:`, err);
+      }
     }
+    return delivered;
   } catch (err) {
     console.error("[notification-email] SMTP transport error:", err);
+    return false;
   }
 }
 
@@ -93,7 +111,7 @@ export async function notify(
   });
 
   if (user?.email) {
-    void sendNotificationEmails([user.email], entry.title, entry.body, entry.link);
+    void sendEmail([user.email], entry.title, entry.body, entry.link);
   }
 }
 
@@ -125,7 +143,7 @@ export async function notifyMany(
 
   const emails = users.map((u) => u.email).filter(Boolean);
   if (emails.length > 0) {
-    void sendNotificationEmails(emails, entry.title, entry.body, entry.link);
+    void sendEmail(emails, entry.title, entry.body, entry.link);
   }
 }
 
@@ -137,10 +155,14 @@ export async function notifyLeadership(
   entry: Omit<NotifyInput, "userId">,
   client: Prisma.TransactionClient | typeof db = db
 ): Promise<void> {
+  // Matched on rank, not a list of role keys. A key list cannot see a role the
+  // CEO created after this file was written, so its holders would silently
+  // never receive an approval notification — the one place where missing a new
+  // role fails quietly rather than safely.
   const leaders = await (client as typeof db).user.findMany({
     where: {
       status: "ACTIVE",
-      role: { key: { in: ["ceo", "co_founder"] } },
+      role: leadershipRoleWhere,
     },
     select: { id: true, email: true },
   });
@@ -150,4 +172,3 @@ export async function notifyLeadership(
     await notifyMany(ids, entry, client);
   }
 }
-

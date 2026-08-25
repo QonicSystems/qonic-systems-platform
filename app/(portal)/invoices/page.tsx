@@ -1,15 +1,16 @@
 import { InvoiceManager } from "@/components/finance/invoice-manager";
-import { CommissionTracker, type CommissionItem } from "@/components/finance/commission-tracker";
 import { can, requirePermission } from "@/lib/auth/guard";
 import { ageingBucket, formatMoney } from "@/lib/money";
+import { formatSettlementRate, settlementAmountAtLockedRate } from "@/lib/finance/fx-settlement";
+import { formatCurrencyTotals, totalsByCurrency } from "@/lib/finance/summary";
 import { db } from "@/lib/db";
 
-export const metadata = { title: "Invoices & Commissions" };
+export const metadata = { title: "Invoices" };
 
 export default async function InvoicesPage() {
   const context = await requirePermission("invoice.view");
 
-  const [invoices, clients, projects, candidates] = await Promise.all([
+  const [invoices, clients, projects] = await Promise.all([
     // Lines, payments and credit notes are all loaded: each was written by the
     // app and read back nowhere, so an invoice could not be inspected at all.
     db.invoice.findMany({
@@ -22,12 +23,8 @@ export default async function InvoicesPage() {
       },
       orderBy: { issueDate: "desc" },
     }),
-    db.client.findMany({ where: { status: { in: ["ACTIVE", "PROSPECT"] } }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
+    db.client.findMany({ where: { status: { in: ["ACTIVE", "PROSPECT"] } }, select: { id: true, name: true, rateCurrency: true }, orderBy: { name: "asc" } }),
     db.project.findMany({ where: { status: { in: ["ACTIVE", "COMPLETED"] } }, select: { id: true, name: true, clientId: true }, orderBy: { name: "asc" } }),
-    // Archived candidates must not accrue commission. `source` is canonicalised
-    // by migration, so the exact match now also catches records that were
-    // stored as GLOBAL_VISA_RESOURCE.
-    db.candidate.findMany({ where: { source: "Global Visa Resource", status: "ACTIVE" }, take: 10 }),
   ]);
 
   // CreditNote.issuedById has no relation, so issuer names are resolved in one
@@ -38,38 +35,21 @@ export default async function InvoicesPage() {
     : [];
   const issuerName = new Map(issuers.map((u) => [u.id, u.name]));
 
-  // Derive commission items from invoices and global candidates
-  const commissionItems: CommissionItem[] = [];
-  if (candidates.length > 0 && invoices.length > 0) {
-    candidates.forEach((cand, idx) => {
-      const inv = invoices[idx % invoices.length];
-      const rate = 15; // standard 15% VISA commission rate
-      const commAmount = Math.round((inv.total * rate) / 100);
-      commissionItems.push({
-        id: `comm-${cand.id}-${inv.id}`,
-        candidateName: cand.name,
-        candidateEmail: cand.email,
-        visaType: cand.visaType ?? "H-1B",
-        projectName: inv.project?.name ?? "Enterprise Cloud Transformation",
-        clientName: inv.client.name,
-        invoiceNumber: inv.number,
-        grossAmount: inv.total,
-        commissionRate: rate,
-        commissionAmount: commAmount,
-        status: inv.status === "PAID" ? "PAID" : "PENDING",
-        paidOn: inv.status === "PAID" ? new Date().toISOString().split("T")[0] : null,
-        payoutRef: inv.status === "PAID" ? `WIRE-COMM-${cand.id.slice(-4).toUpperCase()}` : null,
-      });
-    });
-  }
-
   // Hoisted out of JSX: the lint rule treats clock reads inside render as impure.
   const now = new Date();
   const today = now.toISOString().slice(0, 10);
   const dueDefault = new Date(now.getTime() + 30 * 86_400_000).toISOString().slice(0, 10);
 
-  const outstanding = invoices.filter((i) => !["PAID", "VOID", "DRAFT"].includes(i.status));
+  const revenueInvoices = invoices.filter((i) => ["STANDARD", "QONIC_TO_VENDOR"].includes(i.commercialKind));
+  const outstanding = revenueInvoices.filter((i) => !["PAID", "VOID", "DRAFT"].includes(i.status));
   const overdue = outstanding.filter((i) => ageingBucket(i.dueDate) !== "current");
+
+  const outstandingByCurrency = totalsByCurrency(outstanding.map((invoice) => ({ currency: invoice.currency, amount: invoice.total - invoice.paidAmount })));
+  const overdueByCurrency = totalsByCurrency(overdue.map((invoice) => ({ currency: invoice.currency, amount: invoice.total - invoice.paidAmount })));
+  const receivedCash = totalsByCurrency(revenueInvoices.flatMap((invoice) => invoice.payments.map((payment) => ({
+    currency: payment.settlementCurrency ?? invoice.currency,
+    amount: payment.settlementAmount ?? payment.amount,
+  }))));
 
   return <div className="portal-page">
     <header className="portal-page-head">
@@ -79,24 +59,36 @@ export default async function InvoicesPage() {
     </header>
 
     <div className="portal-grid">
-      <article className="portal-card"><span className="portal-stat">{formatMoney(outstanding.reduce((s, i) => s + (i.total - i.paidAmount), 0))}</span><p>Outstanding</p></article>
-      <article className="portal-card"><span className="portal-stat">{formatMoney(overdue.reduce((s, i) => s + (i.total - i.paidAmount), 0))}</span><p>Overdue</p></article>
-      <article className="portal-card"><span className="portal-stat">{formatMoney(invoices.filter((i) => i.status === "PAID").reduce((s, i) => s + i.total, 0))}</span><p>Collected</p></article>
+      <article className="portal-card"><span className="portal-stat">{formatCurrencyTotals(outstandingByCurrency)}</span><p>Outstanding receivables</p></article>
+      <article className="portal-card"><span className="portal-stat">{formatCurrencyTotals(overdueByCurrency)}</span><p>Overdue receivables</p></article>
+      <article className="portal-card"><span className="portal-stat">{formatCurrencyTotals(receivedCash)}</span><p>Actual cash received</p></article>
     </div>
 
     <InvoiceManager
       invoices={invoices.map((invoice) => ({
         id: invoice.id, number: invoice.number, client: invoice.client.name,
+        currency: invoice.currency,
+        settlementCurrency: invoice.settlementCurrency ?? invoice.currency,
+        lockedSettlementRate: invoice.lockedSettlementRate === null ? "" : formatSettlementRate(Number(invoice.lockedSettlementRate), invoice.settlementCurrency ?? invoice.currency, invoice.currency),
+        expectedSettlement: invoice.lockedSettlementRate === null || !invoice.settlementCurrency
+          ? ""
+          : formatMoney(settlementAmountAtLockedRate(invoice.total, Number(invoice.lockedSettlementRate)), invoice.settlementCurrency),
+        commercialKind: invoice.commercialKind, billingRecipient: invoice.billingRecipient ?? "",
         project: invoice.project?.name ?? "—", status: invoice.status,
         issued: invoice.issueDate.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }),
         due: invoice.dueDate.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }),
         total: formatMoney(invoice.total, invoice.currency),
         outstanding: formatMoney(invoice.total - invoice.paidAmount, invoice.currency),
+        outstandingAmount: ((invoice.total - invoice.paidAmount) / 100).toFixed(2),
         ageing: ["PAID", "VOID", "DRAFT"].includes(invoice.status) ? "—" : ageingBucket(invoice.dueDate),
         subtotal: formatMoney(invoice.subtotal, invoice.currency),
         taxPercent: invoice.taxPercent,
         taxAmount: formatMoney(invoice.taxAmount, invoice.currency),
         notes: invoice.notes ?? "",
+        grossClientAmount: invoice.grossClientAmount === null ? "" : formatMoney(invoice.grossClientAmount, invoice.currency),
+        vendorCommissionAmount: invoice.vendorCommissionAmount === null ? "" : formatMoney(invoice.vendorCommissionAmount, invoice.currency),
+        globalCandidateCommissionAmount: invoice.globalCandidateCommissionAmount === null ? "" : formatMoney(invoice.globalCandidateCommissionAmount, invoice.currency),
+        qonicRevenueAmount: invoice.qonicRevenueAmount === null ? "" : formatMoney(invoice.qonicRevenueAmount, invoice.currency),
         lines: invoice.lines.map((line) => ({
           id: line.id,
           description: line.description,
@@ -108,6 +100,8 @@ export default async function InvoicesPage() {
         payments: invoice.payments.map((p) => ({
           id: p.id,
           amount: formatMoney(p.amount, invoice.currency),
+          settlementAmount: p.settlementAmount === null ? "" : formatMoney(p.settlementAmount, p.settlementCurrency ?? invoice.currency),
+          realizedFxGainLoss: p.realizedFxGainLoss === null ? "" : `${p.realizedFxGainLoss >= 0 ? "FX gain" : "FX loss"} ${formatMoney(Math.abs(p.realizedFxGainLoss), p.settlementCurrency ?? invoice.currency)}`,
           paidOn: p.paidOn.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }),
           method: p.method ?? "",
           reference: p.reference ?? "",
@@ -131,11 +125,6 @@ export default async function InvoicesPage() {
       canRecordPayment={can(context, "payment.record")}
       today={today}
       dueDefault={dueDefault}
-    />
-
-    <CommissionTracker
-      initialCommissions={commissionItems}
-      canManage={can(context, "payment.record")}
     />
   </div>;
 }

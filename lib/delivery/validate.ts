@@ -1,6 +1,11 @@
 import { emailPattern } from "@/lib/contact";
 
-export type ClientPayload = { name: string; code: string; status: string; industry: string; website: string; ownerId: string; notes: string };
+export type ClientPayload = {
+  name: string; code: string; status: string; industry: string; website: string; ownerId: string; notes: string;
+  vendorId: string; globalCandidateId: string; employmentType: string; workArrangement: string;
+  startDate: string; endDate: string; actualClientRate: string; rateCurrency: string;
+  globalCandidateCommissionPercent: string; vendorCommissionPercent: string; projectName: string;
+};
 export type ClientErrors = Partial<Record<keyof ClientPayload, string>>;
 
 // ARCHIVED is the retirement state for a client that cannot be deleted because
@@ -8,6 +13,8 @@ export type ClientErrors = Partial<Record<keyof ClientPayload, string>>;
 // to use it, so the validator has to accept it. CANCELLED plays the same role
 // for a project.
 export const CLIENT_STATUSES = ["ACTIVE", "UPCOMING", "RESCHEDULED", "CANCELLED", "ARCHIVED"] as const;
+export const EMPLOYMENT_TYPES = ["W2", "C2C", "FULL_TIME"] as const;
+export const WORK_ARRANGEMENTS = ["REMOTE", "HYBRID", "WFO"] as const;
 export const PROJECT_STATUSES = ["ACTIVE", "COMPLETED", "CANCELLED"] as const;
 export const BILLING_MODELS = ["TIME_AND_MATERIALS", "FIXED_PRICE", "RETAINER", "NON_BILLABLE"] as const;
 
@@ -50,6 +57,17 @@ export function validateClient(value: unknown): { data?: ClientPayload; errors: 
     website: String(input.website ?? "").trim(),
     ownerId: String(input.ownerId ?? "").trim(),
     notes: String(input.notes ?? "").trim(),
+    vendorId: String(input.vendorId ?? "").trim(),
+    globalCandidateId: String(input.globalCandidateId ?? "").trim(),
+    employmentType: String(input.employmentType ?? "").trim(),
+    workArrangement: String(input.workArrangement ?? "").trim(),
+    startDate: String(input.startDate ?? "").trim(),
+    endDate: String(input.endDate ?? "").trim(),
+    actualClientRate: String(input.actualClientRate ?? "").trim(),
+    rateCurrency: String(input.rateCurrency ?? "USD").trim().toUpperCase(),
+    globalCandidateCommissionPercent: String(input.globalCandidateCommissionPercent ?? "").trim(),
+    vendorCommissionPercent: String(input.vendorCommissionPercent ?? "").trim(),
+    projectName: String(input.projectName ?? "").trim(),
   };
   const errors: ClientErrors = {};
 
@@ -57,6 +75,29 @@ export function validateClient(value: unknown): { data?: ClientPayload; errors: 
   if (!CODE.test(data.code)) errors.code = "Use 2–10 uppercase letters or digits, e.g. ACME.";
   if (!CLIENT_STATUSES.includes(data.status as typeof CLIENT_STATUSES[number])) errors.status = "Please choose a status.";
   if (data.website && !/^https?:\/\//i.test(data.website)) errors.website = "The website must start with http:// or https://";
+  if (data.employmentType && !EMPLOYMENT_TYPES.includes(data.employmentType as typeof EMPLOYMENT_TYPES[number])) errors.employmentType = "Choose W2, C2C, or Full Time.";
+  if (data.workArrangement && !WORK_ARRANGEMENTS.includes(data.workArrangement as typeof WORK_ARRANGEMENTS[number])) errors.workArrangement = "Choose Remote, Hybrid, or WFO.";
+  if (data.startDate && !DATE.test(data.startDate)) errors.startDate = "Please enter a valid start date.";
+  if (data.endDate && !DATE.test(data.endDate)) errors.endDate = "Please enter a valid end date.";
+  if (data.startDate && data.endDate && data.endDate < data.startDate) errors.endDate = "The end date cannot be before the start date.";
+  const actualClientRate = toMinorUnits(data.actualClientRate);
+  if (Number.isNaN(actualClientRate)) errors.actualClientRate = "Enter the rate as a number, e.g. 80.";
+  if (!/^[A-Z]{3}$/.test(data.rateCurrency)) errors.rateCurrency = "Choose a currency.";
+  for (const [key, value] of [
+    ["globalCandidateCommissionPercent", data.globalCandidateCommissionPercent],
+    ["vendorCommissionPercent", data.vendorCommissionPercent],
+  ] as const) {
+    if (value && (!/^\d{1,3}(\.\d{1,2})?$/.test(value) || Number(value) > 100)) {
+      errors[key] = "Enter a percentage between 0 and 100.";
+    }
+  }
+  // Supplying job terms means this is the job-procurement workflow, so a
+  // candidate and the auto-created internal project need names as well.
+  const hasCommercialTerms = Boolean(data.globalCandidateId || data.vendorId || data.employmentType || data.actualClientRate);
+  if (hasCommercialTerms && !data.globalCandidateId) errors.globalCandidateId = "Choose the Global Candidate for this job.";
+  if (hasCommercialTerms && !data.projectName) errors.projectName = "Enter the internal project name.";
+  if (hasCommercialTerms && (!actualClientRate || actualClientRate <= 0)) errors.actualClientRate = "Enter the actual client rate for this job.";
+  if (data.employmentType === "C2C" && !data.vendorId) errors.vendorId = "Choose the vendor that procured this C2C job.";
 
   return Object.keys(errors).length ? { errors } : { data, errors };
 }

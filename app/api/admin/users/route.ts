@@ -1,28 +1,20 @@
 import { randomBytes } from "node:crypto";
 import { NextResponse } from "next/server";
-import nodemailer from "nodemailer";
-import { appOrigin } from "@/lib/app-origin";
 import { clientIp, recordAudit } from "@/lib/audit";
 import { canAssignRole } from "@/lib/auth/authority";
 import { guardRoute } from "@/lib/auth/guard";
+import { CEO_ALREADY_ASSIGNED_MESSAGE, CEO_TRANSFER_EXISTING_PERSON_MESSAGE, ceoSingletonValue } from "@/lib/auth/single-ceo";
+import { deliverInvite } from "@/lib/auth/invite";
 import { hashPassword } from "@/lib/auth/password";
-import { INVITE_TTL_MS, createResetToken, hashResetToken, inviteEmail, resetUrl } from "@/lib/auth/reset";
+import { INVITE_TTL_MS, createResetToken, hashResetToken } from "@/lib/auth/reset";
 import { emailPattern } from "@/lib/contact";
 import { db } from "@/lib/db";
-import { isUniqueEmailViolation } from "@/lib/db-errors";
+import { isUniqueCeoSingletonViolation, isUniqueEmailViolation } from "@/lib/db-errors";
+import { parseCompensationInput } from "@/lib/finance/compensation";
 
 export const runtime = "nodejs";
 
-type CreateErrors = Partial<Record<"name" | "email" | "phone" | "jobTitle" | "roleId", string>>;
-
-function smtp() {
-  const required = ["SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASSWORD", "CONTACT_FROM_EMAIL"] as const;
-  if (required.some((name) => !process.env[name])) return null;
-  return {
-    host: process.env.SMTP_HOST!, port: Number(process.env.SMTP_PORT), secure: process.env.SMTP_SECURE === "true",
-    auth: { user: process.env.SMTP_USER!, pass: process.env.SMTP_PASSWORD! }, from: process.env.CONTACT_FROM_EMAIL!,
-  };
-}
+type CreateErrors = Partial<Record<"name" | "email" | "phone" | "jobTitle" | "roleId" | "monthlyCompensation" | "currency" | "effectiveFrom", string>>;
 
 /**
  * Create a colleague's account. Requires user.manage, plus the authority to
@@ -53,6 +45,7 @@ export async function POST(request: Request) {
     roleId: String(input.roleId ?? "").trim(),
   };
   const techStack = String(input.techStack ?? "").trim().slice(0, 500);
+  const wantsCompensation = String(input.monthlyCompensation ?? "").trim().length > 0;
 
   const errors: CreateErrors = {};
   if (data.name.length < 2) errors.name = "Please enter the person's name.";
@@ -72,6 +65,42 @@ export async function POST(request: Request) {
   const assignable = canAssignRole(context, role);
   if (!assignable.ok) return NextResponse.json({ message: assignable.reason }, { status: assignable.status });
 
+  if (ceoSingletonValue(role.key)) {
+    return NextResponse.json({
+      message: CEO_TRANSFER_EXISTING_PERSON_MESSAGE,
+      errors: { roleId: CEO_TRANSFER_EXISTING_PERSON_MESSAGE },
+    }, { status: 409 });
+  }
+
+  // Employee, and any other role the CEO marks the same way, is created
+  // from the Candidate Pool so the account always has a candidate record and a
+  // contract letter behind it. Creating one here would produce a delivery
+  // account with neither. The dialog disables these options, but that is
+  // cosmetic — this is the check that counts.
+  //
+  // 422 with a `roleId` field error so the existing form renders it inline.
+  if (role.viaCandidatePool) {
+    return NextResponse.json({
+      message: "Please correct the highlighted fields.",
+      errors: { roleId: `${role.label} accounts are added from the Candidate Pool. Add the candidate there, then create their employee account.` },
+    }, { status: 422 });
+  }
+
+  // Salary can be decided at People onboarding, but only by the two founder
+  // roles. The standalone compensation route applies the same restriction.
+  const founderFinance = context.role.isSuperAdmin || context.role.key === "co_founder";
+  let compensation: ReturnType<typeof parseCompensationInput>["data"];
+  if (wantsCompensation) {
+    if (!founderFinance || !context.permissions.has("compensation.manage")) {
+      return NextResponse.json({ message: "Only the CEO or Co-Founder may set compensation." }, { status: 403 });
+    }
+    const parsed = parseCompensationInput(input);
+    if (!parsed.data) {
+      return NextResponse.json({ message: "Please correct the highlighted fields.", errors: parsed.errors }, { status: 422 });
+    }
+    compensation = parsed.data;
+  }
+
   // A random 32-byte password is generated so the account cannot be logged into
   // until the invite is accepted — no hardcoded "password123".
   const passwordHash = await hashPassword(randomBytes(32).toString("hex"));
@@ -90,15 +119,27 @@ export async function POST(request: Request) {
           jobTitle: data.jobTitle || null,
           techStack: techStack || null,
           roleId: role.id,
+          ceoSingletonKey: ceoSingletonValue(role.key),
           passwordHash,
           mustChangePassword: true,
           resetTokens: { create: { tokenHash, expiresAt } },
+          ...(compensation ? {
+            compensationProfiles: {
+              create: {
+                monthlyAmount: compensation.monthlyAmount,
+                currency: compensation.currency,
+                effectiveFrom: compensation.effectiveFrom,
+                note: compensation.note || null,
+                setById: context.user.id,
+              },
+            },
+          } : {}),
         },
         select: { id: true, name: true, email: true },
       });
       await recordAudit({
         actorId: context.user.id, action: "user.create", entityType: "User", entityId: user.id,
-        after: { name: data.name, email: data.email, role: role.key, techStack }, ipAddress: clientIp(request),
+        after: { name: data.name, email: data.email, role: role.key, techStack, compensation: compensation ? { monthlyAmount: compensation.monthlyAmount, currency: compensation.currency, effectiveFrom: compensation.effectiveFrom.toISOString().slice(0, 10) } : null }, ipAddress: clientIp(request),
       }, tx);
       return user;
     });
@@ -106,29 +147,20 @@ export async function POST(request: Request) {
     if (isUniqueEmailViolation(error)) {
       return NextResponse.json({ message: "Please correct the highlighted fields.", errors: { email: "Another account already uses that email address." } }, { status: 422 });
     }
+    if (isUniqueCeoSingletonViolation(error)) {
+      return NextResponse.json({ message: CEO_ALREADY_ASSIGNED_MESSAGE, errors: { roleId: CEO_ALREADY_ASSIGNED_MESSAGE } }, { status: 409 });
+    }
     throw error;
   }
 
-  const url = resetUrl(appOrigin(), token);
-  const config = smtp();
-  let delivered = false;
-
-  if (config) {
-    try {
-      const { subject, text } = inviteEmail(created.name, url, context.user.name);
-      const transporter = nodemailer.createTransport({ host: config.host, port: config.port, secure: config.secure, auth: config.auth });
-      await transporter.sendMail({ from: config.from, to: created.email, subject, text });
-      delivered = true;
-    } catch (error) {
-      // The account exists either way; the caller gets the link to pass on.
-      console.error("Invite email failed", error);
-    }
-  }
+  const { url, delivered } = await deliverInvite({
+    name: created.name, email: created.email, token, inviterName: context.user.name,
+  });
 
   return NextResponse.json({
     message: delivered
-      ? `${created.name} has been added — an invite is on its way to ${created.email}.`
-      : `${created.name} has been added. Email is not configured here, so send them this link yourself.`,
+      ? `${created.name} has been added${compensation ? " with their salary schedule" : ""} — an invite is on its way to ${created.email}.`
+      : `${created.name} has been added${compensation ? " with their salary schedule" : ""}. Email is not configured here, so send them this link yourself.`,
     // Only returned when we could not deliver it; it is a bearer token.
     inviteUrl: delivered ? undefined : url,
   });

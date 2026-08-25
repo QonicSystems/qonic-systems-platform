@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { StatusChip } from "@/components/status-chip";
 import { can, requireAuth } from "@/lib/auth/guard";
-import { ROLE } from "@/lib/auth/roles";
+import { leadershipRoleWhere } from "@/lib/auth/roles";
 import { db } from "@/lib/db";
 
 export const metadata = { title: "Approvals" };
@@ -13,9 +13,12 @@ export default async function ApprovalsPage() {
   const context = await requireAuth();
   const userId = context.user.id;
 
-  // Filter for employee-only submissions: Exclude CEO and Co-Founder submissions
+  // Leadership's own submissions don't belong in leadership's approval queue.
+  // Matched on rank rather than a list of role keys, so a role the CEO creates
+  // at rank 10 or better is excluded too — with the seeded ranks this is the
+  // same set as before.
   const executiveRoles = await db.role.findMany({
-    where: { key: { in: [ROLE.CEO, ROLE.CO_FOUNDER] } },
+    where: leadershipRoleWhere,
     select: { id: true },
   });
   const execRoleIds = executiveRoles.map((r) => r.id);

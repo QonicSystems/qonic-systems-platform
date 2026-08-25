@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
+import { randomBytes } from "node:crypto";
 import { clientIp, recordAudit } from "@/lib/audit";
 import { guardRoute } from "@/lib/auth/guard";
 import { emailPattern } from "@/lib/contact";
-import { toMinor } from "@/lib/money";
-import { resourceTypeOf, RESOURCE_TYPE } from "@/lib/ats/resource-type";
+import { isLeadershipRank } from "@/lib/auth/roles";
+import { appOrigin } from "@/lib/app-origin";
+import { sha256 } from "@/lib/crypto";
+import { sendEmail } from "@/lib/notify";
 import { db } from "@/lib/db";
 
 export const runtime = "nodejs";
@@ -42,11 +45,6 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const linkedinProblem = urlProblem(linkedinUrl, "LinkedIn URL");
   if (linkedinProblem) errors.linkedinUrl = linkedinProblem;
 
-  const currentSalary = input.currentSalary !== undefined ? toMinor(String(input.currentSalary ?? "")) : existing.currentSalary;
-  const expectedSalary = input.expectedSalary !== undefined ? toMinor(String(input.expectedSalary ?? "")) : existing.expectedSalary;
-  if (Number.isNaN(currentSalary)) errors.currentSalary = "Enter the salary as a number.";
-  if (Number.isNaN(expectedSalary)) errors.expectedSalary = "Enter the salary as a number.";
-
   if (email !== existing.email) {
     const clash = await db.candidate.findUnique({ where: { email } });
     if (clash && clash.id !== existing.id) errors.email = "Another candidate already uses that email address.";
@@ -54,9 +52,26 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
   if (Object.keys(errors).length) return NextResponse.json({ message: "Please correct the highlighted fields.", errors }, { status: 422 });
 
+  const requestedKind = String(input.kind ?? existing.kind).trim().toUpperCase();
+  if (requestedKind !== existing.kind) {
+    return NextResponse.json({
+      message: "A candidate's classification is permanent. Add a new Developer or Global Candidate record instead.",
+      errors: { kind: "Global Candidates, Developers, and Direct Candidates cannot be converted into one another." },
+    }, { status: 409 });
+  }
+  const kind = existing.kind;
+  const isGlobal = kind === "GLOBAL";
   const rawSource = String(input.source ?? existing.source).trim() || "Direct";
-  const isGlobal = resourceTypeOf(rawSource) === RESOURCE_TYPE.GLOBAL;
+  if (isGlobal && !["LinkedIn", "Internal Sources", "Other"].includes(rawSource)) {
+    errors.source = "Choose LinkedIn, Internal Sources, or Other for a Global Candidate.";
+  }
 
+  if (Object.keys(errors).length) return NextResponse.json({ message: "Please correct the highlighted fields.", errors }, { status: 422 });
+
+  // Legacy Global records may predate the consent model. Their immutable
+  // classification stays Global, but an outstanding consent request is created.
+  const needsConsentRequest = isGlobal && existing.consentStatus === "NOT_REQUIRED";
+  const consentToken = needsConsentRequest ? randomBytes(32).toString("base64url") : null;
   const updated = await db.$transaction(async (tx) => {
     const candidate = await tx.candidate.update({
       where: { id },
@@ -75,16 +90,33 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         visaExpiry: isGlobal && input.visaExpiry ? new Date(String(input.visaExpiry)) : (isGlobal ? existing.visaExpiry : null),
         ssn: isGlobal ? (String(input.ssn ?? existing.ssn ?? "").trim() || null) : null,
         address: isGlobal ? (String(input.address ?? existing.address ?? "").trim() || null) : null,
-        commissionPaid: isGlobal && input.commissionPaid !== undefined ? toMinor(String(input.commissionPaid)) : (isGlobal ? existing.commissionPaid : null),
+        // Retained only for historical records; new commercial commission is
+        // configured on the Client/job where it can reconcile to invoices.
+        commissionPaid: existing.commissionPaid,
         benchStatus: String(input.benchStatus ?? existing.benchStatus ?? (isGlobal ? "Available / On Bench" : "Available / Ready to Deploy")).trim(),
         source: rawSource,
+        kind: kind as "GLOBAL" | "DEVELOPER" | "DIRECT",
+        consentStatus: needsConsentRequest ? "PENDING" : existing.consentStatus,
+        consentAt: needsConsentRequest ? null : existing.consentAt,
+        consents: consentToken
+          ? { create: { status: "PENDING", tokenHash: sha256(consentToken) } }
+          : undefined,
         noticePeriod: typeof input.noticePeriod === "string" ? (input.noticePeriod.trim() || null) : existing.noticePeriod,
         notes: typeof input.notes === "string" ? (input.notes.trim() || null) : existing.notes,
-        currentSalary,
-        expectedSalary,
+        // Candidate compensation is no longer editable here. The accepted
+        // contract letter's Monthly Compensation is the single live source.
         status: typeof input.status === "string" && ["ACTIVE", "ARCHIVED"].includes(input.status) ? (input.status as "ACTIVE" | "ARCHIVED") : existing.status,
       },
     });
+
+    if (candidate.kind === "GLOBAL" && (typeof input.techStack === "string" || existing.kind !== "GLOBAL")) {
+      const profileSource = typeof input.techStack === "string" ? input.techStack : (candidate.techStack ?? candidate.skills ?? "");
+      const technologies = [...new Set(profileSource.split(",").map((item) => item.trim()).filter(Boolean))].slice(0, 30);
+      await tx.candidateMarketingProfile.deleteMany({ where: { candidateId: candidate.id } });
+      if (technologies.length > 0) {
+        await tx.candidateMarketingProfile.createMany({ data: technologies.map((technology) => ({ candidateId: candidate.id, technology })) });
+      }
+    }
 
     await recordAudit({
       actorId: context.user.id,
@@ -99,7 +131,21 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return candidate;
   });
 
-  return NextResponse.json({ message: `${updated.name} updated successfully.`, id: updated.id });
+  if (consentToken) {
+    void sendEmail(
+      [updated.email],
+      "Confirm Qonic Systems profile marketing consent",
+      "Please confirm that Qonic Systems may use your documents and profile to procure jobs, market your profile, and notify you when a job is procured. Confirm your consent at the secure link below.",
+      `${appOrigin()}/consent/${encodeURIComponent(consentToken)}`
+    );
+  }
+
+  return NextResponse.json({
+    message: consentToken
+      ? `${updated.name} is now a Global Candidate. A consent email has been sent.`
+      : `${updated.name} updated successfully.`,
+    id: updated.id,
+  });
 }
 
 /** Archive or delete a candidate */
@@ -130,11 +176,11 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
     // audit trail explaining why. Permanently purging an account, when that
     // is genuinely wanted, is its own deliberate, CEO-only action —
     // DELETE /api/admin/users/[id] — not a side effect of deleting a candidate.
-    // The link is a real FK (Candidate.linkedUserId) set only when someone
-    // deliberately drafts this person's first contract letter — no more
-    // guessing by email, so an unlinked candidate's deletion never touches
-    // any User account, however similar the names or emails look.
-    const linkedUser = existing.linkedUser && !["ceo", "co_founder"].includes(existing.linkedUser.role.key) && existing.linkedUser.status === "ACTIVE"
+    // The link is a real FK (Candidate.linkedUserId), written only by the
+    // deliberate "Create Employee Account" action — no more guessing by email,
+    // so an unlinked candidate's deletion never touches any User account,
+    // however similar the names or emails look.
+    const linkedUser = existing.linkedUser && !isLeadershipRank(existing.linkedUser.role.rank) && existing.linkedUser.status === "ACTIVE"
       ? existing.linkedUser
       : null;
     if (linkedUser) {

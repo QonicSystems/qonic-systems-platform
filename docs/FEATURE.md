@@ -43,10 +43,16 @@ container: `docker compose -f docker/docker-compose.local.yml exec app npx tsx p
 |---|---|---|---|
 | Founder | `founder@qonicsystems.com` | CEO & Founder — super admin | 0 |
 | Priya Raman | `cofounder@qonicsystems.com` | Co-Founder | 10 |
-| Neha Kulkarni | `hr@qonicsystems.com` | HR | 20 |
-| Rahul Mehta | `accounts@qonicsystems.com` | Accounts | 20 |
-| Sana Iqbal | `projects@qonicsystems.com` | Projects | 20 |
-| Arjun Nair | `developer@qonicsystems.com` | Employee | 50 |
+| Ananya Sharma | `hr@qonicsystems.com` | Developer, with recruitment overrides | 50 |
+| Neha Kulkarni | `lead-dev@qonicsystems.com` | Developer | 50 |
+| Rahul Mehta | `backend-dev@qonicsystems.com` | Developer | 50 |
+| Sana Iqbal | `cloud-dev@qonicsystems.com` | Developer | 50 |
+| Arjun Nair | `developer@qonicsystems.com` | Developer | 50 |
+
+> The separate HR, Accounts and Projects roles were retired in the platform
+> refactor; `prisma/seed-demo.ts` now grants the HR account its extra capabilities
+> as **per-user overrides** instead. Scenarios below that still say "as HR" mean
+> that account.
 
 > All accounts use the parent-company domain **@qonicsystems.com** (Qonic
 > Consulting is a vertical of Qonic Systems). In the Docker stack the bootstrap
@@ -204,6 +210,43 @@ Legend: 🟢 covered by an automated test · ⚪ manual check only.
 - **When** I choose "sign out of other devices"
 - **Then** the others end and my current session stays alive.
 
+### 2.14 People refuses a Candidate Pool role ⚪
+- **Given** Developer, the one role whose `Role.viaCandidatePool` is true
+- **When** I try to create a person in it from Administration → People, or edit an
+  existing person into it
+- **Then** both are refused with a 422 naming the Candidate Pool. The dialogs omit
+  the option entirely, but the refusal is server-side — forging the request past
+  the dropdown fails the same way.
+- **And** an existing Developer is still editable for name, email, phone, job title
+  and tech stack, because the guard is gated on the role actually changing.
+
+### 2.15 The CEO creates a role at runtime ⚪
+- **Given** Administration → People → Roles
+- **When** I create "Legal & Compliance" at rank 20
+- **Then** the role exists with a server-derived key, `isSystem: false`,
+  `isSuperAdmin: false`, and one disabled toggle per permission — it appears
+  immediately as a new column in Roles & Permissions and as an option in the
+  People role picker.
+- **And** `npm run db:seed` afterwards **leaves it intact**: `pruneRetiredRoles()`
+  only deletes `isSystem: true` roles the code no longer defines.
+- **And** it is assigned from **People**, never the Candidate Pool — that flag
+  belongs to the seeded Developer role alone and is not offered when creating a
+  role.
+- **And** rank 0 is refused (it is the CEO tier), a colliding key is suffixed
+  rather than rejected, and nobody may create a role at or above their own rank.
+
+### 2.16 Deleting a role is permanent ⚪
+- **Given** a role I created that nobody holds
+- **When** I delete it
+- **Then** it is gone for good.
+- **And** the three built-ins (CEO & Founder, Co-Founder, Developer) are refused:
+  the seed recreates them anyway, and deleting Developer would leave the Candidate
+  Pool with no role to assign. A role somebody still holds is refused too, naming
+  how many accounts hold it — deliberately *not* reassigning them, unlike the
+  deploy seed's unattended prune.
+- **And** changing a role's rank signs its holders out and notifies them, while a
+  rename does not.
+
 ---
 
 ## Phase 3 — HR operations
@@ -288,18 +331,6 @@ Legend: 🟢 covered by an automated test · ⚪ manual check only.
 - **When** I try to delete it
 - **Then** it is refused — archive instead. Removing an assignee is likewise
   blocked once they have booked time.
-
-### 4.7 Utilisation vs. billable ratio 🟢
-- **Given** someone who booked more or less than a 40-hour week
-- **When** I open the utilisation report
-- **Then** billable ratio ("of time booked, how much is chargeable") and
-  utilisation ("of a standard week, how much was chargeable") are **different
-  numbers**, and diverge exactly when the week isn't full.
-
-### 4.8 Capacity report flags bench and over-allocation ⚪
-- **Given** team assignments with `allocationPercent`
-- **When** I open the capacity report
-- **Then** the bench and anyone over 100% allocated are flagged.
 
 ---
 
@@ -411,12 +442,20 @@ exist; the portal exposes the pipeline, not a calendar).
   clients, projects, jobs, candidates, invoices, letters) is gated on the
   searcher's own permissions.
 
-### 7.3 Analytics ⚪
-- **When** I open `/reports/analytics`
-- **Then** I see median time-to-fill, the recruitment funnel with stage-to-stage
-  conversion, revenue mix, billable share, and rolling-year attrition.
-
 **Not built (needs an external service):** client portal; scheduled report emails.
+
+**Removed:** the Analytics, Utilisation, Capacity and Deal Financials reports.
+The Revenue report (§6.7) is the only one that remains, and now lives under
+Finance rather than a Reports group of its own.
+
+**Removed:** Administration → Rate Management, along with the `ResourceDeal`
+table it maintained and the payout-reclassification override on
+`PayoutLedgerEntry`. Payout categories are still computed and frozen when a
+timesheet is approved, and **My Earnings** still shows them — there is simply no
+longer a screen that can override one after the fact. `ProjectAssignment.rate`
+and `.startedOn` survive as columns because invoicing and payout categorisation
+still read them, but nothing sets them any more: new assignments fall back to
+`Project.defaultRate` and to the assignment's `createdAt`.
 
 ---
 

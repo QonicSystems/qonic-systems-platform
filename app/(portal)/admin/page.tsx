@@ -1,7 +1,11 @@
 import { PeopleTable, type PersonRow } from "@/components/admin/people-table";
+import { RoleManager, type RoleRow } from "@/components/admin/role-manager";
 import { canAdminister, canAssignRole, canEditIdentity, describeAuthority } from "@/lib/auth/authority";
 import { can, requirePermission } from "@/lib/auth/guard";
+import { ROLE } from "@/lib/auth/roles";
+import { CEO_SINGLETON_KEY } from "@/lib/auth/single-ceo";
 import { db } from "@/lib/db";
+import { formatMoney } from "@/lib/money";
 
 export const metadata = { title: "People" };
 
@@ -12,15 +16,24 @@ export default async function AdminPeoplePage() {
     // Overrides are per-person exceptions to the role matrix. The guard has
     // always honoured them; nothing could create one until now.
     db.user.findMany({
-      include: { role: true, overrides: { include: { permission: true } } },
+      // Candidate-Pool Developers are managed in the Candidate Pool. People
+      // contains only accounts deliberately added through Administration.
+      where: { role: { viaCandidatePool: false } },
+      include: {
+        role: true,
+        overrides: { include: { permission: true } },
+        compensationProfiles: { orderBy: { effectiveFrom: "desc" }, take: 1 },
+      },
       orderBy: [{ role: { rank: "asc" } }, { name: "asc" }],
     }),
-    db.role.findMany({ orderBy: { rank: "asc" } }),
+    db.role.findMany({ orderBy: { rank: "asc" }, include: { _count: { select: { users: true } } } }),
     db.permission.findMany({ orderBy: [{ group: "asc" }, { sortOrder: "asc" }] }),
   ]);
 
   const mayEdit = can(context, "user.manage");
   const mayOverride = can(context, "rbac.manage");
+  const founderFinance = context.role.isSuperAdmin || context.role.key === "co_founder";
+  const maySetCompensation = founderFinance && can(context, "compensation.manage");
   const today = new Date().toISOString().slice(0, 10);
 
   // Authority is resolved on the SERVER for each row. The table is a dumb
@@ -49,6 +62,10 @@ export default async function AdminPeoplePage() {
     canExport: can(context, "user.view") && (user.id === context.user.id || canAdminister(context, { id: user.id, role: user.role }).ok),
     isSelf: user.id === context.user.id,
     canOverride: mayOverride && user.id !== context.user.id && canAdminister(context, { id: user.id, role: user.role }).ok,
+    canSetCompensation: maySetCompensation && !user.role.viaCandidatePool && (user.id === context.user.id || canAdminister(context, { id: user.id, role: user.role }).ok),
+    compensation: user.compensationProfiles[0]
+      ? `${formatMoney(user.compensationProfiles[0].monthlyAmount, user.compensationProfiles[0].currency)} / month from ${user.compensationProfiles[0].effectiveFrom.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })}`
+      : null,
     overrides: user.overrides.map((o) => ({
       key: o.permission.key,
       label: o.permission.label,
@@ -59,10 +76,44 @@ export default async function AdminPeoplePage() {
     })),
   }));
 
+  const currentCeo = users.find((user) => user.ceoSingletonKey === CEO_SINGLETON_KEY) ?? null;
+  const viewerIsCurrentCeo = currentCeo?.id === context.user.id && context.role.key === ROLE.CEO;
   const roleOptions = roles.map((role) => ({
     id: role.id,
     label: role.label,
-    assignable: canAssignRole(context, role).ok,
+    isCeo: role.key === ROLE.CEO,
+    assignable: canAssignRole(context, role).ok && !(role.key === ROLE.CEO && currentCeo && !viewerIsCurrentCeo),
+    unavailableReason: role.key === ROLE.CEO && currentCeo && !viewerIsCurrentCeo
+      ? `CEO is already assigned to ${currentCeo.name}`
+      : null,
+    // Developer is assigned by the Candidate Pool, so People leaves it out of
+    // the role dropdown. Both user endpoints re-check this; the flag is carried
+    // here only so the dialogs know what to omit.
+    viaCandidatePool: role.viaCandidatePool,
+  }));
+
+  // Same server-resolved-authority pattern as the people rows above: the role
+  // table is a dumb renderer and every action it offers is re-checked by its
+  // own endpoint.
+  const mayEditRole = (role: (typeof roles)[number]) =>
+    mayOverride && !role.isSuperAdmin && (context.role.isSuperAdmin || role.rank > context.role.rank);
+
+  const roleRows: RoleRow[] = roles.map((role) => ({
+    id: role.id,
+    key: role.key,
+    label: role.label,
+    description: role.description ?? "",
+    rank: role.rank,
+    isSystem: role.isSystem,
+    isSuperAdmin: role.isSuperAdmin,
+    viaCandidatePool: role.viaCandidatePool,
+    userCount: role._count.users,
+    canEdit: mayEditRole(role),
+    // Built-in roles are permanent — CEO & Founder, Co-Founder and Developer.
+    // Developer in particular is what the Candidate Pool assigns, so deleting it
+    // would leave staff onboarding with no role to hand out. Only roles created
+    // here can be deleted, and only once nobody holds them.
+    canDelete: mayEditRole(role) && !role.isSystem && role._count.users === 0,
   }));
 
   return <section className="portal-section">
@@ -77,9 +128,15 @@ export default async function AdminPeoplePage() {
       // Same permission as editing — user.manage is described as "Create
       // accounts and edit their details". Whether any given role can actually
       // be assigned is decided per role by canAssignRole below.
-      canCreate={mayEdit && roleOptions.some((role) => role.assignable)}
+      canCreate={mayEdit && roleOptions.some((role) => role.assignable && !role.viaCandidatePool)}
+      canSetCompensation={maySetCompensation}
       permissions={permissions.map((p) => ({ key: p.key, label: p.label, group: p.group }))}
       today={today}
     />
+
+    {mayOverride && <div className="mt-10">
+      <h2 className="portal-section-title">Roles</h2>
+      <RoleManager roles={roleRows} />
+    </div>}
   </section>;
 }

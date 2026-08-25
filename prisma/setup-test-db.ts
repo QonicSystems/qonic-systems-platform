@@ -44,8 +44,9 @@ async function clearData() {
   await db.$executeRawUnsafe(`TRUNCATE TABLE
     "TimeEntry", "Timesheet", "ProjectAssignment", "ProjectTask", "ProjectMilestone",
     "InvoiceLine", "Payment", "CreditNote", "Invoice", "Expense",
-    "Interview", "Placement", "ApplicationEvent", "Application", "Candidate", "Job",
+    "Reminder", "CandidateMarketingProfile", "CandidateConsent", "Interview", "Placement", "ApplicationEvent", "Application", "Candidate", "Job",
     "Project", "ClientContact", "Client",
+    "Vendor", "CommissionPolicy",
     "ContractLetterEvent", "ContractLetter",
     "LeaveRequest", "LeaveBalance",
     "Notification", "BankDetail", "PasswordResetToken", "Session",

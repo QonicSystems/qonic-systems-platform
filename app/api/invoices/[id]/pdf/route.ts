@@ -24,6 +24,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     const buffer = await renderInvoicePdf({
       number: invoice.number, status: invoice.status,
       issueDate: invoice.issueDate, dueDate: invoice.dueDate, currency: invoice.currency,
+      settlementCurrency: invoice.settlementCurrency,
+      lockedSettlementRate: invoice.lockedSettlementRate === null ? null : Number(invoice.lockedSettlementRate),
       clientName: invoice.client.name, projectName: invoice.project?.name ?? null,
       lines: invoice.lines, subtotal: invoice.subtotal, taxPercent: invoice.taxPercent,
       taxAmount: invoice.taxAmount, total: invoice.total, paidAmount: invoice.paidAmount,

@@ -108,18 +108,8 @@ export function resolveBreadcrumbs(pathname: string): Crumb[] {
     return [{ label: "Home", href: "/dashboard" }, { label: "Finance" }, { label: "Expense Claims" }];
   }
 
-  // Reports
-  if (path === "/reports") {
-    return [{ label: "Home", href: "/dashboard" }, { label: "Reports" }, { label: "Utilisation" }];
-  }
-  if (path === "/reports/analytics") {
-    return [{ label: "Home", href: "/dashboard" }, { label: "Reports" }, { label: "Analytics" }];
-  }
-  if (path === "/reports/capacity") {
-    return [{ label: "Home", href: "/dashboard" }, { label: "Reports" }, { label: "Capacity" }];
-  }
   if (path === "/reports/revenue") {
-    return [{ label: "Home", href: "/dashboard" }, { label: "Reports" }, { label: "Revenue" }];
+    return [{ label: "Home", href: "/dashboard" }, { label: "Finance" }, { label: "Company Finance" }];
   }
 
   // Directory

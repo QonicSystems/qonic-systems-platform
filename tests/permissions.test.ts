@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { PERMISSIONS, resolvePermissions } from "@/lib/auth/permissions";
+import { DEFAULT_ROLE_PERMISSIONS, PERMISSIONS, resolvePermissions, SUPER_ADMIN_ONLY_PERMISSIONS } from "@/lib/auth/permissions";
+import { ROLE } from "@/lib/auth/roles";
 import { safeRedirectPath } from "@/lib/auth/session";
 
 const NOW = new Date("2026-07-20T12:00:00Z");
@@ -62,6 +63,42 @@ describe("resolvePermissions", () => {
   it("honours an override that has not expired yet", () => {
     const result = resolvePermissions(staff, [], [{ permissionKey: "contract.release", effect: "ALLOW", expiresAt: future }], NOW);
     expect(result.has("contract.release")).toBe(true);
+  });
+});
+
+describe("capability catalog", () => {
+  const permissionKeys: ReadonlySet<string> = new Set(PERMISSIONS.map((permission) => permission.key));
+
+  it("exposes distinct administration capabilities for every administration workspace", () => {
+    expect(PERMISSIONS.filter((permission) => permission.group === "People").map((permission) => permission.key)).toEqual([
+      "user.view", "user.manage", "user.deactivate", "user.delete", "user.purge",
+    ]);
+    expect(PERMISSIONS.filter((permission) => permission.group === "Roles & Permissions").map((permission) => permission.key)).toEqual(["rbac.manage"]);
+    expect(PERMISSIONS.filter((permission) => permission.group === "Holidays").map((permission) => permission.key)).toEqual([
+      "holiday.view", "holiday.manage",
+    ]);
+    expect(PERMISSIONS.filter((permission) => permission.group === "Audit Log").map((permission) => permission.key)).toEqual([
+      "audit.view", "audit.export", "audit.purge",
+    ]);
+  });
+
+  it("includes separate export capabilities for financial and audit data", () => {
+    expect(permissionKeys.has("finance.export")).toBe(true);
+    expect(permissionKeys.has("audit.export")).toBe(true);
+  });
+
+  it("keeps every default and CEO-only capability registered in the catalog", () => {
+    for (const permissions of Object.values(DEFAULT_ROLE_PERMISSIONS)) {
+      for (const permission of permissions) expect(permissionKeys.has(permission)).toBe(true);
+    }
+    for (const permission of SUPER_ADMIN_ONLY_PERMISSIONS) expect(permissionKeys.has(permission)).toBe(true);
+  });
+
+  it("gives a Co-Founder the current administration and export capabilities", () => {
+    const coFounderPermissions = DEFAULT_ROLE_PERMISSIONS[ROLE.CO_FOUNDER];
+    expect(coFounderPermissions).toEqual(expect.arrayContaining([
+      "holiday.view", "holiday.manage", "audit.view", "audit.export", "finance.export",
+    ]));
   });
 });
 

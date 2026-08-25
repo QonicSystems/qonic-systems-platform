@@ -1,6 +1,7 @@
 import { Document, Link, Page, StyleSheet, Text, View, renderToBuffer } from "@react-pdf/renderer";
 import { PdfLockup, PdfParentMark } from "@/lib/pdf-brand";
 import { formatMoney, formatQuantity } from "@/lib/money";
+import { formatSettlementRate, settlementAmountAtLockedRate } from "@/lib/finance/fx-settlement";
 
 export type InvoiceContext = {
   number: string;
@@ -8,6 +9,8 @@ export type InvoiceContext = {
   issueDate: Date;
   dueDate: Date;
   currency: string;
+  settlementCurrency?: string | null;
+  lockedSettlementRate?: number | null;
   clientName: string;
   clientAddress?: string | null;
   projectName?: string | null;
@@ -21,129 +24,205 @@ export type InvoiceContext = {
   paymentUrl?: string | null;
 };
 
+export type CreditNoteContext = {
+  number: string;
+  issuedAt: Date;
+  currency: string;
+  clientName: string;
+  projectName?: string | null;
+  invoiceNumber: string;
+  invoiceIssueDate: Date;
+  invoiceTotal: number;
+  creditAmount: number;
+  reason: string;
+};
+
 const styles = StyleSheet.create({
-  page: { paddingTop: 40, paddingBottom: 50, paddingHorizontal: 48, fontSize: 9, lineHeight: 1.45, color: "#2b2b2b" },
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", borderBottomWidth: 2, borderBottomColor: "#FFD700", paddingBottom: 10, marginBottom: 14 },
-  meta: { fontSize: 8, color: "#8a8a8a", textAlign: "right" },
-  title: { fontSize: 18, fontWeight: 700, color: "#111111", marginBottom: 2, textAlign: "right" },
-  number: { fontSize: 10, fontWeight: 700, color: "#8a6a08", textAlign: "right" },
-  billTo: { flexDirection: "row", justifyContent: "space-between", marginBottom: 14 },
-  label: { fontSize: 7, color: "#8a8a8a", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 2 },
+  page: { paddingTop: 42, paddingBottom: 52, paddingHorizontal: 48, fontSize: 9, lineHeight: 1.45, color: "#252525" },
+  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", borderBottomWidth: 2, borderBottomColor: "#FFD700", paddingBottom: 13, marginBottom: 20 },
+  documentMeta: { alignItems: "flex-end", minWidth: 150 },
+  title: { fontSize: 20, fontWeight: 700, color: "#111111", lineHeight: 1.1, marginTop: 10, marginBottom: 3, textAlign: "right" },
+  number: { fontSize: 9.5, fontWeight: 700, color: "#8a6a08", textAlign: "right" },
+  void: { marginBottom: 15, borderWidth: 1, borderColor: "#fecaca", backgroundColor: "#fef2f2", padding: 8, color: "#b91c1c", fontSize: 9, fontWeight: 700, textAlign: "center", borderRadius: 3 },
+  metaGrid: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: "#e7e4da", paddingBottom: 15, marginBottom: 16 },
+  metaClient: { width: "48%" },
+  metaDate: { width: "26%" },
+  metaDue: { width: "26%", textAlign: "right" },
+  label: { fontSize: 7.25, color: "#777777", textTransform: "uppercase", letterSpacing: 0.85, marginBottom: 4 },
   strong: { fontSize: 10, fontWeight: 700, color: "#111111" },
-  tableHead: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: "#111111", paddingBottom: 4, marginBottom: 2 },
-  row: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: "#e7e4da", paddingVertical: 4 },
-  cDesc: { width: "52%" },
+  muted: { color: "#666666" },
+  tableHead: { flexDirection: "row", borderBottomWidth: 1.25, borderBottomColor: "#222222", paddingBottom: 5 },
+  row: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: "#e7e4da", paddingVertical: 7 },
+  cDesc: { width: "50%" },
   cQty: { width: "12%", textAlign: "right" },
-  cRate: { width: "18%", textAlign: "right" },
-  cAmt: { width: "18%", textAlign: "right" },
-  headCell: { fontSize: 7.5, fontWeight: 700, color: "#111111" },
-  summaryRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 10, alignItems: "flex-start" },
-  paymentBox: { width: "48%", backgroundColor: "#0b0c10", borderRadius: 6, padding: 8, borderWidth: 1, borderColor: "#272a37" },
-  paymentTitle: { fontSize: 8, fontWeight: 700, color: "#ffd700", marginBottom: 3, letterSpacing: 0.5 },
-  paymentText: { fontSize: 7, color: "#cbd5e1", marginBottom: 2 },
-  payLink: { fontSize: 7.5, fontWeight: 700, color: "#ffd700", textDecoration: "underline", marginTop: 3 },
-  totals: { width: "46%" },
-  totalRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 2.5 },
-  grand: { flexDirection: "row", justifyContent: "space-between", borderTopWidth: 1.5, borderTopColor: "#111111", marginTop: 3, paddingTop: 4 },
+  cRate: { width: "19%", textAlign: "right" },
+  cAmt: { width: "19%", textAlign: "right" },
+  headCell: { fontSize: 7.25, fontWeight: 700, color: "#222222", textTransform: "uppercase", letterSpacing: 0.25 },
+  summaryGrid: { flexDirection: "row", justifyContent: "space-between", marginTop: 20, alignItems: "flex-start" },
+  paymentBox: { width: "51%", borderWidth: 1, borderColor: "#e2d5a2", backgroundColor: "#fffdf5", borderRadius: 4, paddingVertical: 10, paddingHorizontal: 11 },
+  paymentTitle: { fontSize: 8.5, fontWeight: 700, color: "#594500", marginBottom: 5 },
+  paymentText: { fontSize: 7.6, color: "#4a4a4a", marginBottom: 3 },
+  payLink: { fontSize: 8, fontWeight: 700, color: "#7a5e00", textDecoration: "underline", marginTop: 5 },
+  totals: { width: "41%" },
+  totalRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 3 },
+  grand: { flexDirection: "row", justifyContent: "space-between", borderTopWidth: 1.5, borderTopColor: "#111111", marginTop: 4, paddingTop: 6 },
   grandText: { fontSize: 11, fontWeight: 700, color: "#111111" },
-  paid: { marginTop: 10, borderWidth: 1, borderColor: "#cfe3d6", backgroundColor: "#f0f7f2", padding: 6, color: "#1f5c3d", fontSize: 8.5, fontWeight: 700, textAlign: "center", borderRadius: 4 },
-  void: { marginBottom: 10, borderWidth: 1, borderColor: "#fecaca", backgroundColor: "#fef2f2", padding: 6, color: "#b91c1c", fontSize: 9, fontWeight: 700, textAlign: "center", borderRadius: 4 },
-  notes: { marginTop: 12, fontSize: 8, color: "#4f4f4f" },
-  footer: { position: "absolute", bottom: 24, left: 48, right: 48, borderTopWidth: 1, borderTopColor: "#e7e4da", paddingTop: 6, fontSize: 7, color: "#8a8a8a", flexDirection: "row", justifyContent: "space-between" },
+  paid: { marginTop: 14, borderWidth: 1, borderColor: "#b9d8c3", backgroundColor: "#f0f7f2", padding: 7, color: "#1f5c3d", fontSize: 8.5, fontWeight: 700, textAlign: "center", borderRadius: 3 },
+  notePanel: { marginTop: 20, borderLeftWidth: 3, borderLeftColor: "#FFD700", backgroundColor: "#faf9f6", paddingVertical: 9, paddingHorizontal: 11 },
+  noteTitle: { fontSize: 8, fontWeight: 700, color: "#333333", marginBottom: 3, textTransform: "uppercase", letterSpacing: 0.45 },
+  footer: { position: "absolute", bottom: 24, left: 48, right: 48, borderTopWidth: 1, borderTopColor: "#e7e4da", paddingTop: 7, fontSize: 7, color: "#777777", flexDirection: "row", justifyContent: "space-between" },
+  creditBanner: { backgroundColor: "#fff8dc", borderWidth: 1, borderColor: "#ead487", borderRadius: 3, padding: 9, marginBottom: 16, fontSize: 8.5, color: "#4f420b" },
+  creditReason: { width: "51%", borderWidth: 1, borderColor: "#e7e4da", borderRadius: 3, padding: 10 },
 });
 
-const day = (date: Date) => date.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+const day = (value: Date) => value.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+
+function DocumentHeader({ label, number }: { label: string; number: string }) {
+  return <View style={styles.header}>
+    <PdfLockup />
+    <View style={styles.documentMeta}>
+      <PdfParentMark />
+      <Text style={styles.title}>{label}</Text>
+      <Text style={styles.number}>{number}</Text>
+    </View>
+  </View>;
+}
+
+function DocumentFooter({ reference }: { reference: string }) {
+  return <View style={styles.footer} fixed>
+    <Text>QONIC consulting | {reference}</Text>
+    <Text render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />
+  </View>;
+}
 
 function InvoiceDocument({ context }: { context: InvoiceContext }) {
-  const outstanding = context.total - context.paidAmount;
+  const outstanding = Math.max(0, context.total - context.paidAmount);
   const payUrl = context.paymentUrl || `https://consulting.qonicsystems.com/invoices/${context.number}`;
+  const foreignSettlement = Boolean(context.settlementCurrency && context.settlementCurrency !== context.currency && context.lockedSettlementRate);
 
   return <Document title={`Invoice ${context.number}`} author="QONIC consulting">
     <Page size="A4" style={styles.page}>
-      <View style={styles.header}>
-        <View>
-          <PdfLockup />
-          <Text style={styles.meta}>Global Plaza, Innovation District, Suite 400</Text>
-        </View>
-        <View style={{ alignItems: "flex-end" }}>
-          <PdfParentMark />
-          <Text style={[styles.title, { marginTop: 6 }]}>INVOICE</Text>
-          <Text style={styles.number}>{context.number}</Text>
-        </View>
-      </View>
+      <DocumentHeader label="INVOICE" number={context.number} />
+      {context.status === "VOID" ? <Text style={styles.void}>VOID - this invoice has been cancelled and is not payable.</Text> : null}
 
-      {/* A void invoice must never be mistaken for a payable one. */}
-      {context.status === "VOID" ? <Text style={styles.void}>VOID — this invoice has been cancelled and is not payable.</Text> : null}
-
-      <View style={styles.billTo}>
-        <View>
+      <View style={styles.metaGrid}>
+        <View style={styles.metaClient}>
           <Text style={styles.label}>Billed to</Text>
           <Text style={styles.strong}>{context.clientName}</Text>
-          {context.projectName ? <Text>{context.projectName}</Text> : null}
+          {context.projectName ? <Text style={styles.muted}>{context.projectName}</Text> : null}
+          {context.clientAddress ? <Text style={styles.muted}>{context.clientAddress}</Text> : null}
         </View>
-        <View>
+        <View style={styles.metaDate}>
           <Text style={styles.label}>Issued</Text>
           <Text>{day(context.issueDate)}</Text>
         </View>
-        <View>
-          <Text style={styles.label}>Due</Text>
+        <View style={styles.metaDue}>
+          <Text style={styles.label}>Due date</Text>
           <Text style={styles.strong}>{day(context.dueDate)}</Text>
         </View>
       </View>
 
-      <View style={styles.tableHead}>
+      <View style={styles.tableHead} fixed>
         <Text style={[styles.cDesc, styles.headCell]}>Description</Text>
-        <Text style={[styles.cQty, styles.headCell]}>Qty</Text>
+        <Text style={[styles.cQty, styles.headCell]}>Quantity</Text>
         <Text style={[styles.cRate, styles.headCell]}>Rate</Text>
         <Text style={[styles.cAmt, styles.headCell]}>Amount</Text>
       </View>
-      {context.lines.map((line, index) => <View style={styles.row} key={index}>
+      {context.lines.map((line, index) => <View style={styles.row} key={index} wrap={false}>
         <Text style={styles.cDesc}>{line.description}</Text>
         <Text style={styles.cQty}>{formatQuantity(line.quantity)}</Text>
         <Text style={styles.cRate}>{formatMoney(line.unitRate, context.currency)}</Text>
         <Text style={styles.cAmt}>{formatMoney(line.amount, context.currency)}</Text>
       </View>)}
 
-      <View style={styles.summaryRow}>
-        {/* ── Payment Gateway & Wire Transfer Instructions ──────── */}
-        <View style={styles.paymentBox}>
-          <Text style={styles.paymentTitle}>⚡ PAYMENT GATEWAY &amp; WIRE TRANSFER</Text>
+      <View style={styles.summaryGrid} wrap={false}>
+        {outstanding > 0 && context.status !== "VOID" ? <View style={styles.paymentBox}>
+          <Text style={styles.paymentTitle}>Payment instructions</Text>
           <Text style={styles.paymentText}>Bank: JPMorgan Chase / HDFC Global Commercial</Text>
           <Text style={styles.paymentText}>Beneficiary: Qonic Systems Inc.</Text>
-          <Text style={styles.paymentText}>SWIFT / BIC: QONICUS33XXX · Ref: {context.number}</Text>
-          {outstanding > 0 && context.status !== "VOID" && (
-            <Link src={payUrl} style={styles.payLink}>
-              👉 Click here to Pay Online with Card / Wire / Stripe
-            </Link>
-          )}
-        </View>
-
-        {/* ── Totals ────────────────────────────────────────────── */}
+          <Text style={styles.paymentText}>Reference: {context.number}</Text>
+          {foreignSettlement ? <>
+            <Text style={styles.paymentText}>Settlement: {formatMoney(settlementAmountAtLockedRate(outstanding, context.lockedSettlementRate!), context.settlementCurrency!)} in {context.settlementCurrency}</Text>
+            <Text style={styles.paymentText}>Locked rate: {formatSettlementRate(context.lockedSettlementRate!, context.settlementCurrency!, context.currency)}</Text>
+          </> : null}
+          <Link src={payUrl} style={styles.payLink}>Pay this invoice online or view payment options</Link>
+        </View> : <View style={{ width: "51%" }} />}
         <View style={styles.totals}>
           <View style={styles.totalRow}><Text>Subtotal</Text><Text>{formatMoney(context.subtotal, context.currency)}</Text></View>
           {context.taxPercent > 0 ? <View style={styles.totalRow}>
             <Text>Tax ({context.taxPercent}%)</Text><Text>{formatMoney(context.taxAmount, context.currency)}</Text>
           </View> : null}
           <View style={styles.grand}>
-            <Text style={styles.grandText}>Total</Text>
+            <Text style={styles.grandText}>Invoice total</Text>
             <Text style={styles.grandText}>{formatMoney(context.total, context.currency)}</Text>
           </View>
           {context.paidAmount > 0 ? <View style={styles.totalRow}>
-            <Text>Paid</Text><Text>{formatMoney(context.paidAmount, context.currency)}</Text>
+            <Text>Received</Text><Text>{formatMoney(context.paidAmount, context.currency)}</Text>
           </View> : null}
-          {outstanding > 0 && context.paidAmount > 0 ? <View style={styles.totalRow}>
-            <Text>Outstanding</Text><Text>{formatMoney(outstanding, context.currency)}</Text>
+          {context.paidAmount > 0 && outstanding > 0 ? <View style={styles.totalRow}>
+            <Text>Balance due</Text><Text>{formatMoney(outstanding, context.currency)}</Text>
           </View> : null}
         </View>
       </View>
 
-      {outstanding <= 0 && context.status !== "VOID" ? <Text style={styles.paid}>PAID IN FULL — THANK YOU</Text> : null}
-      {context.notes ? <Text style={styles.notes}>{context.notes}</Text> : null}
+      {outstanding === 0 && context.status !== "VOID" ? <Text style={styles.paid}>PAID IN FULL - THANK YOU</Text> : null}
+      {context.notes ? <View style={styles.notePanel}><Text style={styles.noteTitle}>Notes</Text><Text>{context.notes}</Text></View> : null}
+      <DocumentFooter reference={context.number} />
+    </Page>
+  </Document>;
+}
 
-      <View style={styles.footer} fixed>
-        <Text>QONIC consulting · {context.number}</Text>
-        <Text render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />
+function CreditNoteDocument({ context }: { context: CreditNoteContext }) {
+  return <Document title={`Credit note ${context.number}`} author="QONIC consulting">
+    <Page size="A4" style={styles.page}>
+      <DocumentHeader label="CREDIT NOTE" number={context.number} />
+      <Text style={styles.creditBanner}>This credit note reduces the amount due on invoice {context.invoiceNumber}. Keep it with the original invoice for your records.</Text>
+
+      <View style={styles.metaGrid}>
+        <View style={styles.metaClient}>
+          <Text style={styles.label}>Issued to</Text>
+          <Text style={styles.strong}>{context.clientName}</Text>
+          {context.projectName ? <Text style={styles.muted}>{context.projectName}</Text> : null}
+        </View>
+        <View style={styles.metaDate}>
+          <Text style={styles.label}>Credit note date</Text>
+          <Text>{day(context.issuedAt)}</Text>
+        </View>
+        <View style={styles.metaDue}>
+          <Text style={styles.label}>Original invoice</Text>
+          <Text style={styles.strong}>{context.invoiceNumber}</Text>
+          <Text style={styles.muted}>{day(context.invoiceIssueDate)}</Text>
+        </View>
       </View>
+
+      <View style={styles.tableHead}>
+        <Text style={[styles.cDesc, styles.headCell]}>Description</Text>
+        <Text style={[styles.cQty, styles.headCell]}>Quantity</Text>
+        <Text style={[styles.cRate, styles.headCell]}>Rate</Text>
+        <Text style={[styles.cAmt, styles.headCell]}>Credit amount</Text>
+      </View>
+      <View style={styles.row} wrap={false}>
+        <Text style={styles.cDesc}>Credit against invoice {context.invoiceNumber}</Text>
+        <Text style={styles.cQty}>1.00</Text>
+        <Text style={styles.cRate}>{formatMoney(context.creditAmount, context.currency)}</Text>
+        <Text style={styles.cAmt}>-{formatMoney(context.creditAmount, context.currency)}</Text>
+      </View>
+
+      <View style={styles.summaryGrid} wrap={false}>
+        <View style={styles.creditReason}>
+          <Text style={styles.noteTitle}>Reason for credit</Text>
+          <Text>{context.reason}</Text>
+        </View>
+        <View style={styles.totals}>
+          <View style={styles.totalRow}><Text>Original invoice total</Text><Text>{formatMoney(context.invoiceTotal, context.currency)}</Text></View>
+          <View style={styles.totalRow}><Text>Credit adjustment</Text><Text>-{formatMoney(context.creditAmount, context.currency)}</Text></View>
+          <View style={styles.grand}>
+            <Text style={styles.grandText}>Credit note total</Text>
+            <Text style={styles.grandText}>-{formatMoney(context.creditAmount, context.currency)}</Text>
+          </View>
+        </View>
+      </View>
+      <DocumentFooter reference={context.number} />
     </Page>
   </Document>;
 }
@@ -151,4 +230,9 @@ function InvoiceDocument({ context }: { context: InvoiceContext }) {
 /** Rendered on demand from the stored figures. Nothing is persisted. */
 export function renderInvoicePdf(context: InvoiceContext): Promise<Buffer> {
   return renderToBuffer(<InvoiceDocument context={context} />);
+}
+
+/** A formal correction document linked to its original invoice. */
+export function renderCreditNotePdf(context: CreditNoteContext): Promise<Buffer> {
+  return renderToBuffer(<CreditNoteDocument context={context} />);
 }

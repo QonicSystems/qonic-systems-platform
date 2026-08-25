@@ -1,9 +1,12 @@
 "use client";
 
-import { CSSProperties, FormEvent, useState } from "react";
+import { CSSProperties, FormEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { EmptyState } from "@/components/portal/empty-state";
 import { RingStat } from "@/components/portal/ring-stat";
+import { TableToolbar } from "@/components/portal/table-toolbar";
 import { StatusChip } from "@/components/status-chip";
+import { useFilter } from "@/lib/ui/filter";
 
 export type LeaveTypeOption = { id: string; label: string; colour: string; entitled: number; used: number; tracksBalance: boolean };
 export type LeaveRow = {
@@ -130,7 +133,36 @@ function LeaveTable({ rows, showRequester, busy, onDecide }: {
   busy: boolean;
   onDecide: (id: string, decision: "APPROVED" | "REJECTED" | "CANCELLED") => void;
 }) {
-  return <div className="matrix-scroll">
+  const { query, setQuery, rows: searchedRows, isFiltered: isSearching } = useFilter(rows, (row) => [
+    row.requesterName, row.typeLabel, row.from, row.to, row.reason, row.decisionNote, row.status,
+  ]);
+  const [status, setStatus] = useState<"ALL" | LeaveRow["status"]>("ALL");
+  const statuses = [...new Set(rows.map((row) => row.status))];
+  const filteredRows = useMemo(
+    () => searchedRows.filter((row) => status === "ALL" || row.status === status),
+    [searchedRows, status],
+  );
+  const isFiltered = isSearching || status !== "ALL";
+
+  return <>
+    <TableToolbar
+      search={query}
+      onSearch={setQuery}
+      placeholder={showRequester ? "Search employee, leave type, or date…" : "Search leave type, date, or status…"}
+      label={showRequester ? "Search leave requests awaiting a decision" : "Search your leave requests"}
+    >
+      {statuses.length > 1 && <label className="flex items-center gap-2 text-sm font-medium text-ink-muted">
+        <span>Status</span>
+        <select className="row-select" value={status} onChange={(event) => setStatus(event.target.value as typeof status)}>
+          <option value="ALL">All statuses</option>
+          {statuses.map((value) => <option key={value} value={value}>{value}</option>)}
+        </select>
+      </label>}
+      {isFiltered && <button type="button" className="row-action" onClick={() => { setQuery(""); setStatus("ALL"); }}>Clear filters</button>}
+    </TableToolbar>
+    {filteredRows.length === 0
+      ? <EmptyState message="No leave requests are recorded." filteredMessage="No leave requests match those filters." isFiltered={isFiltered} />
+      : <div className="matrix-scroll">
     <table className="matrix matrix--people">
       <thead>
         <tr>
@@ -139,7 +171,7 @@ function LeaveTable({ rows, showRequester, busy, onDecide }: {
         </tr>
       </thead>
       <tbody>
-        {rows.map((row) => <tr key={row.id}>
+        {filteredRows.map((row) => <tr key={row.id}>
           {showRequester && <th scope="row"><strong>{row.requesterName}</strong>{row.reason && <span>{row.reason}</span>}</th>}
           <td><span className="leave-type-pill" style={{ "--dot": row.colour } as CSSProperties}>{row.typeLabel}</span></td>
           <td>{row.from} → {row.to}</td>
@@ -161,5 +193,6 @@ function LeaveTable({ rows, showRequester, busy, onDecide }: {
         </tr>)}
       </tbody>
     </table>
-  </div>;
+  </div>}
+  </>;
 }

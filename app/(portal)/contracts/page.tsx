@@ -1,8 +1,7 @@
 import Link from "next/link";
+import { ContractLetterTable } from "@/components/contracts/contract-letter-table";
 import { can, requirePermission } from "@/lib/auth/guard";
-import { describeStatus } from "@/lib/contracts/workflow";
 import { db } from "@/lib/db";
-import { StatusChip } from "@/components/status-chip";
 
 export const metadata = { title: "Contract Letters" };
 
@@ -33,27 +32,14 @@ export default async function ContractsPage() {
       <Link href="/contracts/new" className="button button-primary">Draft a new letter</Link>
     </p>}
 
-    {letters.length === 0 ? <p className="portal-note">No contract letters yet.</p> : <div className="matrix-scroll">
-      <table className="matrix matrix--people">
-        <thead>
-          <tr><th scope="col">Reference</th><th scope="col">Employee</th><th scope="col">Position</th><th scope="col">Status</th><th scope="col">Updated</th></tr>
-        </thead>
-        <tbody>
-          {letters.map((letter) => {
-            const payload = letter.payload as { jobTitle?: string };
-            return <tr key={letter.id}>
-              <th scope="row">
-                <Link className="text-link" href={`/contracts/${letter.id}`}>{letter.reference}</Link>
-                <span>Drafted by {letter.author.name}</span>
-              </th>
-              <td>{letter.subject.name}</td>
-              <td>{payload.jobTitle ?? "—"}</td>
-              <td><StatusChip status={letter.status} label={describeStatus(letter.status)} /></td>
-              <td>{letter.updatedAt.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</td>
-            </tr>;
-          })}
-        </tbody>
-      </table>
-    </div>}
+    <ContractLetterTable letters={letters.map((letter) => ({
+      id: letter.id,
+      reference: letter.reference,
+      author: letter.author.name,
+      subject: letter.subject.name,
+      jobTitle: (letter.payload as { jobTitle?: string }).jobTitle ?? "—",
+      status: letter.status,
+      updated: letter.updatedAt.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }),
+    }))} />
   </div>;
 }

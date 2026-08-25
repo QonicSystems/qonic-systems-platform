@@ -26,8 +26,7 @@ type Row = {
   techStack: string;
   visaType: string;
   visaStatus?: string;
-  commissionPaid?: string;
-  rawCommissionPaid?: string;
+  visaExpiry?: string;
   ssn?: string;
   rawSsn?: string;
   address?: string;
@@ -36,28 +35,95 @@ type Row = {
   source: string;
   resourceType: ResourceType;
   noticePeriod?: string;
-  expectedSalary?: string;
-  currentSalary?: string;
   notes?: string;
   status: "ACTIVE" | "ARCHIVED";
   resumeUrl: string | null;
   linkedinUrl?: string;
   hasConsent: boolean;
+  consentStatus: string;
+  addedBy: string;
+  marketingProfiles: string[];
   applications: string[];
   linkedUserName: string | null;
   contractStatus: string | null;
   contractId: string | null;
+  globalAgreementId: string | null;
+  globalAgreementReference: string | null;
+  globalAgreementStatus: string | null;
 };
 type Errors = Record<string, string>;
+
+/** The `source` value each Add button seeds the dialog with. */
+const GLOBAL_SOURCE = "LinkedIn";
+const EMPLOYEE_DEV_SOURCE = "Internal Sources";
+
+const EMPTY_FORM = {
+  name: "",
+  email: "",
+  phone: "",
+  headline: "",
+  location: "",
+  techStack: "",
+  visaType: "",
+  visaStatus: "",
+  visaExpiry: "",
+  ssn: "",
+  address: "",
+  benchStatus: "Available / Ready to Deploy",
+  source: EMPLOYEE_DEV_SOURCE,
+  kind: "DEVELOPER",
+  resumeUrl: "",
+  linkedinUrl: "",
+  noticePeriod: "",
+  notes: "",
+  consent: false,
+};
+type CandidateForm = typeof EMPTY_FORM;
+
+/**
+ * Applies the defaults that go with a resource classification.
+ *
+ * Pure and module-scope so the two Add buttons and the in-dialog classification
+ * select run the identical logic — when this lived inline in the change handler
+ * only the select could reach it, and a button that seeded `source` directly
+ * would have left the visa and bench fields on their non-global defaults.
+ */
+function withSourceDefaults(previous: CandidateForm, source: string, kind = previous.kind): CandidateForm {
+  const isGlobal = kind === "GLOBAL";
+  return {
+    ...previous,
+    source,
+    kind,
+    visaType: isGlobal ? previous.visaType || "H-1B" : "",
+    visaStatus: isGlobal ? previous.visaStatus || "Valid" : "",
+    visaExpiry: isGlobal ? previous.visaExpiry : "",
+    benchStatus: isGlobal
+      ? previous.benchStatus.includes("Bench")
+        ? previous.benchStatus
+        : "Available / On Bench"
+      : "Available / Ready to Deploy",
+    ssn: isGlobal ? previous.ssn : "",
+    address: isGlobal ? previous.address : "",
+  };
+}
 
 export function CandidateManager({
   candidates,
   canManage,
   canDraftContract,
+  canCreateAccount,
+  canIssueGlobalAgreement,
+  canRevokeGlobalAgreement,
 }: {
   candidates: ReadonlyArray<Row>;
   canManage: boolean;
   canDraftContract: boolean;
+  /** `user.manage` — creating a staff account is account administration. */
+  canCreateAccount: boolean;
+  /** `contract.release` — only leadership can send external master terms. */
+  canIssueGlobalAgreement: boolean;
+  /** `contract.revoke` — withdraws a sent agreement before a replacement. */
+  canRevokeGlobalAgreement: boolean;
 }) {
   const router = useRouter();
   const [matchRequirement, setMatchRequirement] = useState("");
@@ -87,6 +153,7 @@ export function CandidateManager({
   const { query, setQuery, rows, isFiltered } = useFilter(visible, (c) => [
     c.name,
     c.email,
+    c.phone,
     c.headline,
     c.techStack,
     c.location,
@@ -111,32 +178,12 @@ export function CandidateManager({
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Row | null>(null);
   const [deleting, setDeleting] = useState<Row | null>(null);
-  const empty = {
-    name: "",
-    email: "",
-    phone: "",
-    headline: "",
-    location: "",
-    techStack: "",
-    visaType: "",
-    visaStatus: "",
-    ssn: "",
-    commissionPaid: "",
-    address: "",
-    benchStatus: "Available / Ready to Deploy",
-    source: "Direct / LinkedIn",
-    resumeUrl: "",
-    linkedinUrl: "",
-    noticePeriod: "",
-    currentSalary: "",
-    expectedSalary: "",
-    notes: "",
-    consent: false,
-  };
-  const [form, setForm] = useState(empty);
+  const [form, setForm] = useState<CandidateForm>(EMPTY_FORM);
   const [errors, setErrors] = useState<Errors>({});
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ tone: "success" | "error"; text: string } | null>(null);
+  // Only ever set when SMTP is unconfigured and the invite could not be emailed.
+  const [inviteUrl, setInviteUrl] = useState<string | null>(null);
 
   const startEdit = (c: Row) => {
     setEditing(c);
@@ -149,16 +196,15 @@ export function CandidateManager({
       techStack: c.techStack || "",
       visaType: c.visaType || "",
       visaStatus: c.visaStatus || "",
+      visaExpiry: c.visaExpiry || "",
       ssn: c.rawSsn || "",
-      commissionPaid: c.rawCommissionPaid || "",
       address: c.address || "",
       benchStatus: c.benchStatus || "Available / Ready to Deploy",
-      source: c.source || "Direct / LinkedIn",
+      source: c.source || EMPLOYEE_DEV_SOURCE,
+      kind: c.resourceType === "GLOBAL" ? "GLOBAL" : c.resourceType === "EMPLOYEE_DEV" ? "DEVELOPER" : "DIRECT",
       resumeUrl: c.resumeUrl || "",
       linkedinUrl: c.linkedinUrl || "",
       noticePeriod: c.noticePeriod || "",
-      currentSalary: c.currentSalary || "",
-      expectedSalary: c.expectedSalary || "",
       notes: c.notes || "",
       consent: c.hasConsent,
     });
@@ -167,26 +213,16 @@ export function CandidateManager({
     setOpen(true);
   };
 
-  const startAdd = () => {
+  const startAdd = (source: string) => {
     setEditing(null);
-    setForm(empty);
+    setForm(withSourceDefaults(EMPTY_FORM, source, source === GLOBAL_SOURCE ? "GLOBAL" : "DEVELOPER"));
     setErrors({});
     setNotice(null);
     setOpen(true);
   };
 
   const handleSourceChange = (newSource: string) => {
-    const isGlobal = newSource === "Global Visa Resource";
-    setForm((prev) => ({
-      ...prev,
-      source: newSource,
-      visaType: isGlobal ? (prev.visaType || "H-1B") : "",
-      visaStatus: isGlobal ? (prev.visaStatus || "Valid") : "",
-      benchStatus: isGlobal ? (prev.benchStatus.includes("Bench") ? prev.benchStatus : "Available / On Bench") : "Available / Ready to Deploy",
-      ssn: isGlobal ? prev.ssn : "",
-      commissionPaid: isGlobal ? prev.commissionPaid : "",
-      address: isGlobal ? prev.address : "",
-    }));
+    setForm((prev) => withSourceDefaults(prev, newSource));
   };
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
@@ -195,14 +231,14 @@ export function CandidateManager({
     setNotice(null);
     setErrors({});
     try {
-      const isGlobal = form.source === "Global Visa Resource";
+      const isGlobal = form.kind === "GLOBAL";
       const payload = {
         ...form,
         skills: form.techStack,
         visaType: isGlobal ? form.visaType : null,
         visaStatus: isGlobal ? form.visaStatus : null,
+        visaExpiry: isGlobal ? form.visaExpiry || null : null,
         ssn: isGlobal ? form.ssn : null,
-        commissionPaid: isGlobal ? form.commissionPaid : null,
         benchStatus: form.benchStatus || (isGlobal ? "Available / On Bench" : "Available / Ready to Deploy"),
       };
 
@@ -219,7 +255,7 @@ export function CandidateManager({
         return;
       }
       setNotice({ tone: "success", text: result.message ?? (editing ? "Candidate updated successfully." : "Candidate added to pool.") });
-      setForm(empty);
+      setForm(EMPTY_FORM);
       setOpen(false);
       setEditing(null);
       router.refresh();
@@ -256,7 +292,7 @@ export function CandidateManager({
   };
 
   const toggleStatus = (candidate: Row) =>
-    act(`/api/admin/candidates/${candidate.id}/status`, {
+    act(`/api/candidates/${candidate.id}/status`, {
       method: "POST",
       body: JSON.stringify({ active: candidate.status !== "ACTIVE" }),
     });
@@ -265,12 +301,59 @@ export function CandidateManager({
     if (await act(`/api/candidates/${candidate.id}`, { method: "DELETE" })) setDeleting(null);
   };
 
+  const revokeGlobalAgreement = (candidate: Row) => {
+    if (!candidate.globalAgreementId) return Promise.resolve(false);
+    return act(`/api/global-agreements/${candidate.globalAgreementId}`, {
+      method: "POST",
+      body: JSON.stringify({ action: "revoke" }),
+    });
+  };
+
+  /**
+   * Gives the candidate a staff account and records the link.
+   *
+   * Not folded into `act`: this is the one call that can return an invite link,
+   * and that link has to survive the `router.refresh()` so it can be copied.
+   */
+  const createAccount = async (candidate: Row) => {
+    setBusy(true);
+    setNotice(null);
+    setInviteUrl(null);
+    try {
+      const res = await fetch(`/api/candidates/${candidate.id}/employee`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const result = (await res.json().catch(() => ({}))) as { message?: string; inviteUrl?: string };
+      if (!res.ok) {
+        setNotice({ tone: "error", text: result.message ?? "Unable to create that account." });
+        if (res.status === 404 || res.status === 409) router.refresh();
+        return;
+      }
+      setNotice({ tone: "success", text: result.message ?? "Account created." });
+      setInviteUrl(result.inviteUrl ?? null);
+      router.refresh();
+    } catch {
+      setNotice({ tone: "error", text: "Unable to reach the server." });
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div>
       {notice && (
         <p className={`form-status form-status--${notice.tone}`} role="status">
           {notice.text}
         </p>
+      )}
+
+      {inviteUrl && (
+        <div className="portal-panel mt-4 mb-6">
+          <p className="font-semibold text-emerald-800">New invite link generated:</p>
+          <p className="portal-note">Email is not configured in this environment. Send this link directly to the person:</p>
+          <p className="mfa-secret">{inviteUrl}</p>
+        </div>
       )}
 
       {/* ── Status & resource-type filters ─────────────────────────────── */}
@@ -308,10 +391,18 @@ export function CandidateManager({
         placeholder="Search candidate, tech stack, visa, bench status…"
         label="Search candidate pool"
       >
+        {/* Both kinds of candidate are added here now — Global Candidates used
+            to be a separate Administration tab with its own form and its own
+            API, which is how it drifted into writing no `source` at all. */}
         {canManage && (
-          <button type="button" className="button button-primary" onClick={startAdd}>
-            Add Candidate
-          </button>
+          <>
+            <button type="button" className="button button-outline" onClick={() => startAdd(EMPLOYEE_DEV_SOURCE)}>
+              Add Developer
+            </button>
+            <button type="button" className="button button-primary" onClick={() => startAdd(GLOBAL_SOURCE)}>
+              Add Global Candidate
+            </button>
+          </>
         )}
       </TableToolbar>
 
@@ -383,21 +474,16 @@ export function CandidateManager({
         />
       ) : (
         <>
-          {/* ── Section 1: Employee (Dev) & Direct Talent Pool ────────────── */}
+          {/* ── Section 1: Developer & Direct Talent Pool ─────────────────── */}
           {(typeFilter === "ALL" || typeFilter === "DIRECT" || typeFilter === "EMPLOYEE_DEV") && (
             <section className="mb-6">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2.5">
-                  <span className="w-3 h-3 rounded-full bg-blue-600 shadow-xs" />
-                  <h2 className="text-lg font-extrabold text-[#111111] tracking-tight m-0">
-                    Employee (Dev) &amp; Direct Talent Pool
-                  </h2>
-                  <span className="bg-[#eef2ff] text-[#1e40af] border border-[#c7d2fe] text-xs font-bold px-2.5 py-0.5 rounded-full shadow-xs">
-                    {scored.filter((entry) => entry.row.resourceType !== "GLOBAL").length} Developers
-                  </span>
-                </div>
-                <span className="text-xs text-slate-600 font-medium hidden sm:inline">
-                  Synced with Admin &rarr; People
+              <div className="flex items-center gap-2.5 mb-3">
+                <span className="w-3 h-3 rounded-full bg-blue-600 shadow-xs" />
+                <h2 className="text-lg font-extrabold text-[#111111] tracking-tight m-0">
+                  Developer &amp; Direct Talent Pool
+                </h2>
+                <span className="bg-[#eef2ff] text-[#1e40af] border border-[#c7d2fe] text-xs font-bold px-2.5 py-0.5 rounded-full shadow-xs">
+                  {scored.filter((entry) => entry.row.resourceType !== "GLOBAL").length} Candidates
                 </span>
               </div>
 
@@ -430,7 +516,7 @@ export function CandidateManager({
                               <span>
                                 {c.email} {c.location && `· ${c.location}`}
                               </span>
-                              {!c.hasConsent && <span className="portal-muted">No consent recorded</span>}
+                              <span className="portal-muted">Added by {c.addedBy}</span>
                               {c.linkedUserName && <span className="portal-muted">Linked employee: {c.linkedUserName}</span>}
                             </th>
                             <td>
@@ -472,13 +558,8 @@ export function CandidateManager({
                             <td>
                               <div className="flex flex-col gap-0.5">
                                 <span className="text-xs font-semibold text-slate-800">
-                                  Direct Staff (Non-Visa)
+                                  {c.resourceType === "EMPLOYEE_DEV" ? "Developer candidate" : "Direct candidate"}
                                 </span>
-                                {c.expectedSalary && (
-                                  <span className="text-xs text-slate-600">
-                                    Exp: ₹{c.expectedSalary}
-                                  </span>
-                                )}
                                 {c.noticePeriod && (
                                   <span className="text-[11px] text-blue-700 font-medium">
                                     Notice: {c.noticePeriod}
@@ -533,9 +614,25 @@ export function CandidateManager({
                                     <StatusChip status={c.contractStatus} />
                                   </Link>
                                 )}
-                                {canDraftContract && c.status === "ACTIVE" && !c.contractStatus && (
+                                {/* An account first, then a letter addressed to
+                                    it. Creating the account used to happen
+                                    invisibly when this link was followed —
+                                    during a GET render — so it fired on
+                                    prefetch and on every refresh too. */}
+                                {canCreateAccount && c.resourceType === "EMPLOYEE_DEV" && c.status === "ACTIVE" && !c.linkedUserName && (
+                                  <button
+                                    type="button"
+                                    className="row-action row-action--highlight"
+                                    onClick={() => createAccount(c)}
+                                    disabled={busy}
+                                    title="Create their staff account and send a one-time invite"
+                                  >
+                                    Create Employee Account
+                                  </button>
+                                )}
+                                {canDraftContract && c.resourceType === "EMPLOYEE_DEV" && c.status === "ACTIVE" && !c.contractStatus && c.linkedUserName && (
                                   <Link
-                                    href={`/contracts/new?candidateId=${c.id}&name=${encodeURIComponent(c.name)}&email=${encodeURIComponent(c.email)}`}
+                                    href={`/contracts/new?candidateId=${c.id}`}
                                     className="row-action row-action--highlight"
                                     title="Draft employment contract for candidate"
                                   >
@@ -602,18 +699,13 @@ export function CandidateManager({
           {/* ── Section 2: Global Visa Resources Pool ─────────────────────── */}
           {(typeFilter === "ALL" || typeFilter === "GLOBAL") && (
             <section className="mt-4">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2.5">
-                  <span className="w-3 h-3 rounded-full bg-emerald-600 shadow-xs" />
-                  <h2 className="text-lg font-extrabold text-[#111111] tracking-tight m-0">
-                    Global Visa Resources Pool
-                  </h2>
-                  <span className="bg-[#ecfdf5] text-[#065f46] border border-[#a7f3d0] text-xs font-bold px-2.5 py-0.5 rounded-full shadow-xs">
-                    {scored.filter((entry) => entry.row.resourceType === "GLOBAL").length} Visa Resources
-                  </span>
-                </div>
-                <span className="text-xs text-slate-600 font-medium hidden sm:inline">
-                  Synced with Admin &rarr; Global Candidates
+              <div className="flex items-center gap-2.5 mb-3">
+                <span className="w-3 h-3 rounded-full bg-emerald-600 shadow-xs" />
+                <h2 className="text-lg font-extrabold text-[#111111] tracking-tight m-0">
+                  Global Visa Resources Pool
+                </h2>
+                <span className="bg-[#ecfdf5] text-[#065f46] border border-[#a7f3d0] text-xs font-bold px-2.5 py-0.5 rounded-full shadow-xs">
+                  {scored.filter((entry) => entry.row.resourceType === "GLOBAL").length} Visa Resources
                 </span>
               </div>
 
@@ -650,7 +742,10 @@ export function CandidateManager({
                                 <span className="text-xs text-slate-500 font-mono">SSN: {c.ssn}</span>
                               )}
                               {!c.hasConsent && <span className="portal-muted">No consent recorded</span>}
-                              {c.linkedUserName && <span className="portal-muted">Linked employee: {c.linkedUserName}</span>}
+                              <span className={c.hasConsent ? "text-xs text-emerald-700" : "text-xs text-amber-700"}>
+                                Consent: {c.consentStatus.toLowerCase().replace("_", " ")}
+                              </span>
+                              <span className="portal-muted">Added by {c.addedBy}</span>
                             </th>
                             <td>
                               <div className="flex flex-col items-start gap-1">
@@ -666,6 +761,7 @@ export function CandidateManager({
                             <td>
                               <div className="flex flex-col gap-1.5 min-w-[200px]">
                                 <TechStackBadges stack={c.techStack} />
+                                {c.marketingProfiles.length > 1 && <span className="text-[11px] text-slate-500">Marketing profiles: {c.marketingProfiles.join(", ")}</span>}
                                 {match && (
                                   <div className="flex items-center gap-1.5 mt-0.5">
                                     <span
@@ -693,10 +789,8 @@ export function CandidateManager({
                                 <span className="text-xs font-semibold text-slate-800">
                                   {c.visaType || "Visa Required"} {c.visaStatus ? `(${c.visaStatus})` : ""}
                                 </span>
-                                {c.commissionPaid && c.commissionPaid !== "—" && (
-                                  <span className="text-xs text-emerald-700 font-medium">
-                                    Comm: {c.commissionPaid}
-                                  </span>
+                                {c.visaExpiry && (
+                                  <span className="text-[11px] text-slate-500">Expires {c.visaExpiry}</span>
                                 )}
                               </div>
                             </td>
@@ -742,19 +836,36 @@ export function CandidateManager({
                                     Edit
                                   </button>
                                 )}
-                                {c.contractStatus && c.contractId && (
-                                  <Link href={`/contracts/${c.contractId}`} className="row-action" title="View this candidate's contract letter">
-                                    <StatusChip status={c.contractStatus} />
+                                {c.globalAgreementId && c.globalAgreementReference && (
+                                  <a
+                                    href={`/api/global-agreements/${c.globalAgreementId}/pdf`}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="row-action"
+                                    title={`Open ${c.globalAgreementReference} PDF`}
+                                  >
+                                    <StatusChip status={c.globalAgreementStatus ?? "SENT"} label={`Agreement · ${c.globalAgreementStatus?.toLowerCase() ?? "sent"}`} />
+                                  </a>
+                                )}
+                                {canIssueGlobalAgreement && c.status === "ACTIVE" && c.hasConsent && !["SENT", "ACKNOWLEDGED"].includes(c.globalAgreementStatus ?? "") && (
+                                  <Link
+                                    href={`/global-agreements/new?candidateId=${c.id}`}
+                                    className="row-action row-action--highlight"
+                                    title="Issue reusable Global Candidate agreement"
+                                  >
+                                    Issue Master Agreement
                                   </Link>
                                 )}
-                                {canDraftContract && c.status === "ACTIVE" && !c.contractStatus && (
-                                  <Link
-                                    href={`/contracts/new?candidateId=${c.id}&name=${encodeURIComponent(c.name)}&email=${encodeURIComponent(c.email)}`}
-                                    className="row-action row-action--highlight"
-                                    title="Issue client / placement agreement for candidate"
+                                {canRevokeGlobalAgreement && c.globalAgreementId && ["SENT", "ACKNOWLEDGED"].includes(c.globalAgreementStatus ?? "") && (
+                                  <button
+                                    type="button"
+                                    className="row-action row-action--danger"
+                                    onClick={() => revokeGlobalAgreement(c)}
+                                    disabled={busy}
+                                    title="Withdraw this agreement so a corrected replacement can be issued"
                                   >
-                                    Issue Agreement
-                                  </Link>
+                                    Revoke Agreement
+                                  </button>
                                 )}
                                 {canManage && (
                                   <button
@@ -838,22 +949,45 @@ export function CandidateManager({
         <div className="dialog-backdrop" role="dialog" aria-modal="true" aria-labelledby="cand-title">
           <div className="dialog dialog--wide">
             <h3 id="cand-title" className="dialog-title">
-              {editing ? `Edit Candidate: ${editing.name}` : "Add Candidate to Pool"}
+              {editing
+                ? `Edit Candidate: ${editing.name}`
+                : form.kind === "GLOBAL"
+                  ? "Add Global Candidate"
+                  : "Add Developer"}
             </h3>
             <form className="contact-form" noValidate onSubmit={submit}>
               <div className="grid gap-5 sm:grid-cols-2">
-                <div className="sm:col-span-2">
-                  <label htmlFor="cd-source">Resource Classification <em>*</em></label>
+                <div>
+                  <label htmlFor="cd-kind">Candidate Type <em>*</em></label>
                   <select
-                    id="cd-source"
-                    value={form.source}
-                    onChange={(e) => handleSourceChange(e.target.value)}
+                    id="cd-kind"
+                    value={form.kind}
+                    onChange={(e) => {
+                      const kind = e.target.value as CandidateForm["kind"];
+                      setForm((previous) => withSourceDefaults(previous, kind === "GLOBAL" ? "LinkedIn" : "Internal Sources", kind));
+                    }}
+                    disabled={Boolean(editing)}
                   >
-                    <option value="Global Visa Resource">Global Visa Resource (VISA Utilisation & Placement Commission)</option>
-                    <option value="Direct / LinkedIn">Employee Dev (Sourced via LinkedIn)</option>
-                    <option value="Internal Connection">Employee Dev (Sourced via Internal Network / Founders)</option>
-                    <option value="Job Application">Direct Applicant</option>
+                    <option value="GLOBAL">Global Candidate</option>
+                    <option value="DEVELOPER">Developer</option>
+                    <option value="DIRECT">Direct Applicant</option>
                   </select>
+                  {editing && <p className="field-hint">Candidate type is permanent. Create a separate record for a different type.</p>}
+                </div>
+                <div>
+                  <label htmlFor="cd-source">Source <em>*</em></label>
+                  <select id="cd-source" value={form.source} onChange={(e) => handleSourceChange(e.target.value)}>
+                    {form.kind === "GLOBAL" ? <>
+                      <option value="LinkedIn">LinkedIn</option>
+                      <option value="Internal Sources">Internal Sources</option>
+                      <option value="Other">Other</option>
+                    </> : <>
+                      <option value="LinkedIn">LinkedIn</option>
+                      <option value="Internal Sources">Internal Sources</option>
+                      <option value="Other">Other</option>
+                    </>}
+                  </select>
+                  {form.kind === "GLOBAL" && <p className="field-hint">Consent is emailed after the record is added.</p>}
                 </div>
                 <div>
                   <label htmlFor="cd-name">Full Name <em>*</em></label>
@@ -907,12 +1041,12 @@ export function CandidateManager({
                   />
                 </div>
 
-                {/* Conditional Fields: Global Visa Resource */}
-                {form.source === "Global Visa Resource" ? (
+                {/* Conditional fields: Global Candidate */}
+                {form.kind === "GLOBAL" ? (
                   <>
                     <div className="sm:col-span-2 pt-2 border-t border-slate-200">
                       <p className="text-xs font-bold uppercase tracking-wider text-amber-700">
-                        Global Visa & Placement Commission Details
+                        Global Candidate visa details
                       </p>
                     </div>
                     <div>
@@ -933,6 +1067,24 @@ export function CandidateManager({
                       </select>
                     </div>
                     <div>
+                      <label htmlFor="cd-visa-status">Visa Status</label>
+                      <input
+                        id="cd-visa-status"
+                        value={form.visaStatus}
+                        onChange={(e) => setForm({ ...form, visaStatus: e.target.value })}
+                        placeholder="Active, Transfer in Progress, Extension Filed"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="cd-visa-expiry">Visa Expiry</label>
+                      <input
+                        id="cd-visa-expiry"
+                        type="date"
+                        value={form.visaExpiry}
+                        onChange={(e) => setForm({ ...form, visaExpiry: e.target.value })}
+                      />
+                    </div>
+                    <div>
                       <label htmlFor="cd-bench">Bench Status</label>
                       <select
                         id="cd-bench"
@@ -942,6 +1094,7 @@ export function CandidateManager({
                         <option value="Available / On Bench">Available / On Bench</option>
                         <option value="Allocated to Project">Allocated to Project</option>
                         <option value="Interviewing">Interviewing</option>
+                        <option value="Placement Closed">Placement Closed</option>
                       </select>
                     </div>
                     <div>
@@ -951,16 +1104,6 @@ export function CandidateManager({
                         value={form.ssn}
                         onChange={(e) => setForm({ ...form, ssn: e.target.value })}
                         placeholder="123-45-6789"
-                      />
-                    </div>
-                    <div>
-                      <label htmlFor="cd-comm">Commission Paid on VISA ($ / ₹)</label>
-                      <input
-                        id="cd-comm"
-                        type="number"
-                        value={form.commissionPaid}
-                        onChange={(e) => setForm({ ...form, commissionPaid: e.target.value })}
-                        placeholder="e.g. 5000"
                       />
                     </div>
                     <div className="sm:col-span-2">
@@ -977,7 +1120,7 @@ export function CandidateManager({
                   <>
                     <div className="sm:col-span-2 pt-2 border-t border-slate-200">
                       <p className="text-xs font-bold uppercase tracking-wider text-blue-700">
-                        Developer Sourcing & Compensation Details
+                        Developer Sourcing Details
                       </p>
                     </div>
                     <div>
@@ -987,15 +1130,6 @@ export function CandidateManager({
                         value={form.noticePeriod}
                         onChange={(e) => setForm({ ...form, noticePeriod: e.target.value })}
                         placeholder="Immediate / 15 Days / 1 Month"
-                      />
-                    </div>
-                    <div>
-                      <label htmlFor="cd-exp-salary">Expected Compensation</label>
-                      <input
-                        id="cd-exp-salary"
-                        value={form.expectedSalary}
-                        onChange={(e) => setForm({ ...form, expectedSalary: e.target.value })}
-                        placeholder="e.g. 80000 or $50/hr"
                       />
                     </div>
                     <div className="sm:col-span-2">
@@ -1058,7 +1192,13 @@ export function CandidateManager({
                   Cancel
                 </button>
                 <button type="submit" className="button button-primary" disabled={busy}>
-                  {busy ? (editing ? "Updating…" : "Saving…") : (editing ? "Update Candidate" : "Add to Candidate Pool")}
+                  {busy
+                    ? editing ? "Updating…" : "Saving…"
+                    : editing
+                      ? "Update Candidate"
+                      : form.kind === "GLOBAL"
+                        ? "Add Global Candidate"
+                        : "Add Developer"}
                 </button>
               </div>
             </form>

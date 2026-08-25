@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { clientIp, recordAudit } from "@/lib/audit";
 import { guardRoute } from "@/lib/auth/guard";
-import { MAX_DAY_MINUTES, canEditTimesheet, canRecallTimesheet, canSubmitTimesheet, isDayBookable, parseDuration } from "@/lib/delivery/timesheet";
+import { MAX_DAY_MINUTES, canEditTimesheet, canRecallTimesheet, canSubmitTimesheet, isDayBookable, parseDuration, projectBookingStart } from "@/lib/delivery/timesheet";
 import { notifyLeadership } from "@/lib/notify";
 import { db } from "@/lib/db";
 
@@ -39,20 +39,18 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   // is deliberately `sheet.userId`, not `context.user.id`: an approver can be
   // backfilling on behalf of someone else (see canEditTimesheet), and it's
   // always that person's assignments that matter, never the actor's own.
-  // Each project's own startDate is the per-project bookable floor — see the
-  // matching comment in app/(portal)/timesheets/page.tsx.
-  // Bookability (how far back time can be entered) intentionally stays keyed
-  // on Project.startDate, not the new per-assignment startedOn — that field
-  // exists to categorize payout (see payoutCategoryFor), and using it here
-  // too would break the deliberate handover/backfill allowance below: someone
-  // can log time from the project's own start even if their own assignment
-  // (or its startedOn) came later.
+  // Client delivery starts on the Project Start Date. The Developer's Actual
+  // Start Date is intentionally not used here: approval later records an
+  // earlier day as company-retained rather than developer-payable.
   const assignments = await db.projectAssignment.findMany({
     where: { userId: sheet.userId },
     select: { projectId: true, createdAt: true, project: { select: { startDate: true } } },
   });
   const allowedProjects = new Set(assignments.map((assignment) => assignment.projectId));
-  const bookableFrom = new Map(assignments.map((assignment) => [assignment.projectId, assignment.project.startDate ?? assignment.createdAt]));
+  const bookableFrom = new Map(assignments.map((assignment) => [
+    assignment.projectId,
+    projectBookingStart(assignment.project.startDate, assignment.createdAt),
+  ]));
 
   const prepared: { projectId: string; taskId: string | null; workDate: Date; minutes: number; billable: boolean; note: string | null }[] = [];
   const dayTotals = new Map<string, number>();

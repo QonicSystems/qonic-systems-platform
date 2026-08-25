@@ -160,7 +160,7 @@ export function ContractForm({
         </div>
         <div>
           <label htmlFor="startDate">
-            Effective / Start Date <em>*</em>
+            Date of Contract <em>*</em>
           </label>
           <input
             id="startDate"

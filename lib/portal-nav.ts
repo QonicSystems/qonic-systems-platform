@@ -21,7 +21,10 @@ export const portalNavigation: ReadonlyArray<NavItem | NavGroup> = [
     label: "My Work",
     items: [
       { label: "Timesheets", href: "/timesheets", permission: "timesheet.submit" },
-      { label: "My Earnings", href: "/earnings", permission: "payout.view_own" },
+      // Every signed-in Qonic person can raise their own payable invoice from
+      // Earnings. The legacy payout permission still controls company-wide
+      // delivery detail, but must not hide salary invoicing from People roles.
+      { label: "My Earnings", href: "/earnings", permission: null },
       { label: "Leave", href: "/leave", permission: "leave.request" },
       { label: "Contract Letters", href: "/contracts", permission: "contract.view_own" },
     ],
@@ -31,6 +34,7 @@ export const portalNavigation: ReadonlyArray<NavItem | NavGroup> = [
     items: [
       { label: "Projects", href: "/projects", permission: "project.view" },
       { label: "Clients", href: "/clients", permission: "client.view" },
+      { label: "Vendors", href: "/vendors", permission: "client.view" },
     ],
   },
   {
@@ -43,16 +47,10 @@ export const portalNavigation: ReadonlyArray<NavItem | NavGroup> = [
     label: "Finance",
     items: [
       { label: "Invoices", href: "/invoices", permission: "invoice.view" },
-    ],
-  },
-  {
-    label: "Reports",
-    items: [
-      { label: "Analytics", href: "/reports/analytics", permission: "report.utilization" },
-      { label: "Utilisation", href: "/reports", permission: "report.utilization" },
-      { label: "Capacity", href: "/reports/capacity", permission: "report.utilization" },
-      { label: "Revenue", href: "/reports/revenue", permission: "report.finance" },
-      { label: "Deal Financials", href: "/reports/deals", permission: "payout.view_all" },
+      // Company Finance is a complete finance view, not a single report. It
+      // sits with Invoices because collections, costs, payouts, and delivery
+      // economics belong to the same finance workflow.
+      { label: "Company Finance", href: "/reports/revenue", permission: "report.finance" },
     ],
   },
   { label: "Directory", href: "/directory", permission: "directory.view" },

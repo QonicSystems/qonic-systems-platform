@@ -32,6 +32,8 @@ export type PersonRow = {
   /** The viewer's own row: identity is editable, role and removal are not. */
   isSelf: boolean;
   canOverride: boolean;
+  canSetCompensation: boolean;
+  compensation: string | null;
   overrides: ReadonlyArray<Override>;
 };
 
@@ -46,15 +48,35 @@ export type Override = {
 
 export type PermissionOption = { key: string; label: string; group: string };
 
-type RoleOption = { id: string; label: string; assignable: boolean };
+type RoleOption = { id: string; label: string; isCeo: boolean; assignable: boolean; unavailableReason: string | null; viaCandidatePool: boolean };
+
+/**
+ * Roles this dialog offers at all.
+ *
+ * A Candidate Pool role is left out entirely rather than shown disabled: it is
+ * not a thing you could do here under different circumstances, it is simply
+ * managed somewhere else, and an option that can never be picked is noise. A
+ * role you merely lack the seniority to assign is different — that one stays
+ * visible, disabled, with the reason (see `roleUnavailableReason`).
+ */
+function selectableRoles(roles: ReadonlyArray<RoleOption>, includeCeo = true): ReadonlyArray<RoleOption> {
+  return roles.filter((role) => !role.viaCandidatePool && (includeCeo || !role.isCeo));
+}
+
+/** Why a listed role cannot be chosen, or "" when it can. */
+function roleUnavailableReason(role: RoleOption): string {
+  if (role.unavailableReason) return ` — ${role.unavailableReason}`;
+  return role.assignable ? "" : " — not assignable by you";
+}
 /** Success is explicit; `errors` is only ever present on a 422. */
 type ActResult = { ok: boolean; errors?: Errors; inviteUrl?: string };
-type Errors = Partial<Record<"name" | "email" | "phone" | "jobTitle" | "techStack" | "roleId", string>>;
+type Errors = Partial<Record<"name" | "email" | "phone" | "jobTitle" | "techStack" | "roleId" | "monthlyCompensation" | "currency" | "effectiveFrom" | "note", string>>;
 
-export function PeopleTable({ people, roles, canCreate, permissions, today }: {
+export function PeopleTable({ people, roles, canCreate, canSetCompensation, permissions, today }: {
   people: ReadonlyArray<PersonRow>;
   roles: ReadonlyArray<RoleOption>;
   canCreate: boolean;
+  canSetCompensation: boolean;
   permissions: ReadonlyArray<PermissionOption>;
   /** Supplied by the server — reading the clock during render is impure. */
   today: string;
@@ -83,6 +105,7 @@ export function PeopleTable({ people, roles, canCreate, permissions, today }: {
   const [editing, setEditing] = useState<PersonRow | null>(null);
   const [confirming, setConfirming] = useState<PersonRow | null>(null);
   const [overridingId, setOverridingId] = useState<string | null>(null);
+  const [compensating, setCompensating] = useState<PersonRow | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ tone: "success" | "error"; text: string } | null>(null);
 
@@ -188,7 +211,7 @@ export function PeopleTable({ people, roles, canCreate, permissions, today }: {
       <table className="matrix matrix--people">
         <thead>
           <tr>
-            <th scope="col">Name</th><th scope="col">Role & Tech Stack</th><th scope="col">Status</th>
+            <th scope="col">Name</th><th scope="col">Role & Tech Stack</th><th scope="col">Compensation</th><th scope="col">Status</th>
             <th scope="col">Last signed in</th><th scope="col">Actions</th>
           </tr>
         </thead>
@@ -209,6 +232,7 @@ export function PeopleTable({ people, roles, canCreate, permissions, today }: {
                 )}
               </div>
             </td>
+            <td>{person.compensation ?? "Not set"}</td>
             <td>
               <div className="flex flex-col gap-1 items-start">
                 <StatusChip status={person.status} />
@@ -221,7 +245,7 @@ export function PeopleTable({ people, roles, canCreate, permissions, today }: {
             </td>
             <td>{person.lastLoginAt ?? "Never"}</td>
             <td>
-              {person.canEdit || person.canResend || person.canDeactivate || person.canRemove || person.canExport
+              {person.canEdit || person.canResend || person.canDeactivate || person.canRemove || person.canExport || person.canSetCompensation
                 ? <div className="row-actions">
                     {person.canResend && (
                       <button
@@ -235,6 +259,7 @@ export function PeopleTable({ people, roles, canCreate, permissions, today }: {
                       </button>
                     )}
                     {person.canEdit && <button type="button" className="row-action" onClick={() => { setEditing(person); setNotice(null); }} disabled={busy}>Edit</button>}
+                    {person.canSetCompensation && <button type="button" className="row-action row-action--highlight" onClick={() => { setCompensating(person); setNotice(null); }} disabled={busy}>Set salary</button>}
                     {person.canDeactivate && (
                       <button type="button" className="row-action" onClick={() => toggleStatus(person)} disabled={busy}>
                         {person.status === "ACTIVE" ? "Deactivate" : "Reactivate"}
@@ -294,11 +319,25 @@ export function PeopleTable({ people, roles, canCreate, permissions, today }: {
 
     {adding && <AddDialog
       roles={roles}
+      canSetCompensation={canSetCompensation}
+      today={today}
       busy={busy}
       onClose={() => setAdding(false)}
       onSave={async (payload) => {
         const result = await act("/api/admin/users", { method: "POST", body: JSON.stringify(payload) });
         if (result.ok) { setAdding(false); setInviteUrl(result.inviteUrl ?? null); }
+        return result.errors ?? {};
+      }}
+    />}
+
+    {compensating && <CompensationDialog
+      person={compensating}
+      today={today}
+      busy={busy}
+      onClose={() => setCompensating(null)}
+      onSave={async (payload) => {
+        const result = await act(`/api/compensation/${compensating.id}`, { method: "POST", body: JSON.stringify(payload) });
+        if (result.ok) setCompensating(null);
         return result.errors ?? {};
       }}
     />}
@@ -493,13 +532,24 @@ function EditDialog({ person, roles, busy, onClose, onSave }: {
           <div className="sm:col-span-2">
             <label htmlFor="edit-role">Role <em>*</em></label>
             <select id="edit-role" value={data.roleId} onChange={(event) => update("roleId", event.target.value)} disabled={person.isSelf} aria-invalid={Boolean(errors.roleId)}>
-              {roles.map((role) => <option key={role.id} value={role.id} disabled={!role.assignable && role.id !== person.roleId}>
-                {role.label}{!role.assignable && role.id !== person.roleId ? " — not assignable by you" : ""}
-              </option>)}
+              {/* Candidate Pool roles are not offered, but the person's own
+                  current role is always listed — otherwise an existing Employee
+                  would show a blank select, and saving would silently move them
+                  to whatever happened to be first. */}
+              {roles
+                .filter((role) => role.id === person.roleId || !role.viaCandidatePool)
+                .map((role) => {
+                  const reason = role.id === person.roleId ? "" : roleUnavailableReason(role);
+                  return <option key={role.id} value={role.id} disabled={Boolean(reason)}>
+                    {role.label}{reason}
+                  </option>;
+                })}
             </select>
             {person.isSelf ? <p className="field-hint">You cannot change your own role — ask another administrator.</p> : null}
             {errors.roleId ? <p className="form-error">{errors.roleId}</p>
-              : <p className="field-hint">Changing someone&apos;s role signs them out so their new access takes effect.</p>}
+              : data.roleId !== person.roleId && roles.find((role) => role.id === data.roleId)?.isCeo
+                ? <p className="field-hint">This transfers the CEO role to {person.name}. You become Co-Founder and both accounts must sign in again.</p>
+                : <p className="field-hint">Changing someone&apos;s role signs them out so their new access takes effect.</p>}
           </div>
         </div>
 
@@ -517,14 +567,16 @@ function EditDialog({ person, roles, busy, onClose, onSave }: {
  * hidden, so it is clear the option exists and why it is unavailable — the same
  * treatment the edit dialog gives them.
  */
-function AddDialog({ roles, busy, onClose, onSave }: {
+function AddDialog({ roles, canSetCompensation, today, busy, onClose, onSave }: {
   roles: ReadonlyArray<RoleOption>;
+  canSetCompensation: boolean;
+  today: string;
   busy: boolean;
   onClose: () => void;
   onSave: (payload: Record<string, string>) => Promise<Errors>;
 }) {
-  const assignable = roles.filter((role) => role.assignable);
-  const [data, setData] = useState({ name: "", email: "", phone: "", jobTitle: "", techStack: "", roleId: assignable[0]?.id ?? "" });
+  const assignable = selectableRoles(roles, false).filter((role) => !roleUnavailableReason(role));
+  const [data, setData] = useState({ name: "", email: "", phone: "", jobTitle: "", techStack: "", roleId: assignable[0]?.id ?? "", monthlyCompensation: "", currency: "INR", effectiveFrom: today, note: "" });
   const [errors, setErrors] = useState<Errors>({});
 
   const update = (key: keyof typeof data, value: string) => {
@@ -566,12 +618,28 @@ function AddDialog({ roles, busy, onClose, onSave }: {
               placeholder="e.g. React, Next.js, Node.js, Python, AWS"
             />
           </div>
+          {canSetCompensation && <>
+            <div className="sm:col-span-2 pt-2 border-t border-slate-200"><p className="text-xs font-bold uppercase tracking-wider text-amber-700">Optional salary schedule</p><p className="field-hint">For People accounts only. Developers are added from Candidate Pool and are paid from their delivery agreement.</p></div>
+            <div>
+              <label htmlFor="add-monthlyCompensation">Monthly compensation</label>
+              <input id="add-monthlyCompensation" inputMode="decimal" placeholder="e.g. 85000" value={data.monthlyCompensation} onChange={(event) => update("monthlyCompensation", event.target.value)} aria-invalid={Boolean(errors.monthlyCompensation)} />
+              {errors.monthlyCompensation && <p className="form-error">{errors.monthlyCompensation}</p>}
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><label htmlFor="add-currency">Currency</label><input id="add-currency" maxLength={3} value={data.currency} onChange={(event) => update("currency", event.target.value.toUpperCase())} aria-invalid={Boolean(errors.currency)} />{errors.currency && <p className="form-error">{errors.currency}</p>}</div>
+              <div><label htmlFor="add-effectiveFrom">Effective from</label><input id="add-effectiveFrom" type="date" value={data.effectiveFrom} onChange={(event) => update("effectiveFrom", event.target.value)} aria-invalid={Boolean(errors.effectiveFrom)} />{errors.effectiveFrom && <p className="form-error">{errors.effectiveFrom}</p>}</div>
+            </div>
+            <div className="sm:col-span-2"><label htmlFor="add-compensation-note">Salary note</label><input id="add-compensation-note" value={data.note} onChange={(event) => update("note", event.target.value)} placeholder="Optional approval or payroll note" /></div>
+          </>}
           <div className="sm:col-span-2">
             <label htmlFor="add-role">Role <em>*</em></label>
             <select id="add-role" value={data.roleId} onChange={(event) => update("roleId", event.target.value)} aria-invalid={Boolean(errors.roleId)}>
-              {roles.map((role) => <option key={role.id} value={role.id} disabled={!role.assignable}>
-                {role.label}{!role.assignable ? " — not assignable by you" : ""}
-              </option>)}
+              {selectableRoles(roles, false).map((role) => {
+                const reason = roleUnavailableReason(role);
+                return <option key={role.id} value={role.id} disabled={Boolean(reason)}>
+                  {role.label}{reason}
+                </option>;
+              })}
             </select>
             {errors.roleId ? <p className="form-error">{errors.roleId}</p>
               : <p className="field-hint">They choose their own password from an emailed invite — nobody else ever knows it.</p>}
@@ -582,6 +650,36 @@ function AddDialog({ roles, busy, onClose, onSave }: {
           <button type="button" className="button button-outline" onClick={onClose} disabled={busy}>Cancel</button>
           <button type="submit" className="button button-primary" disabled={busy}>{busy ? "Adding…" : "Send Invite"}</button>
         </div>
+      </form>
+    </div>
+  </div>;
+}
+
+function CompensationDialog({ person, today, busy, onClose, onSave }: {
+  person: PersonRow;
+  today: string;
+  busy: boolean;
+  onClose: () => void;
+  onSave: (payload: Record<string, string>) => Promise<Errors>;
+}) {
+  const [data, setData] = useState({ monthlyCompensation: "", currency: "INR", effectiveFrom: today, note: "" });
+  const [errors, setErrors] = useState<Errors>({});
+  const update = (key: keyof typeof data, value: string) => {
+    setData((current) => ({ ...current, [key]: value }));
+    setErrors((current) => ({ ...current, [key]: undefined }));
+  };
+  return <div className="dialog-backdrop" role="dialog" aria-modal="true" aria-labelledby="compensation-title">
+    <div className="dialog dialog--wide">
+      <h3 id="compensation-title" className="dialog-title">Set monthly salary — {person.name}</h3>
+      <p className="portal-note">Each decision creates a new effective-dated schedule. It never changes a salary invoice that has already been raised.</p>
+      <form className="contact-form mt-5" noValidate onSubmit={async (event) => { event.preventDefault(); setErrors(await onSave(data)); }}>
+        <div className="grid gap-5 sm:grid-cols-2">
+          <div><label htmlFor="comp-monthly">Monthly compensation <em>*</em></label><input id="comp-monthly" autoFocus inputMode="decimal" value={data.monthlyCompensation} onChange={(event) => update("monthlyCompensation", event.target.value)} aria-invalid={Boolean(errors.monthlyCompensation)} />{errors.monthlyCompensation && <p className="form-error">{errors.monthlyCompensation}</p>}</div>
+          <div><label htmlFor="comp-currency">Currency <em>*</em></label><input id="comp-currency" maxLength={3} value={data.currency} onChange={(event) => update("currency", event.target.value.toUpperCase())} aria-invalid={Boolean(errors.currency)} />{errors.currency && <p className="form-error">{errors.currency}</p>}</div>
+          <div><label htmlFor="comp-effective">Effective from <em>*</em></label><input id="comp-effective" type="date" value={data.effectiveFrom} onChange={(event) => update("effectiveFrom", event.target.value)} aria-invalid={Boolean(errors.effectiveFrom)} />{errors.effectiveFrom && <p className="form-error">{errors.effectiveFrom}</p>}</div>
+          <div><label htmlFor="comp-note">Note</label><input id="comp-note" value={data.note} onChange={(event) => update("note", event.target.value)} placeholder="Optional approval note" /></div>
+        </div>
+        <div className="dialog-actions"><button type="button" className="button button-outline" onClick={onClose} disabled={busy}>Cancel</button><button type="submit" className="button button-primary" disabled={busy}>{busy ? "Saving…" : "Save salary"}</button></div>
       </form>
     </div>
   </div>;

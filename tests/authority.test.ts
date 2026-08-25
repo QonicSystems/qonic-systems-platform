@@ -115,4 +115,10 @@ describe("canChangeOwnRole — the escalation guard the self-edit relaxation rel
     const self = { id: CEO.user.id, role: CEO.role };
     expect(canChangeOwnRole(CEO, self, true).ok).toBe(false);
   });
+
+  it("stops a Co-Founder from making themself the CEO", () => {
+    const self = { id: CO_FOUNDER.user.id, role: CO_FOUNDER.role };
+    expect(canChangeOwnRole(CO_FOUNDER, self, true).ok).toBe(false);
+    expect(canAssignRole(CO_FOUNDER, role("ceo", 0, true)).ok).toBe(false);
+  });
 });

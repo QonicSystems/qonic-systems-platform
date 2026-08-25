@@ -3,6 +3,20 @@
 import { useMemo, useState } from "react";
 
 /**
+ * The non-React part of table search. Exported so the matching contract is
+ * tested once and every client-side table receives the same behaviour.
+ */
+export function filterRows<T>(
+  rows: ReadonlyArray<T>,
+  fields: (row: T) => ReadonlyArray<string | null | undefined>,
+  query: string,
+): ReadonlyArray<T> {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return rows;
+  return rows.filter((row) => fields(row).filter(Boolean).join(" ").toLowerCase().includes(needle));
+}
+
+/**
  * Client-side table filtering.
  *
  * Extracted from components/ats/candidate-manager.tsx, which was the only table
@@ -21,9 +35,7 @@ export function useFilter<T>(rows: ReadonlyArray<T>, fields: (row: T) => Readonl
   const [query, setQuery] = useState("");
 
   const filtered = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    if (!needle) return rows;
-    return rows.filter((row) => fields(row).filter(Boolean).join(" ").toLowerCase().includes(needle));
+    return filterRows(rows, fields, query);
     // `fields` is recreated each render by callers writing it inline; depending
     // on it would recompute every render and defeat the memo.
     // eslint-disable-next-line react-hooks/exhaustive-deps

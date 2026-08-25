@@ -749,6 +749,15 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 .contact-form [aria-invalid="true"] { border-color: #ef4444; }
 .contact-form [aria-invalid="true"]:focus { box-shadow: 0 0 0 3.5px rgba(239, 68, 68, 0.18); }
 
+/* A frozen document snapshot should read like a form field without pretending
+   the user can edit it. Used before issuing external agreements. */
+.field-readonly {
+  margin: 0; min-height: 2.8rem; display: flex; align-items: center;
+  border: 1px solid var(--line); border-radius: 0.75rem;
+  background: var(--canvas-sub); padding: 0.75rem 0.95rem;
+  color: var(--ink-soft); font-size: 0.9rem; overflow-wrap: anywhere;
+}
+
 .form-error {
   margin: 0.4rem 0 0; color: #b91c1c; font-size: 0.82rem;
   font-weight: 500; animation: fade-up 0.25s var(--ease);
@@ -1053,6 +1062,26 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
   font-weight: 800; letter-spacing: -0.04em;
 }
 .portal-section { display: grid; gap: 1.15rem; }
+.c2c-settings {
+  display: grid; gap: 1.4rem; overflow: hidden;
+  border: 1px solid var(--line); border-radius: 1.25rem;
+  background: #ffffff; box-shadow: var(--shadow-sm);
+}
+.c2c-settings__header {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem;
+  border-bottom: 1px solid var(--line-subtle); padding: 1.35rem 1.5rem 1.15rem;
+  background: linear-gradient(110deg, var(--canvas-sub), #ffffff 70%);
+}
+.c2c-settings__header .eyebrow { margin-bottom: 0.35rem; }
+.c2c-settings__header .portal-note { margin-top: 0.35rem; font-size: 0.86rem; }
+.c2c-settings__badge {
+  flex: 0 0 auto; border: 1px solid var(--accent-soft); border-radius: 999px;
+  background: var(--accent-tint); padding: 0.35rem 0.65rem; color: var(--ink);
+  font-size: 0.72rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase;
+}
+.c2c-settings__controls {
+  display: flex; align-items: start; gap: 1rem; padding: 0 1.5rem;
+}
 .portal-section-title {
   margin: 0; color: var(--ink); font-family: var(--font-display), sans-serif;
   font-size: 1.3rem; font-weight: 800; letter-spacing: -0.02em;
@@ -1158,6 +1187,8 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 .matrix tbody th { max-width: 22rem; }
 .matrix tbody th strong { display: block; color: var(--ink); font-weight: 700; }
 .matrix tbody th span { display: block; margin-top: 0.15rem; color: var(--faint); font-size: 0.8rem; font-weight: 400; line-height: 1.45; }
+.matrix-cell-primary { display: block; line-height: 1.35; }
+.matrix-cell-subline { display: block; margin-top: 0.25rem; color: var(--faint); font-size: 0.8rem; line-height: 1.4; }
 /* Badges inside a row header. The rule above makes every span a block, which
    stretched each tag across the whole column; this puts them back on one
    wrapping line at their natural width. */
@@ -1165,6 +1196,111 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 .matrix tbody th .matrix-tags > * { display: inline-flex; margin-top: 0; }
 .matrix tbody td { text-align: left; }
 .matrix--people tbody td { text-align: left; }
+.matrix thead th.num, .matrix tbody td.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Developer–Project finance rows stay compact until their day-level audit
+   trail is needed. The nested table preserves the normal matrix treatment
+   while keeping the whole daily ledger attached to its parent assignment. */
+.delivery-finance-row--expanded { background: var(--accent-tint) !important; }
+.delivery-finance-table { min-width: 0; table-layout: fixed; font-size: 0.74rem; }
+.delivery-finance-table th, .delivery-finance-table td { padding: 0.72rem 0.8rem; }
+.delivery-finance-table thead th { white-space: normal; line-height: 1.2; font-size: 0.68rem; letter-spacing: 0.035em; }
+.delivery-finance-table th:nth-child(1) { width: 12%; }
+.delivery-finance-table th:nth-child(2) { width: 14%; }
+.delivery-finance-table th:nth-child(3), .delivery-finance-table th:nth-child(4) { width: 10%; }
+.delivery-finance-table th:nth-child(5) { width: 9%; }
+.delivery-finance-table th:nth-child(6), .delivery-finance-table th:nth-child(7) { width: 14%; }
+.delivery-finance-table th:nth-child(8) { width: 13%; }
+.delivery-finance-table th:nth-child(9) { width: 14%; }
+.delivery-finance-expand {
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.35rem;
+  min-width: 6.75rem; border: 1px solid var(--line-strong); border-radius: 0.6rem;
+  background: #fff; padding: 0.45rem 0.6rem; color: var(--ink); cursor: pointer;
+  font: inherit; font-size: 0.78rem; font-weight: 750; white-space: nowrap;
+}
+.delivery-finance-expand:hover { border-color: var(--accent); background: var(--accent-tint); }
+.delivery-finance-expand:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.delivery-finance-expand span { color: var(--accent-dark); font-size: 1rem; line-height: 0.8; }
+.delivery-finance-detail-row > td { padding: 0 !important; background: var(--canvas-sub); }
+.delivery-finance-detail {
+  /* The parent assignment table can be wider than the viewport. Keep the
+     expanded daily audit panel viewport-sized so its final money columns do
+     not disappear beyond that parent table's horizontal scroll area. */
+  width: min(100%, calc(100vw - 4rem)); padding: 1rem 1.15rem 1.15rem;
+}
+.delivery-finance-detail__heading { display: grid; gap: 0.2rem; margin: 0 0 0.8rem; }
+.delivery-finance-detail__heading strong { color: var(--ink); font-size: 0.9rem; }
+.delivery-finance-detail__heading span { color: var(--faint); font-size: 0.78rem; }
+.delivery-finance-detail__summary {
+  display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 0.55rem;
+  margin: 0 0 0.9rem;
+}
+.delivery-finance-detail__summary > div {
+  min-width: 0; border: 1px solid var(--line); border-radius: 0.65rem;
+  background: #fff; padding: 0.55rem 0.65rem;
+}
+.delivery-finance-detail__summary dt {
+  color: var(--faint); font-size: 0.65rem; font-weight: 800;
+  letter-spacing: 0.045em; line-height: 1.25; text-transform: uppercase;
+}
+.delivery-finance-detail__summary dd {
+  margin: 0.28rem 0 0; overflow-wrap: anywhere; color: var(--ink);
+  font-size: 0.78rem; font-weight: 750; font-variant-numeric: tabular-nums;
+}
+.delivery-finance-detail__scroll { border-radius: 0.8rem; box-shadow: none; }
+.delivery-finance-detail__scroll .matrix { min-width: 0; table-layout: fixed; font-size: 0.74rem; }
+.delivery-finance-detail__scroll .matrix th,
+.delivery-finance-detail__scroll .matrix td { padding: 0.62rem 0.45rem; }
+.delivery-finance-detail__scroll .matrix th { padding: 0.62rem 0.35rem; font-size: 0.7rem; }
+.delivery-finance-detail__scroll .matrix td { padding-inline: 0.35rem; }
+.delivery-finance-detail__scroll .matrix thead th { position: static; white-space: normal; line-height: 1.25; }
+.delivery-finance-detail__scroll .matrix tbody th,
+.delivery-finance-detail__scroll .matrix tbody td { overflow-wrap: anywhere; }
+.delivery-finance-detail__scroll .matrix tbody th { max-width: none; }
+.delivery-finance-detail__scroll .matrix .num { text-align: center; }
+.delivery-finance-billing {
+  display: inline-flex; align-items: center; border-radius: 999px; padding: 0.23rem 0.55rem;
+  font-size: 0.72rem; font-weight: 700; line-height: 1.3; white-space: nowrap;
+}
+.delivery-finance-billing--invoiced { background: #f0fdf4; color: #166534; }
+.delivery-finance-billing--partially_invoiced { background: #fffbeb; color: #92400e; }
+.delivery-finance-billing--approved_uninvoiced { background: #eff6ff; color: #1e40af; }
+.delivery-finance-billing--hours_unavailable { background: #f8fafc; color: #475569; }
+@media (max-width: 1080px) {
+  .delivery-finance-detail__summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 700px) {
+  .delivery-finance-detail { width: 100%; padding: 0.85rem; }
+  .delivery-finance-detail__summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .delivery-finance-detail__scroll .matrix { min-width: 51rem; }
+}
+
+.percentage-field { min-width: 13rem; }
+.percentage-field label { display: block; margin-bottom: 0.45rem; color: var(--ink); font-size: 0.84rem; font-weight: 800; }
+.percentage-field > p { margin: 0.45rem 0 0; color: var(--faint); font-size: 0.76rem; }
+.percentage-input { position: relative; display: flex; align-items: center; }
+.percentage-input input {
+  width: 7rem; border: 1px solid var(--line); border-radius: 0.75rem;
+  background: #ffffff; padding: 0.75rem 2rem 0.75rem 0.95rem;
+  color: var(--ink); font-size: 0.9rem; outline: none;
+  box-shadow: var(--shadow-xs); transition: border-color 0.2s, box-shadow 0.2s;
+}
+.percentage-input input:focus {
+  border-color: var(--accent-dark); box-shadow: 0 0 0 3.5px rgba(255, 215, 0, 0.22);
+}
+.percentage-input span { position: absolute; left: 5.25rem; color: var(--faint); font-weight: 700; pointer-events: none; }
+.c2c-settings__save { min-height: 3rem; margin-top: 1.85rem; white-space: nowrap; }
+.c2c-settings__note {
+  margin: 0; border-top: 1px solid var(--line-subtle); padding: 0.85rem 1.5rem;
+  background: var(--canvas-sub); color: var(--faint); font-size: 0.8rem; line-height: 1.45;
+}
+@media (max-width: 640px) {
+  .c2c-settings__header { padding: 1.15rem; }
+  .c2c-settings__controls { display: grid; grid-template-columns: 1fr 1fr; padding: 0 1.15rem; }
+  .percentage-field { min-width: 0; }
+  .c2c-settings__save { grid-column: 1 / -1; width: 100%; margin-top: 0.35rem; }
+  .c2c-settings__note { padding-inline: 1.15rem; }
+}
 
 .matrix-group th {
   background: var(--accent-tint) !important;
@@ -1539,23 +1675,13 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 }
 .timesheet-total { color: var(--ink); font-weight: 700; font-variant-numeric: tabular-nums; }
 
-.meter {
-  display: inline-block; width: 6.5rem; height: 0.5rem;
-  margin-right: 0.6rem; border-radius: 999px; background: var(--line);
-  overflow: hidden; vertical-align: middle;
-}
-.meter span {
-  display: block; height: 100%; border-radius: 999px;
-  background: linear-gradient(90deg, var(--accent), var(--accent-dark));
-}
-
 /* ── Report charts ──────────────────────────────────────────────────────
    Hand-rolled rather than a library: the app has no client-side chart deps,
    and these are static (server-rendered) magnitude/composition bars, not
-   interactive plots. Sequential fills reuse the same gold ramp as .meter;
-   "emphasis" bars pair the gold fill against a neutral gray rather than a
-   second hue, which sidesteps categorical colorblind-safety entirely (a
-   gray has no hue to confuse). See app/(portal)/reports/*. */
+   interactive plots. "Emphasis" bars pair the gold fill against a neutral
+   gray rather than a second hue, which sidesteps categorical colorblind-
+   safety entirely (a gray has no hue to confuse).
+   See app/(portal)/reports/revenue and app/(portal)/dashboard. */
 .chart-panel + .chart-panel { margin-top: 1.75rem; }
 .chart-bars { display: grid; gap: 0.7rem; }
 .chart-bar-row {
@@ -1689,22 +1815,6 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
   cursor: pointer;
 }
 .inline-check input { width: auto; margin-top: 0.25rem; cursor: pointer; }
-.alloc-chip {
-  display: inline-flex; align-items: center; gap: 0.35rem;
-  margin: 0 0.4rem 0.4rem 0; border-radius: 999px;
-  background: var(--accent-tint); padding: 0.18rem 0.65rem;
-  color: var(--accent-dark); font-size: 0.74rem; font-weight: 600;
-}
-.alloc-chip::before {
-  content: ""; width: 0.4rem; height: 0.4rem; border-radius: 50%;
-  background: currentColor; opacity: 0.55; flex: none;
-}
-/* Health tint — on-track stays the default gold; only a project that needs
-   attention repaints the chip, so a calm allocation list doesn't turn into
-   a wall of color. */
-.alloc-chip--at-risk { background: #fffbeb; color: #92400e; }
-.alloc-chip--off-track { background: #fef2f2; color: #991b1b; }
-.meter span.is-over { background: linear-gradient(90deg, #f59e0b, #dc2626); }
 .text-over { color: #dc2626; font-weight: 700; }
 
 /* ── Dark hero panel ────────────────────────────────────────────────────
@@ -1747,6 +1857,159 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
   font-family: var(--font-display), sans-serif; font-size: 2.15rem; font-weight: 800; letter-spacing: -0.03em;
 }
 .hero-stat-label { margin: 0.15rem 0 0; color: rgba(255, 255, 255, 0.55); font-size: 0.82rem; font-weight: 600; }
+
+/* ── Company Finance ─────────────────────────────────────────────────── */
+/* The live dashboard uses the same quiet card-and-panel system as the
+   finance preview, while retaining the portal's real data and navigation. */
+.company-finance { gap: 1.35rem; }
+.company-finance .hero-panel {
+  overflow: visible; border-radius: 0; background: transparent; box-shadow: none;
+  padding: 0; color: var(--ink);
+}
+.company-finance .hero-panel::before { display: none; }
+.company-finance .hero-eyebrow {
+  gap: 0.55rem; border: 0; border-radius: 0; background: transparent; padding: 0;
+  color: #796200; font-size: 0.7rem; letter-spacing: 0.14em;
+}
+.company-finance .hero-eyebrow::before { content: ""; width: 1.6rem; height: 2px; background: var(--accent-dark); }
+.company-finance .hero-title {
+  margin: 0.75rem 0 0.45rem; color: var(--ink); font-size: clamp(2.2rem, 4vw, 3rem);
+  letter-spacing: -0.055em;
+}
+.company-finance .hero-lead { max-width: 48rem; color: var(--body); font-size: 0.98rem; line-height: 1.6; }
+.company-finance .hero-stats {
+  display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 0.75rem;
+  margin-top: 1.7rem; padding-top: 0; border-top: 0;
+}
+.company-finance .hero-stats > div {
+  min-width: 0; min-height: 7.2rem; border: 1px solid var(--line); border-radius: 0.9rem;
+  background: #fffdfa; padding: 1rem; box-shadow: 0 6px 24px rgba(40, 31, 12, 0.035);
+}
+.company-finance .hero-stats > div:first-child { border-top: 3px solid var(--accent); }
+.company-finance .hero-stat-value {
+  overflow-wrap: anywhere; background: none; -webkit-background-clip: border-box; background-clip: border-box;
+  color: var(--ink); font-size: 1.3rem !important; line-height: 1.2;
+}
+.company-finance .hero-stat-label { margin-top: 0.6rem; color: var(--faint); font-size: 0.75rem; font-weight: 600; line-height: 1.35; }
+.company-finance .portal-section {
+  gap: 0.8rem; overflow: hidden; border: 1px solid var(--line); border-radius: 1rem;
+  background: #fffdfa; padding: 1.35rem; box-shadow: 0 6px 24px rgba(40, 31, 12, 0.035);
+}
+.company-finance .portal-section-title { font-size: 1.15rem; }
+.company-finance .portal-note { max-width: 70rem; color: var(--body); font-size: 0.82rem; line-height: 1.55; }
+.company-finance .portal-grid { gap: 0.75rem; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.company-finance .portal-card {
+  border-radius: 0.75rem; background: #f8f7f3; padding: 0.95rem; box-shadow: none;
+}
+.company-finance .portal-card:hover { transform: none; border-color: var(--line-strong); box-shadow: none; }
+.company-finance .portal-card .portal-stat { font-size: 1.35rem; }
+.company-finance .portal-card p { margin-top: 0.3rem; font-size: 0.76rem; }
+.company-finance .matrix-scroll { border-radius: 0.8rem; box-shadow: none; }
+.company-finance .matrix th,
+.company-finance .matrix td { padding-block: 0.8rem; }
+.company-finance .field-hint { margin: 0; color: var(--faint); font-size: 0.75rem; }
+.company-finance__prestart-flags { border-color: var(--accent-soft) !important; }
+.company-finance__prestart-flags .portal-section-title::before {
+  display: inline-block; width: 0.55rem; height: 0.55rem; margin: 0 0.45rem 0.05rem 0;
+  border-radius: 50%; background: var(--accent); content: "";
+}
+
+/* ── Finance command centre ───────────────────────────────────────────── */
+.finance-workspace { gap: 1.1rem; }
+.finance-workspace__hero {
+  display: flex; align-items: end; justify-content: space-between; gap: 1.5rem;
+  padding: clamp(1.2rem, 3vw, 2rem); border: 1px solid #e8e2cf; border-radius: 1.2rem;
+  background: radial-gradient(circle at 100% 0%, rgba(255, 215, 0, 0.19), transparent 34%), #fffdfa;
+  box-shadow: 0 10px 28px rgba(40, 31, 12, 0.04);
+}
+.finance-workspace__hero .hero-title { margin-top: 0.55rem; }
+.finance-workspace__hero .hero-lead { max-width: 42rem; }
+.finance-workspace__filters { display: flex; flex-wrap: wrap; align-items: end; justify-content: end; gap: 0.55rem; }
+.finance-workspace__filters label,
+.finance-ledger__filter { display: grid; gap: 0.28rem; color: var(--faint); font-size: 0.68rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+.finance-workspace__filters select,
+.finance-ledger__filter select {
+  min-width: 8.5rem; height: 2.45rem; border: 1px solid var(--line-strong); border-radius: 0.6rem; background: #fff;
+  padding: 0.56rem 0.65rem; color: var(--ink); font: inherit; font-size: 0.78rem; letter-spacing: 0; text-transform: none;
+}
+.finance-workspace__filters .button {
+  align-self: flex-end; height: 2.45rem; min-height: 0; margin: 0; padding-block: 0;
+  white-space: nowrap;
+}
+.finance-workspace__metrics { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 0.7rem; }
+.finance-metric {
+  --finance-metric-accent: #817553;
+  --finance-metric-tint: rgba(129, 117, 83, 0.07);
+  position: relative; display: grid; min-height: 8.55rem; grid-template-rows: auto 1fr auto; gap: 0.65rem; overflow: hidden;
+  border: 1px solid var(--line); border-radius: 0.95rem; background: linear-gradient(130deg, var(--finance-metric-tint), transparent 42%), #fffdfa;
+  padding: 1rem 1.05rem 0.9rem 1.15rem; color: var(--ink); text-align: left;
+  box-shadow: 0 6px 20px rgba(40, 31, 12, 0.035); transition: border-color 150ms ease, transform 150ms ease, box-shadow 150ms ease;
+}
+.finance-metric::before { position: absolute; inset: 0 auto 0 0; width: 0.28rem; background: var(--finance-metric-accent); content: ""; }
+.finance-metric::after { position: absolute; top: -2.8rem; right: -2.4rem; width: 6.5rem; height: 6.5rem; border-radius: 999px; background: var(--finance-metric-tint); content: ""; pointer-events: none; }
+.finance-workspace__tabs button:focus-visible { outline: 3px solid rgba(255, 215, 0, 0.45); outline-offset: 2px; }
+.finance-metric__label { position: relative; z-index: 1; color: var(--faint); font-size: 0.66rem; font-weight: 800; letter-spacing: 0.065em; text-transform: uppercase; }
+.finance-metric__value { position: relative; z-index: 1; display: flex; flex-wrap: wrap; align-items: center; gap: 0.15rem 0.4rem; overflow-wrap: anywhere; font-family: var(--font-display), sans-serif; font-size: clamp(1.05rem, 1.45vw, 1.32rem); letter-spacing: -0.035em; line-height: 1.15; }
+.finance-metric__value span { white-space: nowrap; }
+.finance-metric__value span + span::before { margin-right: 0.4rem; color: var(--finance-metric-accent); content: "·"; }
+.finance-metric__detail { position: relative; z-index: 1; border-top: 1px solid color-mix(in srgb, var(--finance-metric-accent) 18%, var(--line)); padding-top: 0.58rem; color: var(--body); font-size: 0.71rem; line-height: 1.36; }
+.finance-metric--positive { --finance-metric-accent: #187345; --finance-metric-tint: rgba(24, 115, 69, 0.09); }
+.finance-metric--warning { --finance-metric-accent: #a66a00; --finance-metric-tint: rgba(255, 189, 46, 0.14); }
+.finance-metric--negative { --finance-metric-accent: #9f2f2f; --finance-metric-tint: rgba(159, 47, 47, 0.09); }
+.finance-workspace__tabs { display: flex; gap: 0.35rem; overflow-x: auto; padding: 0.25rem; border: 1px solid var(--line); border-radius: 0.9rem; background: #f7f5ef; scrollbar-width: thin; }
+.finance-workspace__tabs button { display: grid; flex: 1 0 max-content; gap: 0.14rem; border: 0; border-radius: 0.65rem; background: transparent; padding: 0.6rem 0.8rem; color: var(--faint); text-align: left; transition: background 150ms ease, color 150ms ease, box-shadow 150ms ease; }
+.finance-workspace__tabs button span { font-size: 0.8rem; font-weight: 750; }
+.finance-workspace__tabs button small { font-size: 0.64rem; font-weight: 500; }
+.finance-workspace__tabs button.is-active { background: #1c1c1a; box-shadow: 0 3px 10px rgba(28, 28, 26, 0.16); color: #fff; }
+.finance-workspace__content { display: grid; gap: 1rem; animation: finance-workspace-enter 180ms ease-out; }
+@keyframes finance-workspace-enter { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: translateY(0); } }
+.finance-workspace__trend { display: grid; gap: 1rem; overflow: hidden; border: 1px solid #e8e2cf; border-radius: 1rem; background: #1d1c18; padding: 1.25rem; color: #fff; }
+.finance-workspace__trend .hero-eyebrow { color: #e8c629; }
+.finance-workspace__trend .hero-eyebrow::before { background: #e8c629; }
+.finance-workspace__trend h2 { margin: 0.5rem 0 0; color: #fff; font-family: var(--font-display), sans-serif; font-size: 1.15rem; letter-spacing: -0.03em; }
+.finance-workspace__trend .finance-workspace__section-heading > p { color: rgba(255, 255, 255, 0.64); }
+.finance-workspace__section-heading { display: flex; align-items: start; justify-content: space-between; gap: 1rem; }
+.finance-workspace__section-heading h2 { margin: 0.45rem 0 0; font-family: var(--font-display), sans-serif; font-size: 1.18rem; letter-spacing: -0.035em; }
+.finance-workspace__section-heading > p { max-width: 34rem; margin: 0; color: var(--body); font-size: 0.79rem; line-height: 1.5; }
+.finance-flow-chart { display: grid; grid-template-columns: repeat(auto-fit, minmax(4rem, 1fr)); align-items: end; gap: 0.65rem; min-height: 12rem; padding: 0.75rem 0.3rem 0; border-bottom: 1px solid rgba(255, 255, 255, 0.17); }
+.finance-flow-chart__bar { display: grid; min-width: 0; grid-template-rows: 1fr auto; gap: 0.48rem; height: 11rem; color: rgba(255, 255, 255, 0.68); font-size: 0.66rem; text-align: center; }
+.finance-flow-chart__columns { display: flex; align-items: end; justify-content: center; gap: 0.3rem; min-height: 0; }
+.finance-flow-chart__in, .finance-flow-chart__out { display: block; width: min(1.2rem, 35%); min-height: 0.25rem; border-radius: 0.22rem 0.22rem 0 0; }
+.finance-flow-chart__in { background: #9af8b0; }
+.finance-flow-chart__out { background: #b6c6ea; }
+.finance-flow-chart__legend { display: flex; gap: 1rem; color: rgba(255, 255, 255, 0.67); font-size: 0.72rem; }
+.finance-flow-chart__legend span { display: flex; align-items: center; gap: 0.35rem; }
+.finance-flow-chart__legend i { width: 0.65rem; height: 0.65rem; border-radius: 50%; }
+.finance-workspace__watchlist { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.75rem; }
+.finance-workspace__watchlist article { display: grid; gap: 0.5rem; border: 1px solid var(--line); border-radius: 0.75rem; background: #f8f7f3; padding: 0.95rem; }
+.finance-workspace__watchlist span { color: var(--faint); font-size: 0.68rem; font-weight: 750; letter-spacing: 0.055em; text-transform: uppercase; }
+.finance-workspace__watchlist strong { overflow-wrap: anywhere; font-family: var(--font-display), sans-serif; font-size: 1.25rem; letter-spacing: -0.035em; }
+.finance-workspace__watchlist p { margin: 0; color: var(--body); font-size: 0.74rem; line-height: 1.42; }
+.finance-workspace__ageing { margin-top: 0.5rem; max-width: 32rem; }
+.finance-ledger { display: grid; gap: 0.8rem; }
+.finance-ledger__tools { display: flex; align-items: end; justify-content: space-between; gap: 0.75rem; }
+.finance-ledger__tools .table-toolbar { flex: 1; }
+.finance-ledger__direction { display: inline-flex; border-radius: 999px; padding: 0.25rem 0.5rem; font-size: 0.67rem; font-weight: 750; letter-spacing: 0.035em; text-transform: uppercase; white-space: nowrap; }
+.finance-ledger__direction--inflow { background: #e9fbf0; color: #187345; }
+.finance-ledger__direction--outflow { background: #fff4df; color: #925e00; }
+.finance-ledger__direction--non_cash { background: #edf3ff; color: #2954a5; }
+.finance-ledger__outflow { color: #9a4b12; }
+.finance-ledger__more { justify-self: start; }
+@media (max-width: 1180px) {
+  .company-finance .hero-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .finance-workspace__metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 760px) {
+  .company-finance .hero-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .company-finance .portal-section { padding: 1rem; }
+  .company-finance .portal-grid { grid-template-columns: 1fr; }
+  .finance-workspace__hero, .finance-workspace__section-heading, .finance-ledger__tools { align-items: stretch; flex-direction: column; }
+  .finance-workspace__filters { justify-content: stretch; }
+  .finance-workspace__filters label { flex: 1; }
+  .finance-workspace__filters select { width: 100%; }
+  .finance-workspace__metrics, .finance-workspace__watchlist { grid-template-columns: 1fr; }
+  .finance-workspace__tabs button { flex-basis: 7.5rem; }
+}
 
 /* ── Capability tiles (Access page) ────────────────────────────────────── */
 .capability-grid {

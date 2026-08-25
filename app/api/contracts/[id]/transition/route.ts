@@ -4,8 +4,11 @@ import { appOrigin } from "@/lib/app-origin";
 import { clientIp, recordAudit } from "@/lib/audit";
 import { guardRoute } from "@/lib/auth/guard";
 import { canTransition, canViewLetter } from "@/lib/contracts/workflow";
+import { renderLetterPdf } from "@/lib/contracts/pdf";
+import type { ContractPayload } from "@/lib/contracts/payload";
 import { notify, notifyLeadership } from "@/lib/notify";
 import { db } from "@/lib/db";
+import { signatureFor } from "@/lib/signatures";
 import type { ContractStatus } from "@/lib/generated/prisma/enums";
 
 export const runtime = "nodejs";
@@ -55,14 +58,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   const check = canTransition(context, letter, to);
   if (!check.ok) return NextResponse.json({ message: check.reason }, { status: check.status });
+  const transitionAt = new Date();
 
   await db.$transaction(async (tx) => {
     await tx.contractLetter.update({
       where: { id: letter.id },
       data: {
         status: to,
-        ...(to === "RELEASED" ? { releasedAt: new Date(), releasedById: context.user.id } : {}),
-        ...(to === "REVOKED" ? { revokedAt: new Date(), revokedById: context.user.id } : {}),
+        ...(to === "RELEASED" ? { releasedAt: transitionAt, releasedById: context.user.id } : {}),
+        ...(to === "REVOKED" ? { revokedAt: transitionAt, revokedById: context.user.id } : {}),
       },
     });
     await tx.contractLetterEvent.create({
@@ -130,6 +134,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           "Regards,",
           "QONIC Leadership Team",
         ].join("\n");
+        const pdf = await renderLetterPdf(letter.templateKey, {
+          reference: letter.reference,
+          subjectName: letter.subject.name,
+          subjectEmail: letter.subject.email,
+          payload: letter.payload as ContractPayload,
+          releasedByName: context.user.name,
+          releasedByEmail: context.user.email,
+          releasedBySignature: signatureFor(context.user.email),
+          releasedAt: transitionAt,
+        });
 
         const transporter = nodemailer.createTransport({
           host: config.host,
@@ -137,7 +151,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           secure: config.secure,
           auth: config.auth,
         });
-        await transporter.sendMail({ from: config.from, to: letter.subject.email, subject, text });
+        await transporter.sendMail({
+          from: config.from,
+          to: letter.subject.email,
+          subject,
+          text,
+          attachments: [{ filename: `${letter.reference}.pdf`, content: pdf, contentType: "application/pdf" }],
+        });
       } catch (err) {
         console.error("Contract release email delivery error:", err);
       }

@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Company Finance — 10 Project Preview</title>
+  <style>
+    :root {
+      --ink: #171717;
+      --muted: #737373;
+      --line: #e7e2d9;
+      --paper: #fffdfa;
+      --canvas: #f7f5f0;
+      --yellow: #ffd400;
+      --yellow-deep: #a98b00;
+      --green: #0f7a4b;
+      --green-soft: #e5f5eb;
+      --blue: #2556d8;
+      --red: #bd3030;
+    }
+
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--canvas); color: var(--ink); font: 14px/1.45 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    .topbar { height: 56px; display: flex; align-items: center; gap: 26px; padding: 0 42px; color: #ddd; background: #151515; }
+    .brand { color: var(--yellow); font-weight: 900; letter-spacing: -.04em; font-size: 20px; }
+    .nav { display: flex; gap: 20px; color: #aeaeae; font-size: 13px; }
+    .nav .selected { color: #fff; font-weight: 750; }
+    main { max-width: 1440px; margin: 0 auto; padding: 34px 46px 64px; }
+    .crumb { margin-bottom: 20px; color: var(--muted); font-size: 12px; }
+    .eyebrow { display: flex; align-items: center; gap: 9px; color: #796200; font-size: 11px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+    .eyebrow::before { content: ""; width: 25px; height: 2px; background: var(--yellow-deep); }
+    h1 { margin: 12px 0 6px; font-size: clamp(30px, 4vw, 45px); line-height: 1; letter-spacing: -.055em; }
+    .lead { max-width: 720px; margin: 0; color: #555; font-size: 16px; }
+    .sample { display: inline-flex; align-items: center; gap: 7px; float: right; margin-top: -42px; padding: 7px 11px; border: 1px solid #e2c231; border-radius: 999px; color: #604f00; background: #fff9d4; font-size: 12px; font-weight: 800; }
+    .sample::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--yellow-deep); }
+    .cards { display: grid; grid-template-columns: repeat(6, minmax(155px, 1fr)); gap: 12px; margin: 28px 0 32px; }
+    .card, .section { border: 1px solid var(--line); border-radius: 14px; background: var(--paper); box-shadow: 0 6px 24px rgba(40, 31, 12, .035); }
+    .card { min-height: 115px; padding: 17px; }
+    .card b { display: block; font-size: 20px; letter-spacing: -.04em; }
+    .card span { display: block; margin-top: 9px; color: var(--muted); font-size: 12px; }
+    .card.accent { border-top: 3px solid var(--yellow); }
+    .section { margin-top: 20px; overflow: hidden; }
+    .section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding: 21px 22px 13px; }
+    h2 { margin: 0; font-size: 18px; letter-spacing: -.025em; }
+    .note { margin: 0; color: var(--muted); font-size: 12px; }
+    .matrix-scroll { overflow-x: auto; }
+    table { width: 100%; min-width: 810px; border-collapse: collapse; font-size: 13px; }
+    th, td { padding: 13px 15px; border-top: 1px solid var(--line); text-align: left; white-space: nowrap; }
+    thead th { color: #595959; background: #faf9f6; font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+    tbody th { font-weight: 700; }
+    .right { text-align: right; }
+    .positive { color: var(--green); font-weight: 750; }
+    .payout { color: var(--blue); font-weight: 750; }
+    .retained { color: #866a00; font-weight: 750; }
+    .pill { display: inline-flex; align-items: center; gap: 5px; padding: 4px 8px; border-radius: 999px; font-size: 10px; font-weight: 850; letter-spacing: .06em; text-transform: uppercase; }
+    .pill::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+    .pill.payout { color: var(--blue); background: #eaf0ff; }
+    .pill.retained { color: #806600; background: #fff7cf; }
+    .pill.running { color: var(--green); background: var(--green-soft); }
+    .two-col { display: grid; grid-template-columns: 1.1fr .9fr; gap: 20px; }
+    .summary-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 2px 22px 21px; }
+    .summary-card { padding: 13px; border-radius: 10px; background: #f8f7f3; }
+    .summary-card b { display: block; font-size: 17px; letter-spacing: -.03em; }
+    .summary-card span { display: block; margin-top: 3px; color: var(--muted); font-size: 11px; }
+    .legend { display: flex; flex-wrap: wrap; gap: 12px; padding: 0 22px 20px; color: var(--muted); font-size: 11px; }
+    .legend b { color: var(--ink); }
+    .footer-note { margin: 16px 2px 0; color: var(--muted); font-size: 11px; }
+    @media (max-width: 1100px) { .cards { grid-template-columns: repeat(3, 1fr); } }
+    @media (max-width: 760px) { .topbar { padding: 0 20px; } .nav { display: none; } main { padding: 25px 18px 44px; } .sample { float: none; margin: 15px 0 0; } .cards, .two-col, .summary-cards { grid-template-columns: 1fr; } .section-head { display: block; } .section-head .note { margin-top: 6px; } }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">qonic</div>
+    <nav class="nav" aria-label="Portal navigation">
+      <span>Dashboard</span><span>Delivery</span><span>Recruitment</span><span class="selected">Finance</span><span>Directory</span>
+    </nav>
+  </header>
+
+  <main>
+    <div class="crumb">Home &nbsp;/&nbsp; Finance &nbsp;/&nbsp; Company Finance</div>
+    <div class="eyebrow">Finance overview</div>
+    <div class="sample">Illustrative sample data</div>
+    <h1>Company Finance</h1>
+    <p class="lead">A consolidated view across 10 active projects and 10 Developers. Revenue, collections, costs, payouts, and pre-start delivery value remain separate so totals are never double-counted.</p>
+
+    <section class="cards" aria-label="Finance summary">
+      <article class="card accent"><b>₹25,89,000</b><span>Client invoices issued</span></article>
+      <article class="card"><b>₹18,72,000</b><span>Client cash received</span></article>
+      <article class="card"><b>₹7,17,000</b><span>Receivables outstanding</span></article>
+      <article class="card"><b>₹9,26,400</b><span>Developer payout accrued</span></article>
+      <article class="card"><b>₹1,78,200</b><span>Pre-start value retained</span></article>
+      <article class="card"><b>₹95,800</b><span>Approved expenses</span></article>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <div><h2>Cash and commitments</h2><p class="note">All active projects, shown in INR for this preview.</p></div>
+      </div>
+      <div class="matrix-scroll">
+        <table>
+          <thead><tr><th>Currency</th><th class="right">Client billed</th><th class="right">Cash received</th><th class="right">Cash expenses</th><th class="right">Cash after expenses</th><th class="right">Developer payout accrued</th><th class="right">Expenses pending</th><th class="right">Pre-start value retained</th></tr></thead>
+          <tbody><tr><th>INR</th><td class="right">₹25,89,000</td><td class="right">₹18,72,000</td><td class="right">₹58,600</td><td class="right positive">₹18,13,400</td><td class="right payout">₹9,26,400</td><td class="right">₹37,200</td><td class="right retained">₹1,78,200</td></tr></tbody>
+        </table>
+      </div>
+      <div class="legend"><span><b>Developer payout accrued</b> is payable from each Developer&apos;s own Actual Start Date.</span><span><b>Pre-start value retained</b> is approved delivery work before that Developer&apos;s start date; it is already inside client billing and is not new revenue.</span></div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <div><h2>Developer payout and retained delivery value</h2><p class="note">One row per Developer assignment. This is the scalable view for payroll and delivery finance.</p></div>
+        <span class="pill running">10 active assignments</span>
+      </div>
+      <div class="matrix-scroll">
+        <table>
+          <thead><tr><th>Developer</th><th>Client / Project</th><th>Project start</th><th>Actual start</th><th class="right">Approved billable value</th><th class="right">Developer payout</th><th class="right">Pre-start retained</th><th>Assignment status</th></tr></thead>
+          <tbody>
+            <tr><th>Aarav Mehta</th><td>Netflix — Streaming Insights</td><td>01 Aug 2026</td><td>01 Aug 2026</td><td class="right">₹3,15,000</td><td class="right payout">₹1,12,000</td><td class="right">—</td><td><span class="pill running">Running</span></td></tr>
+            <tr><th>Harsh Verma</th><td>Netflix — NTFLX Delivery</td><td>10 Aug 2026</td><td>13 Aug 2026</td><td class="right">₹2,76,000</td><td class="right payout">₹91,200</td><td class="right retained">₹22,800</td><td><span class="pill running">Running</span></td></tr>
+            <tr><th>Priya Sharma</th><td>Acme — Commerce Platform</td><td>04 Aug 2026</td><td>04 Aug 2026</td><td class="right">₹2,64,000</td><td class="right payout">₹96,000</td><td class="right">—</td><td><span class="pill running">Running</span></td></tr>
+            <tr><th>Karan Malhotra</th><td>Globex — Data Modernisation</td><td>06 Aug 2026</td><td>11 Aug 2026</td><td class="right">₹2,43,000</td><td class="right payout">₹72,000</td><td class="right retained">₹36,000</td><td><span class="pill running">Running</span></td></tr>
+            <tr><th>Neha Gupta</th><td>Umbrella — Design System</td><td>08 Aug 2026</td><td>08 Aug 2026</td><td class="right">₹2,18,000</td><td class="right payout">₹78,400</td><td class="right">—</td><td><span class="pill running">Running</span></td></tr>
+            <tr><th>Rohan Kapoor</th><td>Initech — Cloud Migration</td><td>03 Aug 2026</td><td>06 Aug 2026</td><td class="right">₹2,94,000</td><td class="right payout">₹1,05,000</td><td class="right retained">₹21,000</td><td><span class="pill running">Running</span></td></tr>
+            <tr><th>Sana Iyer</th><td>Wayne — Mobile Payments</td><td>12 Aug 2026</td><td>12 Aug 2026</td><td class="right">₹2,37,000</td><td class="right payout">₹84,000</td><td class="right">—</td><td><span class="pill running">Running</span></td></tr>
+            <tr><th>Vikram Singh</th><td>Stark — AI Operations</td><td>01 Aug 2026</td><td>08 Aug 2026</td><td class="right">₹3,21,000</td><td class="right payout">₹1,08,000</td><td class="right retained">₹54,000</td><td><span class="pill running">Running</span></td></tr>
+            <tr><th>Ananya Rao</th><td>Hooli — Talent Analytics</td><td>09 Aug 2026</td><td>09 Aug 2026</td><td class="right">₹2,25,000</td><td class="right payout">₹81,600</td><td class="right">—</td><td><span class="pill running">Running</span></td></tr>
+            <tr><th>Dev Patel</th><td>Massive Dynamic — Security Hub</td><td>05 Aug 2026</td><td>10 Aug 2026</td><td class="right">₹2,96,000</td><td class="right payout">₹98,200</td><td class="right retained">₹44,400</td><td><span class="pill running">Running</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <div class="two-col">
+      <section class="section">
+        <div class="section-head"><div><h2>Receivables and collection</h2><p class="note">Outstanding invoices across the same 10 projects.</p></div></div>
+        <div class="matrix-scroll"><table><thead><tr><th>Ageing bucket</th><th class="right">Outstanding</th><th class="right">Invoices</th></tr></thead><tbody>
+          <tr><th>Current</th><td class="right positive">₹3,25,000</td><td class="right">4</td></tr>
+          <tr><th>1–30 days</th><td class="right">₹2,67,000</td><td class="right">3</td></tr>
+          <tr><th>31–60 days</th><td class="right">₹1,25,000</td><td class="right">2</td></tr>
+          <tr><th>61–90 days</th><td class="right">—</td><td class="right">0</td></tr>
+          <tr><th>90+ days</th><td class="right" style="color: var(--red); font-weight: 750;">₹1,00,000</td><td class="right">1</td></tr>
+        </tbody></table></div>
+      </section>
+
+      <section class="section">
+        <div class="section-head"><div><h2>Delivery economics</h2><p class="note">A management read of the 10-project portfolio.</p></div></div>
+        <div class="summary-cards">
+          <article class="summary-card"><b>₹25.89L</b><span>Approved billable delivery</span></article>
+          <article class="summary-card"><b class="payout">₹9.26L</b><span>Developer payout accrued</span></article>
+          <article class="summary-card"><b class="retained">₹1.78L</b><span>Pre-start delivery retained</span></article>
+          <article class="summary-card"><b>₹95.8K</b><span>Approved operating expenses</span></article>
+          <article class="summary-card"><b>10</b><span>Active client projects</span></article>
+          <article class="summary-card"><b>10</b><span>Developers allocated</span></article>
+        </div>
+      </section>
+    </div>
+    <p class="footer-note">Preview only — all names, clients, projects, dates, and financial amounts are fictional. The live dashboard uses your approved time entries, invoices, expenses, and assignments.</p>
+  </main>
+</body>
+</html>

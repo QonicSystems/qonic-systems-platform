@@ -1,77 +1,45 @@
 import Link from "next/link";
 import { ContractForm } from "@/components/contracts/contract-form";
-import { recordAudit } from "@/lib/audit";
 import { canAdminister } from "@/lib/auth/authority";
 import { requirePermission } from "@/lib/auth/guard";
+import { nonLeadershipRoleWhere } from "@/lib/auth/roles";
 import { db } from "@/lib/db";
 
 export const metadata = { title: "Draft a Contract Letter" };
 
+/**
+ * Drafting a contract letter.
+ *
+ * Arriving with `?candidateId=` preselects that candidate's staff account. It is
+ * a READ: this page used to create the User and write the Candidate → User link
+ * itself, during a GET render, so a prefetch or a refresh of this URL inserted
+ * rows. Creating the account is now its own deliberate action in the Candidate
+ * Pool (POST /api/candidates/[id]/employee), and this page only reads the link
+ * that action wrote.
+ */
 export default async function NewContractPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ candidateId?: string; name?: string; email?: string }>;
+  searchParams?: Promise<{ candidateId?: string }>;
 }) {
   const context = await requirePermission("contract.generate");
   const params = searchParams ? await searchParams : {};
   const candidateId = params?.candidateId;
-  const queryName = params?.name;
-  const queryEmail = params?.email;
 
-  let initialSubjectId = "";
+  const candidate = candidateId
+    ? await db.candidate.findUnique({
+        where: { id: candidateId },
+        select: { name: true, linkedUserId: true },
+      })
+    : null;
+  const initialSubjectId = candidate?.linkedUserId ?? "";
 
-  // If navigated from Candidate Pool, ensure the candidate has an Employee (Dev) account
-  if (candidateId || queryEmail) {
-    const candidate = candidateId ? await db.candidate.findUnique({ where: { id: candidateId } }) : null;
-    const emailToUse = (candidate?.email ?? queryEmail ?? "").trim().toLowerCase();
-    const nameToUse = (candidate?.name ?? queryName ?? "").trim();
-
-    if (emailToUse && nameToUse) {
-      let candidateUser = await db.user.findUnique({ where: { email: emailToUse } });
-      if (!candidateUser) {
-        const employeeRole = await db.role.findFirst({ where: { key: "employee" } });
-        if (employeeRole) {
-          candidateUser = await db.user.create({
-            data: {
-              email: emailToUse,
-              name: nameToUse,
-              roleId: employeeRole.id,
-              status: "ACTIVE",
-              mustChangePassword: true,
-              techStack: candidate?.techStack ?? null,
-              phone: candidate?.phone ?? null,
-              passwordHash: "INVITED_CANDIDATE_NO_LOGIN_YET",
-            },
-          });
-        }
-      }
-      if (candidateUser) {
-        initialSubjectId = candidateUser.id;
-
-        // This is the one deliberate moment a Candidate becomes a linked User —
-        // drafting their first contract letter — so it's recorded here, once,
-        // rather than guessed later by matching email strings.
-        if (candidate && candidate.linkedUserId !== candidateUser.id) {
-          await db.candidate.update({ where: { id: candidate.id }, data: { linkedUserId: candidateUser.id } });
-          await recordAudit({
-            actorId: context.user.id,
-            action: "candidate.link",
-            entityType: "Candidate",
-            entityId: candidate.id,
-            before: { linkedUserId: candidate.linkedUserId },
-            after: { linkedUserId: candidateUser.id },
-          });
-        }
-      }
-    }
-  }
-
-  // The eligible list is strictly for non-leadership employees (Employee Devs)
+  // The eligible list is strictly for non-leadership staff (Developers)
   // that the current user can administer. Founder and Co-Founder are excluded.
   const users = await db.user.findMany({
     where: {
       status: "ACTIVE",
-      role: { key: { notIn: ["ceo", "co_founder"] } },
+      role: nonLeadershipRoleWhere,
     },
     include: { role: true },
     orderBy: { name: "asc" },
@@ -87,13 +55,25 @@ export default async function NewContractPage({
       <p className="portal-lead">Fill in the terms, then submit it to leadership for release.</p>
     </header>
 
+    {candidate && !candidate.linkedUserId && <div className="portal-panel p-6 mb-4">
+      <p className="portal-note">
+        {candidate.name} does not have a staff account yet, so there is nobody to address this letter to.
+      </p>
+      <p className="mt-2 text-sm text-slate-600">
+        Use <strong>Create Employee Account</strong> on their row in the{" "}
+        <Link className="text-link font-semibold" href="/candidates">Candidate Pool</Link>, then come back here.
+      </p>
+    </div>}
+
     {employees.length === 0
       ? <div className="portal-panel p-6">
           <p className="portal-note">
-            There are currently no Employee (Dev) team members in the workspace.
+            There are currently no delivery team members in the workspace.
           </p>
           <p className="mt-2 text-sm text-slate-600">
-            You can <Link className="text-link font-semibold" href="/candidates">select a candidate from the Candidate Pool</Link> to generate their contract, or <Link className="text-link font-semibold" href="/admin">add an Employee in Administration</Link>.
+            Employee accounts start in the{" "}
+            <Link className="text-link font-semibold" href="/candidates">Candidate Pool</Link> — add the candidate
+            there, then create their employee account.
           </p>
         </div>
       : <section className="portal-panel">

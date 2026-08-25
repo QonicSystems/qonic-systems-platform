@@ -1,6 +1,6 @@
 /**
- * Human-facing reference numbers: invoices, credit notes, contract letters and
- * job requisitions.
+ * Human-facing reference numbers: client invoices, credit notes, contract
+ * letters, Global Candidate agreements, earnings invoices, and job requisitions.
  *
  * The format is `<BRAND>-<KIND>-<YEAR>-<NNNN>`, e.g. QNC-INV-2026-0007.
  *
@@ -22,7 +22,7 @@ export const REFERENCE_PREFIX = "QNC";
 export const LEGACY_REFERENCE_PREFIXES = ["AVX"] as const;
 
 /** The document kinds that carry a reference. */
-export type ReferenceKind = "INV" | "CN" | "CL" | "JOB";
+export type ReferenceKind = "INV" | "CN" | "CL" | "GA" | "EI" | "JOB";
 
 /** The prefix new references are issued under, e.g. `QNC-INV-2026-`. */
 export function referencePrefix(kind: ReferenceKind, year: number): string {

@@ -1,15 +1,18 @@
 import { NextResponse } from "next/server";
+import { randomUUID } from "node:crypto";
 import { clientIp, recordAudit } from "@/lib/audit";
 import { guardRoute } from "@/lib/auth/guard";
 import { formatMoney, hoursToCentihours, invoiceTotals, lineAmount, toMinor } from "@/lib/money";
-import { notifyLeadership } from "@/lib/notify";
+import { notifyLeadership, sendEmail } from "@/lib/notify";
+import { c2cCommissionBreakdown } from "@/lib/finance/c2c";
+import { parseSettlementRate } from "@/lib/finance/fx-settlement";
 import { db } from "@/lib/db";
 import { nextReferenceFrom, referenceWhere } from "@/lib/reference";
 
 export const runtime = "nodejs";
 
 /** Sequential per year, e.g. QNC-INV-2026-0001 (prefix from lib/reference). */
-async function nextNumber(): Promise<string> {
+async function nextNumbers(count: number): Promise<string[]> {
   const year = new Date().getFullYear();
   // Legacy-prefixed records are matched too, so the rename from AVX to
   // QNC continues the year's sequence instead of restarting it at 0001.
@@ -17,7 +20,13 @@ async function nextNumber(): Promise<string> {
     where: { OR: referenceWhere("number", "INV", year) },
     select: { number: true },
   });
-  return nextReferenceFrom(existing.map((row) => row.number), "INV", year);
+  const seen = existing.map((row) => row.number);
+  const numbers: string[] = [];
+  for (let index = 0; index < count; index++) {
+    const next = nextReferenceFrom([...seen, ...numbers], "INV", year);
+    numbers.push(next);
+  }
+  return numbers;
 }
 
 /**
@@ -49,12 +58,33 @@ export async function POST(request: Request) {
   if (issueDate && dueDate && dueDate < issueDate) errors.dueDate = "The due date cannot be before the issue date.";
   if (!Number.isFinite(taxPercent) || taxPercent < 0 || taxPercent > 100) errors.taxPercent = "Tax must be between 0 and 100.";
 
-  const client = clientId ? await db.client.findUnique({ where: { id: clientId } }) : null;
+  const client = clientId ? await db.client.findUnique({
+    where: { id: clientId },
+    include: { vendor: true, globalCandidate: true },
+  }) : null;
+  const invoiceCurrency = (client?.rateCurrency || String(input.currency ?? "INR")).trim().toUpperCase() || "INR";
+  const requestedSettlementCurrency = String(input.settlementCurrency ?? invoiceCurrency).trim().toUpperCase() || invoiceCurrency;
+  const isForeignSettlement = requestedSettlementCurrency !== invoiceCurrency;
+  const lockedSettlementRate = isForeignSettlement ? parseSettlementRate(input.lockedSettlementRate) : null;
   if (clientId && !client) errors.clientId = "That client no longer exists.";
+  const isC2C = client?.employmentType === "C2C";
+  if (isC2C && taxPercent !== 0) errors.taxPercent = "C2C invoices use the commission reconciliation amount and cannot add tax.";
+  if (isC2C && (!client?.actualClientRate || !client.globalCandidate || !client.vendor || client.globalCandidateCommissionPercent === null || client.vendorCommissionPercent === null)) {
+    errors.clientId = "This C2C client needs an actual rate, vendor, Global Candidate, and both commission percentages before invoicing.";
+  }
+  if (isForeignSettlement && requestedSettlementCurrency !== "INR") {
+    errors.settlementCurrency = "Foreign-currency invoices can currently be settled only to Qonic's INR bank account.";
+  }
+  if (isForeignSettlement && lockedSettlementRate === null) {
+    errors.lockedSettlementRate = `Enter the locked INR rate for one ${invoiceCurrency}.`;
+  }
   if (Object.keys(errors).length) return NextResponse.json({ message: "Please correct the highlighted fields.", errors }, { status: 422 });
 
   type Line = { description: string; quantity: number; unitRate: number; amount: number; sortOrder: number };
   const lines: Line[] = [];
+  // Only entries that actually contributed to invoice lines may be stamped
+  // invoiced. Project Start Date, not Developer Actual Start, gates billing.
+  let timeEntryIdsToInvoice: string[] = [];
 
   if (fromTimesheets) {
     if (!projectId) return NextResponse.json({ message: "Choose a project to invoice its time." }, { status: 422 });
@@ -74,6 +104,8 @@ export async function POST(request: Request) {
     const assignments = await db.projectAssignment.findMany({ where: { projectId } });
     const byPerson = new Map<string, { name: string; minutes: number }>();
     for (const entry of entries) {
+      if (project.startDate && entry.workDate < project.startDate) continue;
+      timeEntryIdsToInvoice.push(entry.id);
       const key = entry.timesheet.userId;
       const bucket = byPerson.get(key) ?? { name: entry.timesheet.user.name, minutes: 0 };
       bucket.minutes += entry.minutes;
@@ -82,7 +114,9 @@ export async function POST(request: Request) {
 
     let order = 0;
     for (const [userId, bucket] of byPerson) {
-      const rate = assignments.find((a) => a.userId === userId)?.rate ?? project.defaultRate ?? 0;
+      const rate = isC2C
+        ? client!.actualClientRate!
+        : assignments.find((a) => a.userId === userId)?.rate ?? project.defaultRate ?? 0;
       const quantity = hoursToCentihours(bucket.minutes);
       lines.push({
         description: `${project.name} — ${bucket.name} (professional services)`,
@@ -105,35 +139,123 @@ export async function POST(request: Request) {
   }
 
   const { subtotal, taxAmount, total } = invoiceTotals(lines, taxPercent);
+  if (lines.length === 0) {
+    return NextResponse.json({ message: "There is no approved billable time on or after the Project Start Date." }, { status: 409 });
+  }
+  let c2c: ReturnType<typeof c2cCommissionBreakdown> | null = null;
+  try {
+    if (isC2C) {
+      c2c = c2cCommissionBreakdown({
+        grossClientAmount: subtotal,
+        globalCandidateCommissionPercent: client!.globalCandidateCommissionPercent!,
+        vendorCommissionPercent: client!.vendorCommissionPercent!,
+      });
+    }
+  } catch (error) {
+    return NextResponse.json({ message: error instanceof Error ? error.message : "Unable to calculate C2C commission." }, { status: 422 });
+  }
+  const numbers = await nextNumbers(c2c ? 3 : 1);
 
   const created = await db.$transaction(async (tx) => {
-    const invoice = await tx.invoice.create({
-      data: {
-        number: await nextNumber(), clientId, projectId,
-        issueDate: new Date(`${issueDate}T00:00:00.000Z`),
-        dueDate: new Date(`${dueDate}T00:00:00.000Z`),
-        currency: String(input.currency ?? "INR"),
-        taxPercent, subtotal, taxAmount, total,
-        notes: String(input.notes ?? "").trim() || null,
-        lines: { create: lines },
-      },
-    });
+    const base = {
+      clientId, projectId,
+      issueDate: new Date(`${issueDate}T00:00:00.000Z`),
+      dueDate: new Date(`${dueDate}T00:00:00.000Z`),
+      currency: invoiceCurrency,
+      settlementCurrency: isForeignSettlement ? requestedSettlementCurrency : null,
+      lockedSettlementRate: isForeignSettlement ? lockedSettlementRate : null,
+      notes: String(input.notes ?? "").trim() || null,
+    };
+    const commercialGroupId = c2c ? randomUUID() : null;
+    const reconciliation = c2c ? {
+      commercialGroupId,
+      grossClientAmount: c2c.grossClientAmount,
+      vendorCommissionAmount: c2c.vendorCommissionAmount,
+      globalCandidateCommissionAmount: c2c.globalCandidateCommissionAmount,
+      qonicRevenueAmount: c2c.qonicRevenueAmount,
+    } : {};
+
+    const invoice = c2c
+      ? await tx.invoice.create({
+          data: {
+            ...base, ...reconciliation,
+            number: numbers[0], commercialKind: "QONIC_TO_VENDOR",
+            billingRecipient: client!.vendor!.name,
+            taxPercent: 0, taxAmount: 0,
+            subtotal: c2c.qonicRevenueAmount, total: c2c.qonicRevenueAmount,
+            lines: { create: [{ description: `Qonic revenue — ${client!.name} C2C billing after agreed commissions`, quantity: 100, unitRate: c2c.qonicRevenueAmount, amount: c2c.qonicRevenueAmount, sortOrder: 0 }] },
+          },
+        })
+      : await tx.invoice.create({
+          data: {
+            ...base,
+            number: numbers[0],
+            taxPercent, subtotal, taxAmount, total,
+            lines: { create: lines },
+          },
+        });
+
+    if (c2c) {
+      await tx.invoice.create({
+        data: {
+          ...base, ...reconciliation,
+          number: numbers[1], commercialKind: "VENDOR_TO_GLOBAL_CANDIDATE",
+          billingRecipient: client!.globalCandidate!.name,
+          taxPercent: 0, taxAmount: 0,
+          subtotal: c2c.globalCandidateCommissionAmount, total: c2c.globalCandidateCommissionAmount,
+          notes: `Vendor payment instruction. ${base.notes ?? ""}`.trim(),
+          lines: { create: [{ description: `Vendor payment to ${client!.globalCandidate!.name} — Global Candidate commission`, quantity: 100, unitRate: c2c.globalCandidateCommissionAmount, amount: c2c.globalCandidateCommissionAmount, sortOrder: 0 }] },
+        },
+      });
+      await tx.invoice.create({
+        data: {
+          ...base, ...reconciliation,
+          number: numbers[2], commercialKind: "GLOBAL_CANDIDATE_COMMISSION_RECORD",
+          billingRecipient: client!.globalCandidate!.name,
+          taxPercent: 0, taxAmount: 0,
+          subtotal: c2c.globalCandidateCommissionAmount, total: c2c.globalCandidateCommissionAmount,
+          notes: `Documentation record: this commission is held by ${client!.vendor!.name} and payable to the Global Candidate. ${base.notes ?? ""}`.trim(),
+          lines: { create: [{ description: `Global Candidate commission held by ${client!.vendor!.name}`, quantity: 100, unitRate: c2c.globalCandidateCommissionAmount, amount: c2c.globalCandidateCommissionAmount, sortOrder: 0 }] },
+        },
+      });
+    }
     // Stamp the entries so the same hours cannot be billed twice.
-    if (fromTimesheets && projectId) {
+    if (fromTimesheets && timeEntryIdsToInvoice.length > 0) {
       await tx.timeEntry.updateMany({
-        where: { projectId, billable: true, timesheet: { status: "APPROVED" }, invoicedAt: null },
+        where: { id: { in: timeEntryIdsToInvoice }, invoicedAt: null },
         data: { invoicedAt: new Date(), invoiceId: invoice.id },
       });
     }
     await notifyLeadership({
       kind: "INVOICE",
-      title: `Invoice Raised: ${invoice.number}`,
-      body: `${context.user.name} raised invoice ${invoice.number} for ${formatMoney(total, invoice.currency)}.`,
+      title: c2c ? `C2C invoice set raised: ${invoice.number}` : `Invoice Raised: ${invoice.number}`,
+      body: c2c
+        ? `${context.user.name} raised the reconciled C2C invoice set for ${formatMoney(c2c.grossClientAmount, invoice.currency)} gross; Qonic revenue is ${formatMoney(c2c.qonicRevenueAmount, invoice.currency)}.`
+        : `${context.user.name} raised invoice ${invoice.number} for ${formatMoney(total, invoice.currency)}.`,
       link: `/invoices`,
     }, tx);
-    await recordAudit({ actorId: context.user.id, action: "invoice.create", entityType: "Invoice", entityId: invoice.id, after: { number: invoice.number, total }, ipAddress: clientIp(request) }, tx);
+    await recordAudit({ actorId: context.user.id, action: "invoice.create", entityType: "Invoice", entityId: invoice.id, after: { number: invoice.number, total: c2c?.qonicRevenueAmount ?? total, commercialGroupId, reconciliation: c2c }, ipAddress: clientIp(request) }, tx);
     return invoice;
   });
 
-  return NextResponse.json({ message: `${created.number} raised.`, id: created.id });
+  if (c2c) {
+    if (client!.vendor?.email) {
+      void sendEmail(
+        [client!.vendor.email],
+        `C2C payment instruction — ${created.number}`,
+        `A C2C invoice set has been created for ${client!.name}. The Qonic amount due is ${formatMoney(c2c.qonicRevenueAmount, client!.rateCurrency)} and the Global Candidate commission payment instruction is included in the matching records.`,
+        "/invoices"
+      );
+    }
+    if (client!.globalCandidate?.email) {
+      void sendEmail(
+        [client!.globalCandidate.email],
+        `Global Candidate commission record created — ${client!.name}`,
+        `A commission record has been created for ${client!.name}. Your agreed commission is ${formatMoney(c2c.globalCandidateCommissionAmount, client!.rateCurrency)} and is held by the vendor for payment.`,
+        "/invoices"
+      );
+    }
+  }
+
+  return NextResponse.json({ message: c2c ? `${created.number} and two matching C2C commission records raised.` : `${created.number} raised.`, id: created.id });
 }

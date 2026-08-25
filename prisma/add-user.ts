@@ -4,6 +4,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../lib/generated/prisma/client";
 import { describePasswordProblem, hashPassword } from "../lib/auth/password";
 import { emailPattern } from "../lib/contact";
+import { CEO_ALREADY_ASSIGNED_MESSAGE, CEO_SINGLETON_KEY, ceoSingletonValue } from "../lib/auth/single-ceo";
 
 /**
  * Create a colleague's account from the command line.
@@ -48,10 +49,15 @@ async function main() {
       throw new Error(`No role "${roleKey}". Available: ${available.map((r) => `${r.key} (${r.label})`).join(", ")}`);
     }
 
+    if (ceoSingletonValue(role.key) && await db.user.findUnique({ where: { ceoSingletonKey: CEO_SINGLETON_KEY }, select: { id: true } })) {
+      throw new Error(CEO_ALREADY_ASSIGNED_MESSAGE);
+    }
+
     const user = await db.user.create({
       data: {
         email: address, name: name.trim(), passwordHash: await hashPassword(password),
         roleId: role.id, status: "ACTIVE", mustChangePassword: true,
+        ceoSingletonKey: ceoSingletonValue(role.key),
       },
     });
 

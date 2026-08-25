@@ -1,6 +1,7 @@
 import { ProjectManager } from "@/components/delivery/project-manager";
 import { can, requirePermission } from "@/lib/auth/guard";
-import { ROLE } from "@/lib/auth/roles";
+import { isLeadershipRank, leadershipRoleWhere } from "@/lib/auth/roles";
+import { ACCEPTED_CONTRACT_STATUS } from "@/lib/contracts/eligibility";
 import { BILLING_LABELS } from "@/lib/delivery/validate";
 import { db } from "@/lib/db";
 
@@ -24,7 +25,8 @@ export default async function ProjectsPage() {
           select: {
             userId: true,
             allocationPercent: true,
-            user: { select: { id: true, name: true, email: true, jobTitle: true, status: true, role: { select: { key: true, label: true } } } },
+            startedOn: true,
+            user: { select: { id: true, name: true, email: true, jobTitle: true, status: true, role: { select: { key: true, label: true, rank: true } } } },
           },
         },
         _count: { select: { assignments: true, timeEntries: true, invoices: true, expenses: true } },
@@ -37,20 +39,25 @@ export default async function ProjectsPage() {
       select: { id: true, name: true, code: true },
       orderBy: { name: "asc" },
     }),
-    // Project Manager restricted strictly to Founder and Co-Founder
+    // Project Manager is restricted to leadership. Matched on rank rather than
+    // a list of role keys, so a role the CEO creates at rank 10 or better is
+    // eligible without a code change.
     db.user.findMany({
       where: {
         status: "ACTIVE",
-        role: { key: { in: [ROLE.CEO, ROLE.CO_FOUNDER] } },
+        role: leadershipRoleWhere,
       },
       select: { id: true, name: true, role: { select: { label: true } } },
       orderBy: { name: "asc" },
     }),
-    // All active developer/staff members eligible for project allocation (strictly excludes Leadership)
+    // Only Developers who have personally accepted a released contract letter
+    // may be allocated. The relation filter protects the UI, while the API
+    // repeats the same rule to protect against a forged request.
     db.user.findMany({
       where: {
         status: "ACTIVE",
-        role: { key: { notIn: [ROLE.CEO, ROLE.CO_FOUNDER] } },
+        role: { viaCandidatePool: true },
+        contractsSubject: { some: { status: ACCEPTED_CONTRACT_STATUS } },
       },
       select: { id: true, name: true, email: true, jobTitle: true, role: { select: { key: true, label: true } } },
       orderBy: [{ name: "asc" }],
@@ -78,7 +85,7 @@ export default async function ProjectsPage() {
           // ledger entries key off) but no longer show as "currently
           // assigned" — that reads as an active team member when they're not.
           const validAssignments = project.assignments.filter(
-            (a) => !["ceo", "co_founder"].includes(a.user.role.key) && a.user.status === "ACTIVE"
+            (a) => !isLeadershipRank(a.user.role.rank) && a.user.status === "ACTIVE"
           );
           return {
             id: project.id,
@@ -100,8 +107,9 @@ export default async function ProjectsPage() {
             notes: project.notes ?? "",
             team: validAssignments.length,
             assignments: validAssignments.map((a) => ({
-              userId: a.userId,
-              allocationPercent: a.allocationPercent,
+            userId: a.userId,
+            allocationPercent: a.allocationPercent,
+            startedOn: a.startedOn ? a.startedOn.toISOString().slice(0, 10) : "",
               name: a.user.name,
               email: a.user.email,
               roleLabel: a.user.role.label,

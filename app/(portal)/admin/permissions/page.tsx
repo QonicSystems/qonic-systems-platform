@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { PermissionMatrix } from "@/components/admin/permission-matrix";
 import { requirePermission } from "@/lib/auth/guard";
 import { SUPER_ADMIN_ONLY_PERMISSIONS } from "@/lib/auth/permissions";
@@ -32,6 +33,7 @@ export default async function PermissionsPage() {
     <h2 className="portal-section-title">Who can do what</h2>
     <p className="portal-note">
       Switch capabilities on or off for each role. The CEO always retains every capability, so this control can never lock you out.
+      Roles themselves are created and renamed in <Link className="text-link" href="/admin">Administration &rarr; People</Link>.
     </p>
     <PermissionMatrix
       roles={roles.map(({ id, key, label, isSuperAdmin, rank }) => ({ id, key, label, isSuperAdmin, rank }))}
