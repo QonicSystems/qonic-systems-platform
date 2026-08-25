@@ -21,12 +21,21 @@ if (status.status === 0) {
 const isKnownFailedMigration =
   statusOutput.includes("P3009") && statusOutput.includes(migrationName);
 
-if (!isKnownFailedMigration) {
-  process.stderr.write(statusOutput);
-  process.exit(status.status ?? 1);
+if (isKnownFailedMigration) {
+  console.warn(`Recovering failed migration ${migrationName} so its corrected SQL can be applied.`);
+  const recovery = runPrisma(["migrate", "resolve", "--rolled-back", migrationName]);
+  process.stdout.write(`${recovery.stdout ?? ""}${recovery.stderr ?? ""}`);
+  process.exit(recovery.status ?? 1);
 }
 
-console.warn(`Recovering failed migration ${migrationName} so its corrected SQL can be applied.`);
-const recovery = runPrisma(["migrate", "resolve", "--rolled-back", migrationName]);
-process.stdout.write(`${recovery.stdout ?? ""}${recovery.stderr ?? ""}`);
-process.exit(recovery.status ?? 1);
+// `migrate status` uses a non-zero exit code when migrations are pending. That is
+// expected during a deployment: the following `migrate deploy` command applies them.
+const hasPendingMigrations = statusOutput.includes("Following migrations have not yet been applied:");
+
+if (hasPendingMigrations) {
+  process.stdout.write(statusOutput);
+  process.exit(0);
+}
+
+process.stderr.write(statusOutput);
+process.exit(status.status ?? 1);
