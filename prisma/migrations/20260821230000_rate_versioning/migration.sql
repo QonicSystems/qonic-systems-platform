@@ -1,34 +1,55 @@
--- CreateTable
-CREATE TABLE "AssignmentRate" (
-    "id" TEXT NOT NULL,
-    "assignmentId" TEXT NOT NULL,
-    "rate" INTEGER NOT NULL,
-    "effectiveFrom" DATE NOT NULL,
-    "effectiveTo" DATE,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+-- Rate history became obsolete in a later migration, but this historical
+-- migration must still be able to resume when an earlier execution created
+-- its table before failing. Every operation below is therefore idempotent.
+DO $$
+BEGIN
+  IF to_regclass(format('%I.%I', current_schema(), 'AssignmentRate')) IS NULL THEN
+    CREATE TABLE "AssignmentRate" (
+        "id" TEXT NOT NULL,
+        "assignmentId" TEXT NOT NULL,
+        "rate" INTEGER NOT NULL,
+        "effectiveFrom" DATE NOT NULL,
+        "effectiveTo" DATE,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-    CONSTRAINT "AssignmentRate_pkey" PRIMARY KEY ("id")
-);
+        CONSTRAINT "AssignmentRate_pkey" PRIMARY KEY ("id")
+    );
+  END IF;
 
--- CreateIndex
-CREATE INDEX "AssignmentRate_assignmentId_effectiveFrom_idx" ON "AssignmentRate"("assignmentId", "effectiveFrom");
+  CREATE INDEX IF NOT EXISTS "AssignmentRate_assignmentId_effectiveFrom_idx"
+    ON "AssignmentRate"("assignmentId", "effectiveFrom");
 
--- AddForeignKey
-ALTER TABLE "AssignmentRate" ADD CONSTRAINT "AssignmentRate_assignmentId_fkey" FOREIGN KEY ("assignmentId") REFERENCES "ProjectAssignment"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'AssignmentRate_assignmentId_fkey'
+      AND conrelid = to_regclass(format('%I.%I', current_schema(), 'AssignmentRate'))
+  ) THEN
+    ALTER TABLE "AssignmentRate" ADD CONSTRAINT "AssignmentRate_assignmentId_fkey"
+      FOREIGN KEY ("assignmentId") REFERENCES "ProjectAssignment"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+  END IF;
 
--- Backfill: every assignment with a rate on record becomes one still-open
--- period. There's no record of when that CURRENT rate value first applied
--- (it was always just overwritten in place), so the best honest starting
--- point is the same "when did this person actually begin" signal already
--- established elsewhere in this app — startedOn, falling back to the row's
--- own createdAt exactly like every other consumer of that fallback chain.
-INSERT INTO "AssignmentRate" ("id", "assignmentId", "rate", "effectiveFrom", "effectiveTo")
-SELECT gen_random_uuid()::text, "id", "rate", COALESCE("startedOn", "createdAt"::date), NULL
-FROM "ProjectAssignment"
-WHERE "rate" IS NOT NULL;
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = current_schema()
+      AND table_name = 'ProjectAssignment'
+      AND column_name = 'rate'
+  ) THEN
+    -- There was no historical effective-date value for the old current rate.
+    -- Preserve the same start-date fallback used by its original migration.
+    INSERT INTO "AssignmentRate" ("id", "assignmentId", "rate", "effectiveFrom", "effectiveTo")
+    SELECT gen_random_uuid()::text, "id", "rate", COALESCE("startedOn", "createdAt"::date), NULL
+    FROM "ProjectAssignment"
+    WHERE "rate" IS NOT NULL
+      AND NOT EXISTS (
+        SELECT 1 FROM "AssignmentRate"
+        WHERE "AssignmentRate"."assignmentId" = "ProjectAssignment"."id"
+      );
+  END IF;
 
--- AlterTable
-ALTER TABLE "ProjectAssignment" DROP COLUMN "rate";
+  ALTER TABLE "ProjectAssignment" DROP COLUMN IF EXISTS "rate";
+END $$;
 
 -- ResourceDeal was an experimental Rate Management table. Some early
 -- environments were baselined after PayoutLedgerEntry existed but before that
@@ -39,28 +60,56 @@ ALTER TABLE "ProjectAssignment" DROP COLUMN "rate";
 DO $$
 BEGIN
   IF to_regclass(format('%I.%I', current_schema(), 'ResourceDeal')) IS NOT NULL THEN
-    CREATE TABLE "DealRate" (
-        "id" TEXT NOT NULL,
-        "dealId" TEXT NOT NULL,
-        "monthlyAmount" INTEGER NOT NULL,
-        "effectiveFrom" DATE NOT NULL,
-        "effectiveTo" DATE,
-        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    IF to_regclass(format('%I.%I', current_schema(), 'DealRate')) IS NULL THEN
+      CREATE TABLE "DealRate" (
+          "id" TEXT NOT NULL,
+          "dealId" TEXT NOT NULL,
+          "monthlyAmount" INTEGER NOT NULL,
+          "effectiveFrom" DATE NOT NULL,
+          "effectiveTo" DATE,
+          "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-        CONSTRAINT "DealRate_pkey" PRIMARY KEY ("id")
-    );
+          CONSTRAINT "DealRate_pkey" PRIMARY KEY ("id")
+      );
+    END IF;
 
-    CREATE INDEX "DealRate_dealId_effectiveFrom_idx" ON "DealRate"("dealId", "effectiveFrom");
+    CREATE INDEX IF NOT EXISTS "DealRate_dealId_effectiveFrom_idx"
+      ON "DealRate"("dealId", "effectiveFrom");
 
-    ALTER TABLE "DealRate" ADD CONSTRAINT "DealRate_dealId_fkey"
-      FOREIGN KEY ("dealId") REFERENCES "ResourceDeal"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+    IF NOT EXISTS (
+      SELECT 1
+      FROM pg_constraint
+      WHERE conname = 'DealRate_dealId_fkey'
+        AND conrelid = to_regclass(format('%I.%I', current_schema(), 'DealRate'))
+    ) THEN
+      ALTER TABLE "DealRate" ADD CONSTRAINT "DealRate_dealId_fkey"
+        FOREIGN KEY ("dealId") REFERENCES "ResourceDeal"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+    END IF;
 
-    -- Unlike AssignmentRate, ResourceDeal already had a real effectiveFrom on
-    -- each row, so this is an exact carry-over rather than a guessed date.
-    INSERT INTO "DealRate" ("id", "dealId", "monthlyAmount", "effectiveFrom", "effectiveTo")
-    SELECT gen_random_uuid()::text, "id", "monthlyAmount", "effectiveFrom", NULL
-    FROM "ResourceDeal";
+    IF EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = current_schema()
+        AND table_name = 'ResourceDeal'
+        AND column_name = 'monthlyAmount'
+    ) AND EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = current_schema()
+        AND table_name = 'ResourceDeal'
+        AND column_name = 'effectiveFrom'
+    ) THEN
+      INSERT INTO "DealRate" ("id", "dealId", "monthlyAmount", "effectiveFrom", "effectiveTo")
+      SELECT gen_random_uuid()::text, "id", "monthlyAmount", "effectiveFrom", NULL
+      FROM "ResourceDeal"
+      WHERE NOT EXISTS (
+        SELECT 1 FROM "DealRate"
+        WHERE "DealRate"."dealId" = "ResourceDeal"."id"
+      );
+    END IF;
 
-    ALTER TABLE "ResourceDeal" DROP COLUMN "monthlyAmount", DROP COLUMN "effectiveFrom";
+    ALTER TABLE "ResourceDeal"
+      DROP COLUMN IF EXISTS "monthlyAmount",
+      DROP COLUMN IF EXISTS "effectiveFrom";
   END IF;
 END $$;
